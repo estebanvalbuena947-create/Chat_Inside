@@ -1,0 +1,315 @@
+﻿{
+    "name":  "4.4 Aviso de comprobante protegido â€” botones de revisiÃ³n (v2 WEPLASH)",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "content":  "## Instalar despuÃ©s de SQL y pÃ¡gina\nCada minuto avisa de comprobantes protegidos a los dos correos configurados, con enlace a la decisiÃ³n. EXCEPCIÃ“N STRIPE: un comprobante de Stripe (motivo COMPROBANTE_STRIPE_PENDIENTE_WEBHOOK o estado revision_stripe) NO se avisa durante los primeros 15 minutos, porque Stripe se confirma solo por webhook; si en esos 15 minutos Stripe no confirma, el aviso sale igual. Incluye pendientes antiguos que no tengan intento registrado. No reintenta automÃ¡ticamente errores ni envÃ­os inciertos. No borrar marcas para reenviar sin revisar Gmail. Publicar tambiÃ©n el procesador de pagos manuales. Nunca confirmar un pago real para probar.",
+                                         "height":  270,
+                                         "width":  800
+                                     },
+                      "id":  "d23f0ea1-22f4-41ec-a65d-8fd415fa3952",
+                      "name":  "Instrucciones",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       5472,
+                                       4064
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "rule":  {
+                                                      "interval":  [
+                                                                       {
+                                                                           "field":  "minutes",
+                                                                           "minutesInterval":  1
+                                                                       }
+                                                                   ]
+                                                  }
+                                     },
+                      "id":  "9e765381-a7ce-47bb-92a6-98eae7e1e34a",
+                      "name":  "Cada minuto",
+                      "type":  "n8n-nodes-base.scheduleTrigger",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       4800,
+                                       4416
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "635d23ee-e8eb-4365-af53-f1c09f4db485",
+                      "name":  "Probar avisos pendientes",
+                      "type":  "n8n-nodes-base.manualTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       4800,
+                                       4608
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "WITH candidatos AS MATERIALIZED (\n SELECT c.huella FROM public.spa_comprobantes_pago c\n JOIN public.reservas_draft d ON d.id=c.reserva_draft_id AND d.subscriber_id::text=c.subscriber_id\n WHERE d.bloqueo_liberacion_por_comprobante IS TRUE\n AND d.pago_recibido IS NOT TRUE AND d.reserva_confirmada IS NOT TRUE\n AND d.estado_reserva IN (\u0027esperando_pago\u0027,\u0027creando_retencion\u0027,\u0027pendiente_pago\u0027,\u0027requiere_revision\u0027,\u0027requiere_revision_pago\u0027)\n AND (\n   -- Caso normal: la pre-reserva conserva su retenciÃ³n viva en Pabau.\n   (d.pabau_reservado IS TRUE AND d.procesando_desde IS NULL AND d.estado_reserva\u003c\u003e\u0027creando_retencion\u0027 AND d.retencion_cancelada_at IS NULL)\n   -- Pago tardÃ­o: la pre-reserva ya se habÃ­a liberado y el comprobante la protegiÃ³. Se avisa\n   -- igual para que el equipo apruebe; al aprobar, 4.5 vuelve a crear las citas en Pabau.\n   OR (d.estado_reserva=\u0027requiere_revision_pago\u0027 AND d.comprobante_revision_at IS NOT NULL\n       AND d.motivo_revision IN (\u0027COMPROBANTE_RECIBIDO_PENDIENTE_VALIDACION\u0027,\u0027COMPROBANTE_STRIPE_PENDIENTE_WEBHOOK\u0027))\n )\n AND c.estado IS DISTINCT FROM \u0027validado_banxico\u0027\n AND NOT (\n   -- PAGO CON STRIPE: Stripe se confirma solo, por webhook. Mientras esa confirmacion no\n   -- llegue no se avisa al equipo (el cliente ya recibio su acuse y 4.2 cierra solo).\n   -- Si Stripe NO confirma en 15 minutos, el aviso sale normalmente.\n   (c.estado=\u0027revision_stripe\u0027 OR d.motivo_revision=\u0027COMPROBANTE_STRIPE_PENDIENTE_WEBHOOK\u0027)\n   AND COALESCE(d.comprobante_revision_at,c.creado_at,now()) \u003e now() - interval \u002715 minutes\u0027\n )\n AND COALESCE(c.datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027estado\u0027,\u0027\u0027)=\u0027\u0027\n ORDER BY c.creado_at LIMIT 20 FOR UPDATE OF c SKIP LOCKED\n), reclamar AS (\n UPDATE public.spa_comprobantes_pago c SET datos=COALESCE(c.datos,\u0027{}\u0027::jsonb)||\n jsonb_build_object(\n   \u0027decision_access_token\u0027,COALESCE(NULLIF(c.datos-\u003e\u003e\u0027decision_access_token\u0027,\u0027\u0027),gen_random_uuid()::text),\n   \u0027aviso_revision_equipo\u0027,COALESCE(c.datos-\u003e\u0027aviso_revision_equipo\u0027,\u0027{}\u0027::jsonb)||jsonb_build_object(\u0027estado\u0027,\u0027en_proceso\u0027,\u0027execution_id\u0027,$1::text,\u0027intentado_at\u0027,now())\n ),actualizado_at=now()\n FROM candidatos x WHERE c.huella=x.huella RETURNING c.*\n)\nSELECT c.datos-\u003e\u003e\u0027decision_access_token\u0027 AS decision_token,c.huella,c.subscriber_id,c.reserva_draft_id,c.datos,c.creado_at,\n to_jsonb(d) AS borrador,(SELECT x.live_chat_url FROM public.n8n_execution_context x WHERE x.subscriber_id::text=c.subscriber_id AND NULLIF(x.live_chat_url,\u0027\u0027) IS NOT NULL ORDER BY x.updated_at DESC NULLS LAST LIMIT 1) AS live_chat_url_contexto FROM reclamar c JOIN public.reservas_draft d ON d.id=c.reserva_draft_id AND d.subscriber_id::text=c.subscriber_id;",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [String($execution.id)] }}"
+                                                     }
+                                     },
+                      "id":  "b132287e-86e7-43fd-ba4b-a786d65c873f",
+                      "name":  "Reclamar comprobantes protegidos",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       5472,
+                                       4512
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "2IhxXPfSxCPg8MeU",
+                                                           "name":  "New Postgres"
+                                                       }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const esc=x=\u003eString(x??\u0027\u0027).replace(/[\u0026\u003c\u003e\"\u0027]/g,c=\u003e({\u0027\u0026\u0027:\u0027\u0026amp;\u0027,\u0027\u003c\u0027:\u0027\u0026lt;\u0027,\u0027\u003e\u0027:\u0027\u0026gt;\u0027,\u0027\"\u0027:\u0027\u0026quot;\u0027,\"\u0027\":\u0027\u0026#39;\u0027}[c]));\nconst enlace=v=\u003e{const s=String(v??\u0027\u0027).trim();return s.slice(0,8).toLowerCase()===\u0027https://\u0027?s:\u0027\u0027;};\nconst boton=(href,label,color)=\u003ehref?\u0027\u003ca href=\"\u0027+esc(href)+\u0027\" style=\"display:inline-block;margin:6px 8px 6px 0;padding:12px 16px;border-radius:6px;background:\u0027+color+\u0027;color:#fff;text-decoration:none;font-weight:bold\"\u003e\u0027+esc(label)+\u0027\u003c/a\u003e\u0027:\u0027\u0027;\nreturn $input.all().map((item,index)=\u003e{\n const J=v=\u003e{if(v\u0026\u0026typeof v===\u0027object\u0027)return v;if(typeof v===\u0027string\u0027){try{return JSON.parse(v);}catch(e){return {};}}return {};};const r=item.json;const d=J(r.borrador);const c=J(r.datos);const crd=J(d.comprobante_revision_datos);\n if(d.bloqueo_liberacion_por_comprobante!==true||d.pago_recibido===true)throw Error(\u0027AVISO_REQUIERE_PROTECCION_SIN_PAGO_CONFIRMADO\u0027);\n const token=String(r.decision_token||\u0027\u0027);\n // UUID estÃ¡ndar: 8-4-4-4-12. La expresiÃ³n anterior omitÃ­a el cuarto bloque,\n // por eso rechazaba todos los tokens reciÃ©n generados antes de enviar el correo.\n if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token))throw Error(\u0027TOKEN_REVISION_INVALIDO\u0027);\n const base=\u0027https://n8n.insidespa.com.mx/webhook/pre-reserva-decision?token=\u0027+encodeURIComponent(token);\n const comprobante=enlace(c.media_url||crd.media_url||d.media_url||c.media_url_original);\n const chat=enlace(c.live_chat_url||d.live_chat_url||r.live_chat_url_contexto);const sedes={\u002724077\u0027:\u0027Del Valle\u0027,\u002724079\u0027:\u0027Polanco\u0027,\u002724080\u0027:\u0027JuÃ¡rez\u0027,\u002724082\u0027:\u0027Lomas\u0027,\u002724221\u0027:\u0027Roma\u0027};const det=(t,v)=\u003ev?\u0027\u003ctr\u003e\u003ctd style=\"padding:8px 12px;border:1px solid #e5e7eb;font-weight:600\"\u003e\u0027+esc(t)+\u0027\u003c/td\u003e\u003ctd style=\"padding:8px 12px;border:1px solid #e5e7eb\"\u003e\u0027+esc(v)+\u0027\u003c/td\u003e\u003c/tr\u003e\u0027:\u0027\u0027;const vFilas=det(\u0027Cliente\u0027,String(d.nombre||d.nombre_completo||\u0027\u0027).trim())+det(\u0027Servicio\u0027,String(d.nombre_servicio||d.servicio||\u0027\u0027).replace(/_/g,\u0027 \u0027).trim())+det(\u0027Sucursal\u0027,sedes[String(d.sucursal)]||String(d.sucursal||\u0027\u0027).trim())+det(\u0027Fecha y hora\u0027,String(d.jacuzzi_inicio||d.masaje_inicio||\u0027\u0027).trim().replace(\u0027T\u0027,\u0027 \u0027).slice(0,16))+det(\u0027Personas\u0027,String(d.numero_personas??d.personas??\u0027\u0027).trim())+det(\u0027Monto\u0027,String(c.monto_pago??crd.monto_documento??\u0027\u0027).trim())+det(\u0027Referencia o folio\u0027,String(c.clave_rastreo||c.numero_referencia||c.numero_comprobante||c.folio_operacion||crd.rastreo||crd.folio||\u0027\u0027).trim());const vTabla=vFilas?\u0027\u003ctable style=\"border-collapse:collapse;width:100%;margin:14px 0\"\u003e\u0027+vFilas+\u0027\u003c/table\u003e\u0027:\u0027\u0027;\n // Si el horario ya se habÃ­a liberado, se avisa: al aprobar, 4.5 vuelve a crear las citas.\n const pagoTardio=String(d.estado_reserva??\u0027\u0027)===\u0027requiere_revision_pago\u0027\u0026\u0026(d.pabau_reservado!==true||String(d.retencion_cancelada_at??\u0027\u0027).trim()!==\u0027\u0027);\n const avisoLiberada=pagoTardio?\u0027\u003cp style=\"background:#fff4e5;border:1px solid #f0c48a;border-radius:7px;padding:12px 14px;color:#8a4b00\"\u003e\u003cstrong\u003ePago despuÃ©s de la liberaciÃ³n:\u003c/strong\u003e el horario ya se habÃ­a liberado. Al aprobar, el sistema vuelve a crear las citas en Pabau para la misma fecha y hora; si ese horario ya no estÃ¡ disponible, el pago queda en revisiÃ³n y no se envÃ­a la confirmaciÃ³n.\u003c/p\u003e\u0027:\u0027\u0027;\n // PAGÃ“ OTRA PERSONA: se deja la nota a la vista para que nadie apruebe por error un pago ajeno.\n const pagador=String(crd.nombre_ordenante||c.nombre_ordenante||\u0027\u0027).trim();\n const esTercero=crd.pago_de_tercero===true||c.pago_de_tercero===true||JSON.stringify(crd.motivos_revision_pago||c.motivos_revision_pago||[]).includes(\u0027PAGO_DE_TERCERO_REVISAR\u0027);\n const notaTercero=String(crd.nota_pago_tercero||c.nota_pago_de_tercero||\u0027\u0027).trim();\n const avisoTercero=esTercero?\u0027\u003cp style=\"background:#fdecef;border:1px solid #f3b4c0;border-radius:7px;padding:12px 14px;color:#8a1c33\"\u003e\u003cstrong\u003eEl comprobante lo pagÃ³ otra persona.\u003c/strong\u003e \u0027+(esc(notaTercero)||(\u0027Quien pagÃ³ fue \u0027+esc(pagador||\u0027una persona distinta\u0027)+\u0027 y la pre-reserva estÃ¡ a nombre de \u0027+(esc(String(d.nombre||d.nombre_completo||\u0027\u0027).trim())||\u0027otro nombre\u0027)+\u0027. RevÃ­salo antes de aprobar.\u0027))+\u0027\u003c/p\u003e\u0027:\u0027\u0027;\n const fraseEstado=pagoTardio?\u0027\u003cp\u003eEl horario estÃ¡ libre otra vez y hay que recuperarlo. Revisa el comprobante y registra una decisiÃ³n.\u003c/p\u003e\u0027:\u0027\u003cp\u003eLa pre-reserva continÃºa protegida. Revisa el comprobante y registra una decisiÃ³n.\u003c/p\u003e\u0027;\n const html=\u0027\u003chtml lang=\"es\"\u003e\u003cbody style=\"font:16px Arial;color:#243330\"\u003e\u003ch2\u003eComprobante protegido: revisiÃ³n requerida\u003c/h2\u003e\u0027+vTabla+avisoTercero+avisoLiberada+fraseEstado+\u0027\u003cp\u003e\u0027+boton(comprobante,\u0027Ver comprobante\u0027,\u0027#2c6e8f\u0027)+boton(chat,\u0027Ver conversaciÃ³n\u0027,\u0027#195d4a\u0027)+\u0027\u003c/p\u003e\u003cp\u003e\u0027+boton(base+\u0027\u0026accion=pago_verificado\u0027,\u0027Aprobar comprobante\u0027,\u0027#167447\u0027)+boton(base+\u0027\u0026accion=rechazar_comprobante\u0027,\u0027Rechazar comprobante\u0027,\u0027#b42318\u0027)+\u0027\u003c/p\u003e\u003cp style=\"color:#52635b\"\u003eLos botones de aprobar y rechazar abren una pantalla con el monto, la fecha y el folio ya cargados desde el comprobante: sÃ³lo se confirma la acciÃ³n.\u003c/p\u003e\u003c/body\u003e\u003c/html\u003e\u0027;\n return {json:{huella:r.huella,execution_id:String($execution.id),email_subject:\u0027AcciÃ³n requerida Â· comprobante protegido\u0027,email_html:html},pairedItem:{item:index}};\n});"
+                                     },
+                      "id":  "eaa6cfd8-0788-4ce0-938c-df80ca2bf3a0",
+                      "name":  "Preparar correo de comprobante",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       5696,
+                                       4512
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "sendTo":  "contacto@insidespa.com.mx,ymartinez@weplash.com,hola@insidespa.com.mx",
+                                         "subject":  "={{ $json.email_subject }}",
+                                         "message":  "={{ $json.email_html }}",
+                                         "options":  {
+                                                         "appendAttribution":  false
+                                                     }
+                                     },
+                      "id":  "1e5bf19c-6c58-4321-b81e-d459c2f60008",
+                      "name":  "Gmail revisiÃ³n de comprobante",
+                      "type":  "n8n-nodes-base.gmail",
+                      "typeVersion":  2.2,
+                      "position":  [
+                                       5920,
+                                       4512
+                                   ],
+                      "webhookId":  "e82d573a-6ab8-4af3-a477-b87503bfbeda",
+                      "credentials":  {
+                                          "gmailOAuth2":  {
+                                                              "id":  "WswXtonsIYkb9R0Z",
+                                                              "name":  "Wepla"
+                                                          }
+                                      },
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "UPDATE public.spa_comprobantes_pago SET datos=jsonb_set(datos,\u0027{aviso_revision_equipo}\u0027,(datos-\u003e\u0027aviso_revision_equipo\u0027)||jsonb_build_object(\u0027estado\u0027,\u0027enviado\u0027,\u0027actualizado_at\u0027,now(),\u0027resultado\u0027,$2::jsonb)),actualizado_at=now() WHERE datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027execution_id\u0027=$1 AND datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027estado\u0027=\u0027en_proceso\u0027 RETURNING huella;",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [String($execution.id), JSON.stringify($json)] }}"
+                                                     }
+                                     },
+                      "id":  "a02e3ad6-66fa-4349-996d-d7234ee5b725",
+                      "name":  "Registrar correo enviado",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       6144,
+                                       4416
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "2IhxXPfSxCPg8MeU",
+                                                           "name":  "New Postgres"
+                                                       }
+                                      },
+                      "onError":  "continueRegularOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "UPDATE public.spa_comprobantes_pago SET datos=jsonb_set(datos,\u0027{aviso_revision_equipo}\u0027,(datos-\u003e\u0027aviso_revision_equipo\u0027)||jsonb_build_object(\u0027estado\u0027,\u0027fallido\u0027,\u0027actualizado_at\u0027,now(),\u0027resultado\u0027,$2::jsonb)),actualizado_at=now() WHERE datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027execution_id\u0027=$1 AND datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027estado\u0027=\u0027en_proceso\u0027 RETURNING huella;",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [String($execution.id), JSON.stringify($json)] }}"
+                                                     }
+                                     },
+                      "id":  "daa9e993-289f-45d2-a867-880c6cc4dabb",
+                      "name":  "Registrar fallo de correo",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       6144,
+                                       4608
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "2IhxXPfSxCPg8MeU",
+                                                           "name":  "New Postgres"
+                                                       }
+                                      },
+                      "onError":  "continueRegularOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "WITH elegibles AS MATERIALIZED (\n SELECT d.* FROM public.reservas_draft d\n WHERE d.bloqueo_liberacion_por_comprobante IS TRUE\n AND d.pabau_reservado IS TRUE AND d.retencion_pabau_at IS NOT NULL\n AND d.estado_reserva IN (\u0027pendiente_pago\u0027,\u0027requiere_revision\u0027,\u0027requiere_revision_pago\u0027)\n AND d.pago_recibido IS NOT TRUE AND d.reserva_confirmada IS NOT TRUE\n AND d.retencion_cancelada_at IS NULL\n AND d.comprobante_revision_at IS NOT NULL\n AND d.comprobante_revision_datos IS NOT NULL\n AND (d.procesando_desde IS NULL OR d.procesando_desde \u003c= d.retencion_pabau_at)\n AND (d.procesando_desde IS NOT NULL OR NOT EXISTS (SELECT 1 FROM public.spa_comprobantes_pago c WHERE c.reserva_draft_id=d.id AND c.subscriber_id=d.subscriber_id::text))\n ORDER BY d.comprobante_revision_at LIMIT 100 FOR UPDATE OF d SKIP LOCKED\n), registrados AS (\n INSERT INTO public.spa_comprobantes_pago (huella,reserva_draft_id,subscriber_id,estado,datos)\n SELECT \u0027revision_pendiente|\u0027||d.id::text||\u0027|\u0027||d.subscriber_id::text,\n d.id,d.subscriber_id::text,\u0027revision\u0027,\n COALESCE(d.comprobante_revision_datos,\u0027{}\u0027::jsonb) || jsonb_build_object(\n   \u0027registro_solo_revision\u0027,true,\u0027origen_registro\u0027,\u0027recuperacion_proteccion_guardada\u0027,\n   \u0027monto_pago\u0027,d.comprobante_revision_datos-\u003e\u0027monto_documento\u0027,\n   \u0027moneda_pago\u0027,d.comprobante_revision_datos-\u003e\u003e\u0027moneda\u0027,\n   \u0027fecha_pago\u0027,d.comprobante_revision_datos-\u003e\u003e\u0027fecha_pago_documento\u0027,\n   \u0027numero_comprobante\u0027,d.comprobante_revision_datos-\u003e\u003e\u0027folio\u0027,\n   \u0027media_url\u0027,d.comprobante_revision_datos-\u003e\u003e\u0027media_url\u0027,\n   \u0027live_chat_url\u0027,to_jsonb(d)-\u003e\u003e\u0027live_chat_url\u0027)\n FROM elegibles d\n WHERE NOT EXISTS (SELECT 1 FROM public.spa_comprobantes_pago c\n   WHERE c.reserva_draft_id=d.id AND c.subscriber_id=d.subscriber_id::text)\n ON CONFLICT (huella) DO NOTHING RETURNING huella\n), liberados AS (\n UPDATE public.reservas_draft d SET procesando_desde=NULL\n FROM elegibles e WHERE d.id=e.id AND d.subscriber_id=e.subscriber_id\n AND d.procesando_desde IS NOT NULL AND d.procesando_desde \u003c= d.retencion_pabau_at\n RETURNING d.id\n)\nSELECT (SELECT count(*) FROM registrados) comprobantes_recuperados,\n       (SELECT count(*) FROM liberados) marcas_finalizadas;",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "9a78983b-2b73-4ff7-a546-7d173a272c57",
+                      "name":  "Recuperar protecciones pendientes",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       5024,
+                                       4512
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "2IhxXPfSxCPg8MeU",
+                                                           "name":  "New Postgres"
+                                                       }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "WITH rearmados AS (\nUPDATE public.spa_comprobantes_pago c SET\n datos=jsonb_set(\n   COALESCE(c.datos,\u0027{}\u0027::jsonb),\n   \u0027{aviso_revision_equipo}\u0027,\n   COALESCE(c.datos-\u003e\u0027aviso_revision_equipo\u0027,\u0027{}\u0027::jsonb)||jsonb_build_object(\n     \u0027estado\u0027,\u0027\u0027,\n     \u0027rearmado_at\u0027,now(),\n     \u0027motivo\u0027,\u0027REINTENTO_ACOTADO\u0027,\n     \u0027intentos_previos\u0027,COALESCE(NULLIF(c.datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027intentos_previos\u0027,\u0027\u0027)::int,0)+1\n   )\n ),actualizado_at=now()\nFROM public.reservas_draft d\nWHERE d.id=c.reserva_draft_id AND d.subscriber_id::text=c.subscriber_id\n  AND d.bloqueo_liberacion_por_comprobante IS TRUE\n  AND d.pago_recibido IS NOT TRUE AND d.reserva_confirmada IS NOT TRUE\n  AND c.estado IS DISTINCT FROM \u0027validado_banxico\u0027\n  AND COALESCE(NULLIF(c.datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027intentos_previos\u0027,\u0027\u0027)::int,0) \u003c 3\n  AND (\n    c.datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027estado\u0027 = \u0027fallido\u0027\n    OR (\n      c.datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027estado\u0027 = \u0027en_proceso\u0027\n      AND NULLIF(c.datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027intentado_at\u0027,\u0027\u0027) IS NOT NULL\n      AND (c.datos-\u003e\u0027aviso_revision_equipo\u0027-\u003e\u003e\u0027intentado_at\u0027)::timestamptz \u003c now() - interval \u002710 minutes\u0027\n    )\n  )\nRETURNING c.huella\n)\nSELECT count(*) AS avisos_rearmados FROM rearmados;",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "2431f9ad-7dd3-45cc-8f86-edbaf0350ec4",
+                      "name":  "Rearmar avisos sin token seguro",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       5248,
+                                       4512
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "2IhxXPfSxCPg8MeU",
+                                                           "name":  "New Postgres"
+                                                       }
+                                      }
+                  }
+              ],
+    "pinData":  {
+
+                },
+    "connections":  {
+                        "Cada minuto":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "Recuperar protecciones pendientes",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "Probar avisos pendientes":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "Recuperar protecciones pendientes",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "Reclamar comprobantes protegidos":  {
+                                                                 "main":  [
+                                                                              [
+                                                                                  {
+                                                                                      "node":  "Preparar correo de comprobante",
+                                                                                      "type":  "main",
+                                                                                      "index":  0
+                                                                                  }
+                                                                              ]
+                                                                          ]
+                                                             },
+                        "Preparar correo de comprobante":  {
+                                                               "main":  [
+                                                                            [
+                                                                                {
+                                                                                    "node":  "Gmail revisiÃ³n de comprobante",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ]
+                                                                        ]
+                                                           },
+                        "Gmail revisiÃ³n de comprobante":  {
+                                                               "main":  [
+                                                                            [
+                                                                                {
+                                                                                    "node":  "Registrar correo enviado",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ],
+                                                                            [
+                                                                                {
+                                                                                    "node":  "Registrar fallo de correo",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ]
+                                                                        ]
+                                                           },
+                        "Recuperar protecciones pendientes":  {
+                                                                  "main":  [
+                                                                               [
+                                                                                   {
+                                                                                       "node":  "Rearmar avisos sin token seguro",
+                                                                                       "type":  "main",
+                                                                                       "index":  0
+                                                                                   }
+                                                                               ]
+                                                                           ]
+                                                              },
+                        "Rearmar avisos sin token seguro":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Reclamar comprobantes protegidos",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            }
+                    },
+    "active":  true,
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "binaryMode":  "separate",
+                     "availableInMCP":  false
+                 },
+    "versionId":  "d8e142af-fc74-497e-b27b-06c857668e86",
+    "meta":  {
+                 "instanceId":  "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
+             },
+    "nodeGroups":  [
+
+                   ],
+    "id":  "nb0tpuirnpSlChiw",
+    "tags":  [
+
+             ]
+}

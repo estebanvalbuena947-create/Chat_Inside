@@ -63,12 +63,12 @@ Una tarea termina únicamente cuando:
 
 Reemplazar al iniciar el repositorio:
 
-- Instalar: `[COMANDO_INSTALACION]`
-- Desarrollo: `[COMANDO_DESARROLLO]`
-- Pruebas: `[COMANDO_PRUEBAS]`
-- Lint: `[COMANDO_LINT]`
-- Tipos: `[COMANDO_TIPOS]`
-- Build: `[COMANDO_BUILD]`
+- Instalar: `corepack pnpm install --frozen-lockfile`
+- Desarrollo: `corepack pnpm dev`
+- Pruebas: `corepack pnpm test`
+- Lint: `corepack pnpm lint`
+- Tipos: `corepack pnpm typecheck`
+- Build: `corepack pnpm build`
 
 ## Reglas de revisión de código
 

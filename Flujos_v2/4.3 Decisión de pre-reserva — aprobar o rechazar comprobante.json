@@ -1,0 +1,308 @@
+﻿{
+    "name":  "4.3 DecisiÃ³n de pre-reserva â€” aprobar o rechazar comprobante (v2 WEPLASH)",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "path":  "pre-reserva-decision",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "name":  "Abrir decisiÃ³n",
+                      "id":  "e56a78db-d56d-4c76-8c6e-8eb19f3eb5a2",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4416,
+                                       2304
+                                   ],
+                      "webhookId":  "653884db-ebaa-4ba8-b2d3-e9b6d0dba73b"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const j=$input.first().json||{};let b=j.body;if(typeof b===\u0027string\u0027){try{b=JSON.parse(b);}catch{b={};}}const p=Object.assign({},j.query||{},(b\u0026\u0026typeof b===\u0027object\u0027)?b:{});\nconst token = String(p.token || \u0027\u0027);\nconst accion = [\u0027pago_verificado\u0027,\u0027rechazar_comprobante\u0027].includes(String(p.accion || \u0027\u0027))\n  ? String(p.accion)\n  : \u0027\u0027;\n\nif (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {\n  return [{ json: { token: \u002700000000-0000-0000-0000-000000000000\u0027, accion: \u0027\u0027 } }];\n}\n\nreturn [{ json: { token, accion, responsable: p.responsable, nota: p.nota, version: p.version } }];"
+                                     },
+                      "name":  "Normalizar GET",
+                      "id":  "7d8f03ed-c3c0-48ab-83bd-56d16beef85f",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4640,
+                                       2304
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "WITH acceso AS (\n  SELECT c.huella, c.datos, to_jsonb(d) AS borrador,\n    (d.pago_recibido IS NOT TRUE\n     AND d.reserva_confirmada IS NOT TRUE\n     AND (d.retencion_cancelada_at IS NULL\n          OR d.estado_reserva = \u0027requiere_revision_pago\u0027)) AS editable\n  FROM public.spa_comprobantes_pago c\n  JOIN public.reservas_draft d\n    ON d.id = c.reserva_draft_id\n   AND d.subscriber_id::text = c.subscriber_id\n  WHERE c.datos-\u003e\u003e\u0027decision_access_token\u0027 = $1::text\n  ORDER BY c.actualizado_at DESC\n  LIMIT 1\n),\nlegado AS (\n  SELECT inside_retencion.ver_revision($1::uuid) AS r\n),\ndesde_acceso AS (\n  SELECT jsonb_build_object(\n    \u0027ok\u0027, true, \u0027token\u0027, $1::text, \u0027version\u0027, \u0027\u0027,\n    \u0027editable_pago\u0027, a.editable,\n    \u0027mensaje\u0027, CASE WHEN a.editable THEN NULL\n                    ELSE \u0027Este comprobante ya fue procesado o dejÃ³ de estar disponible para cambios.\u0027 END,\n    \u0027accion_sugerida\u0027, COALESCE($2::text,\u0027\u0027)\n  ) || jsonb_strip_nulls(jsonb_build_object(\n    \u0027media_url\u0027,       COALESCE(a.datos-\u003e\u0027media_url\u0027,       a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u0027media_url\u0027),\n    \u0027live_chat_url\u0027,   COALESCE(a.datos-\u003e\u0027live_chat_url\u0027,   a.borrador-\u003e\u0027live_chat_url\u0027,   to_jsonb((SELECT x.live_chat_url FROM public.n8n_execution_context x WHERE x.subscriber_id::text=a.borrador-\u003e\u003e\u0027subscriber_id\u0027 AND NULLIF(x.live_chat_url,\u0027\u0027) IS NOT NULL ORDER BY x.updated_at DESC NULLS LAST LIMIT 1))), \u0027nombre_cliente\u0027, a.borrador-\u003e\u0027nombre\u0027, \u0027servicio\u0027, COALESCE(a.borrador-\u003e\u0027nombre_servicio\u0027, a.borrador-\u003e\u0027servicio\u0027), \u0027sucursal\u0027, a.borrador-\u003e\u0027sucursal\u0027, \u0027cita\u0027, COALESCE(a.borrador-\u003e\u0027jacuzzi_inicio\u0027, a.borrador-\u003e\u0027masaje_inicio\u0027), \u0027personas\u0027, COALESCE(a.borrador-\u003e\u0027numero_personas\u0027, a.borrador-\u003e\u0027personas\u0027),\n    \u0027monto_pago\u0027,      COALESCE(NULLIF(a.datos-\u003e\u003e\u0027monto_pago\u0027,\u0027\u0027), NULLIF(a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027monto_documento\u0027,\u0027\u0027), NULLIF(a.datos-\u003e\u003e\u0027monto\u0027,\u0027\u0027)),\n    \u0027fecha_pago\u0027,      COALESCE(NULLIF(a.datos-\u003e\u003e\u0027fecha_pago\u0027,\u0027\u0027), NULLIF(a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027fecha_pago_documento\u0027,\u0027\u0027)),\n    -- El folio o la referencia se cargan solos desde el comprobante: el equipo no los captura.\n    \u0027referencia_pago\u0027, COALESCE(NULLIF(a.datos-\u003e\u003e\u0027clave_rastreo\u0027,\u0027\u0027),\n                                NULLIF(a.datos-\u003e\u003e\u0027numero_referencia\u0027,\u0027\u0027),\n                                NULLIF(a.datos-\u003e\u003e\u0027numero_comprobante\u0027,\u0027\u0027),\n                                NULLIF(a.datos-\u003e\u003e\u0027folio_operacion\u0027,\u0027\u0027),\n                                NULLIF(a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027rastreo\u0027,\u0027\u0027),\n                                NULLIF(a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027folio\u0027,\u0027\u0027),\n                                NULLIF(a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027referencia\u0027,\u0027\u0027)),\n    \u0027referencia_fuente\u0027, CASE\n                                WHEN NULLIF(a.datos-\u003e\u003e\u0027clave_rastreo\u0027,\u0027\u0027) IS NOT NULL THEN \u0027clave de rastreo\u0027\n                                WHEN NULLIF(a.datos-\u003e\u003e\u0027numero_referencia\u0027,\u0027\u0027) IS NOT NULL THEN \u0027referencia bancaria\u0027\n                                WHEN NULLIF(a.datos-\u003e\u003e\u0027numero_comprobante\u0027,\u0027\u0027) IS NOT NULL THEN \u0027folio del comprobante\u0027\n                                WHEN NULLIF(a.datos-\u003e\u003e\u0027folio_operacion\u0027,\u0027\u0027) IS NOT NULL THEN \u0027folio de operaciÃ³n\u0027\n                                WHEN NULLIF(a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027rastreo\u0027,\u0027\u0027) IS NOT NULL THEN \u0027clave de rastreo\u0027\n                                WHEN NULLIF(a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027folio\u0027,\u0027\u0027) IS NOT NULL THEN \u0027folio del comprobante\u0027\n                                ELSE NULL END,\n    -- Pago hecho por otra persona: la nota queda a la vista justo antes de aprobar.\n    \u0027aviso\u0027, CASE\n               WHEN COALESCE(a.datos-\u003e\u003e\u0027pago_de_tercero\u0027, a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027pago_de_tercero\u0027) = \u0027true\u0027\n                 THEN COALESCE(NULLIF(a.datos-\u003e\u003e\u0027nota_pago_de_tercero\u0027,\u0027\u0027),\n                               NULLIF(a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027nota_pago_tercero\u0027,\u0027\u0027),\n                               \u0027El comprobante lo pagÃ³ otra persona. Revisar antes de aprobar.\u0027)\n               ELSE COALESCE(NULLIF(a.datos-\u003e\u003e\u0027nota_pago_de_tercero\u0027,\u0027\u0027),\n                             NULLIF(a.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027nota_pago_tercero\u0027,\u0027\u0027))\n             END\n  )) AS resultado\n  FROM acceso a\n),\ndesde_legado AS (\n  SELECT r || jsonb_build_object(\u0027accion_sugerida\u0027, COALESCE($2::text,\u0027\u0027)) AS resultado\n  FROM legado\n  WHERE COALESCE((r-\u003e\u003e\u0027ok\u0027)::boolean, false)\n)\nSELECT COALESCE(\n  (SELECT resultado FROM desde_acceso LIMIT 1),\n  (SELECT resultado FROM desde_legado LIMIT 1),\n  jsonb_build_object(\u0027ok\u0027, false, \u0027mensaje\u0027,\n    \u0027El enlace no es vÃ¡lido o ya fue reemplazado. Abre el correo mÃ¡s reciente de revisiÃ³n.\u0027)\n) AS resultado;",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [$json.token, String($json.accion || \u0027\u0027)] }}"
+                                                     }
+                                     },
+                      "name":  "Consultar estado",
+                      "id":  "5c4e31bb-a424-491b-a8eb-24a1a2fd2878",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       4864,
+                                       2304
+                                   ],
+                      "retryOnFail":  true,
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "2IhxXPfSxCPg8MeU",
+                                                           "name":  "New Postgres"
+                                                       }
+                                      },
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "pre-reserva-decision",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "name":  "Guardar decisiÃ³n",
+                      "id":  "a7350efe-99d8-4855-a678-a12c8ceed6d0",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4416,
+                                       2560
+                                   ],
+                      "webhookId":  "b3baed16-123a-49a4-aa15-a3818baa74da"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const j=$input.first().json||{};let b=j.body;if(typeof b===\u0027string\u0027){try{b=JSON.parse(b);}catch{b={};}}const p=Object.assign({},j.query||{},(b\u0026\u0026typeof b===\u0027object\u0027)?b:{});\nconst token = String(p.token || \u0027\u0027);\nconst accion = [\u0027pago_verificado\u0027,\u0027rechazar_comprobante\u0027].includes(String(p.accion || \u0027\u0027))\n  ? String(p.accion)\n  : \u0027\u0027;\n\nif (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {\n  return [{ json: { token: \u002700000000-0000-0000-0000-000000000000\u0027, accion: \u0027\u0027 } }];\n}\n\nreturn [{ json: Object.assign({}, p, { token, accion, responsable: p.responsable, nota: p.nota, version: p.version }) }];"
+                                     },
+                      "name":  "Normalizar POST",
+                      "id":  "db7ee449-ce57-40c3-a319-80ca9f817f65",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4640,
+                                       2560
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "WITH entrada AS (\n  SELECT $1::jsonb AS p\n),\nacceso AS (\n  SELECT c.huella, c.datos, to_jsonb(d) AS borrador, d.id AS draft_id\n  FROM public.spa_comprobantes_pago c\n  JOIN public.reservas_draft d\n    ON d.id = c.reserva_draft_id\n   AND d.subscriber_id::text = c.subscriber_id\n  JOIN entrada i\n    ON c.datos-\u003e\u003e\u0027decision_access_token\u0027 = i.p-\u003e\u003e\u0027token\u0027\n  ORDER BY c.actualizado_at DESC\n  LIMIT 1\n),\ntoken_interno AS (\n  SELECT COALESCE(\n    (SELECT inside_retencion.enlace_comprobante(huella) FROM acceso),\n    (SELECT (p-\u003e\u003e\u0027token\u0027)::uuid FROM entrada)\n  ) AS token\n),\nrevision AS (\n  SELECT t.token, inside_retencion.ver_revision(t.token) AS r\n  FROM token_interno t\n),\ncontexto AS (\n  SELECT r.token, r.r,\n         COALESCE(a.datos, c.datos) AS comprobante,\n         COALESCE(a.borrador, to_jsonb(d)) AS borrador\n  FROM revision r\n  LEFT JOIN acceso a ON true\n  LEFT JOIN public.reservas_draft d\n    ON d.id = NULLIF(COALESCE(r.r-\u003e\u003e\u0027id\u0027, r.r-\u003e\u003e\u0027reserva_draft_id\u0027), \u0027\u0027)::bigint\n  LEFT JOIN LATERAL (\n    SELECT datos\n    FROM public.spa_comprobantes_pago c\n    WHERE c.reserva_draft_id = d.id\n      AND c.subscriber_id = d.subscriber_id::text\n    ORDER BY c.actualizado_at DESC\n    LIMIT 1\n  ) c ON true\n),\nsolicitud AS (\n  SELECT jsonb_set(\n    jsonb_set(i.p, \u0027{token}\u0027, to_jsonb(x.token::text), true),\n    \u0027{version}\u0027, COALESCE(x.r-\u003e\u0027version\u0027, i.p-\u003e\u0027version\u0027, \u0027null\u0027::jsonb), true\n  ) || jsonb_strip_nulls(jsonb_build_object(\n    \u0027monto\u0027,      COALESCE(to_jsonb(NULLIF(i.p-\u003e\u003e\u0027monto\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.comprobante-\u003e\u003e\u0027monto_pago\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027monto_documento\u0027,\u0027\u0027)),\n                           x.r-\u003e\u0027monto_pago\u0027, x.r-\u003e\u0027monto\u0027),\n    \u0027metodo\u0027,     COALESCE(NULLIF(i.p-\u003e\u003e\u0027metodo\u0027,\u0027\u0027),\u0027transferencia\u0027),\n    \u0027referencia\u0027, COALESCE(to_jsonb(NULLIF(i.p-\u003e\u003e\u0027referencia\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.comprobante-\u003e\u003e\u0027clave_rastreo\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.comprobante-\u003e\u003e\u0027numero_referencia\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.comprobante-\u003e\u003e\u0027numero_comprobante\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.comprobante-\u003e\u003e\u0027folio_operacion\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027folio\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027rastreo\u0027,\u0027\u0027)),\n                           x.r-\u003e\u0027referencia_pago\u0027),\n    \u0027fecha_pago\u0027, COALESCE(to_jsonb(NULLIF(i.p-\u003e\u003e\u0027fecha_pago\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.comprobante-\u003e\u003e\u0027fecha_pago\u0027,\u0027\u0027)),\n                           to_jsonb(NULLIF(x.borrador-\u003e\u0027comprobante_revision_datos\u0027-\u003e\u003e\u0027fecha_pago_documento\u0027,\u0027\u0027)),\n                           x.r-\u003e\u0027fecha_pago\u0027)\n  )) AS payload\n  FROM entrada i\n  CROSS JOIN contexto x\n  WHERE COALESCE((x.r-\u003e\u003e\u0027ok\u0027)::boolean, false)\n)\nSELECT COALESCE(\n  (SELECT inside_retencion.cambiar_revision(payload) FROM solicitud LIMIT 1),\n  jsonb_build_object(\u0027ok\u0027, false, \u0027mensaje\u0027,\n    \u0027No fue posible registrar la decisiÃ³n; abre el enlace mÃ¡s reciente del correo.\u0027)\n) AS resultado;",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [JSON.stringify($json)] }}"
+                                                     }
+                                     },
+                      "name":  "Registrar cambio",
+                      "id":  "81a53a2d-c340-4454-8cbc-0132b6c1fced",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       4864,
+                                       2560
+                                   ],
+                      "retryOnFail":  true,
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "2IhxXPfSxCPg8MeU",
+                                                           "name":  "New Postgres"
+                                                       }
+                                      },
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const J=v=\u003e{if(v\u0026\u0026typeof v===\u0027object\u0027)return v;if(typeof v===\u0027string\u0027){try{return JSON.parse(v);}catch(e){return {};}}return {};};\nconst d=J($input.first().json.resultado);\nconst esc=x=\u003eString(x??\u0027\u0027).replace(/[\u0026\u003c\u003e\"\u0027]/g,c=\u003e({\u0027\u0026\u0027:\u0027\u0026amp;\u0027,\u0027\u003c\u0027:\u0027\u0026lt;\u0027,\u0027\u003e\u0027:\u0027\u0026gt;\u0027,\u0027\"\u0027:\u0027\u0026quot;\u0027,\"\u0027\":\u0027\u0026#39;\u0027}[c]));\nconst enlace=v=\u003e{const s=String(v??\u0027\u0027).trim();return s.slice(0,8).toLowerCase()===\u0027https://\u0027?s:\u0027\u0027;};\nconst base=\u0027https://n8n.insidespa.com.mx/webhook/pre-reserva-decision\u0027;\nconst chat=enlace(d.live_chat_url);\nconst comprobante=enlace(d.media_url);\nconst sedes={\u002724077\u0027:\u0027Del Valle\u0027,\u002724079\u0027:\u0027Polanco\u0027,\u002724080\u0027:\u0027Juarez\u0027,\u002724082\u0027:\u0027Lomas\u0027,\u002724221\u0027:\u0027Roma\u0027};\nconst det=(t,v)=\u003ev?\u0027\u003ctr\u003e\u003ctd style=\"padding:8px 12px;border:1px solid #e5e7eb;font-weight:600\"\u003e\u0027+esc(t)+\u0027\u003c/td\u003e\u003ctd style=\"padding:8px 12px;border:1px solid #e5e7eb\"\u003e\u0027+esc(v)+\u0027\u003c/td\u003e\u003c/tr\u003e\u0027:\u0027\u0027;\nconst vFilas=det(\u0027Cliente\u0027,d.nombre_cliente)+det(\u0027Servicio\u0027,String(d.servicio||\u0027\u0027).replace(/_/g,\u0027 \u0027).trim())+det(\u0027Sucursal\u0027,sedes[String(d.sucursal)]||String(d.sucursal||\u0027\u0027).trim())+det(\u0027Fecha y hora\u0027,String(d.cita||\u0027\u0027).replace(\u0027T\u0027,\u0027 \u0027).slice(0,16))+det(\u0027Personas\u0027,String(d.personas??\u0027\u0027).trim())+det(\u0027Monto\u0027,String(d.monto_pago??\u0027\u0027).trim())+det(\u0027Referencia\u0027,String(d.referencia_pago??\u0027\u0027).trim());\nconst vTabla=vFilas?\u0027\u003ctable style=\"border-collapse:collapse;width:100%;margin:14px 0\"\u003e\u0027+vFilas+\u0027\u003c/table\u003e\u0027:\u0027\u0027;\nconst boton=(href,label,clase)=\u003ehref?\u0027\u003ca class=\"boton \u0027+clase+\u0027\" target=\"_blank\" rel=\"noopener noreferrer\" href=\"\u0027+esc(href)+\u0027\"\u003e\u0027+esc(label)+\u0027\u003c/a\u003e\u0027:\u0027\u0027;\nconst campo=(label,name,value,tipo,extra)=\u003e\u0027\u003clabel class=\"campo\"\u003e\u003cspan\u003e\u0027+esc(label)+\u0027\u003c/span\u003e\u003cinput type=\"\u0027+(tipo||\u0027text\u0027)+\u0027\" name=\"\u0027+name+\u0027\" \u0027+(extra||\u0027\u0027)+\u0027 value=\"\u0027+esc(value===undefined||value===null?\u0027\u0027:value)+\u0027\"\u003e\u003c/label\u003e\u0027;\n// El folio o la referencia vienen del comprobante: se muestran ya cargados.\nconst referencia=String(d.referencia_pago??\u0027\u0027).trim();\nconst fuenteReferencia=String(d.referencia_fuente??\u0027\u0027).trim();\nconst etiquetaReferencia=referencia?(\u0027Referencia o folio Â· \u0027+(fuenteReferencia||\u0027tomado del comprobante\u0027)):\u0027Referencia o folio\u0027;\nconst ayudaReferencia=referencia?\u0027\u003cp class=\"ayuda\"\u003eEste dato ya se tomÃ³ del comprobante. Solo corrÃ­gelo si no coincide.\u003c/p\u003e\u0027:\u0027\u0027;\nconst formDecision=\u0027\u003cform method=\"post\" action=\"\u0027+base+\u0027\" id=\"fd\"\u003e\u0027\n +\u0027\u003cinput type=\"hidden\" name=\"token\" value=\"\u0027+esc(d.token)+\u0027\"\u003e\u0027\n +\u0027\u003cinput type=\"hidden\" name=\"version\" value=\"\u0027+esc(d.version)+\u0027\"\u003e\u0027\n +campo(\u0027Monto verificado\u0027,\u0027monto\u0027,d.monto_pago,\u0027text\u0027,\u0027required inputmode=\"decimal\"\u0027)\n +\u0027\u003clabel class=\"campo\"\u003e\u003cspan\u003eMetodo de pago\u003c/span\u003e\u003cselect name=\"metodo\"\u003e\u003coption value=\"transferencia\"\u003eTransferencia\u003c/option\u003e\u003coption value=\"deposito\"\u003eDeposito\u003c/option\u003e\u003coption value=\"efectivo\"\u003eEfectivo\u003c/option\u003e\u003c/select\u003e\u003c/label\u003e\u0027\n +campo(etiquetaReferencia,\u0027referencia\u0027,referencia,\u0027text\u0027,referencia?\u0027\u0027:\u0027required\u0027)\n +ayudaReferencia\n +campo(\u0027Fecha del pago\u0027,\u0027fecha_pago\u0027,d.fecha_pago,\u0027date\u0027,\u0027required\u0027)\n +\u0027\u003clabel class=\"check\"\u003e\u003cinput type=\"checkbox\" name=\"confirmo_pago\" value=\"si\" required\u003e Confirmo que verifique este pago\u003c/label\u003e\u0027\n +campo(\u0027Tu nombre (se recuerda)\u0027,\u0027responsable\u0027,\u0027\u0027,\u0027text\u0027,\u0027id=\"resp\" autocomplete=\"off\" required\u0027)\n +campo(\u0027Motivo (solo si rechazas)\u0027,\u0027nota\u0027,\u0027\u0027,\u0027text\u0027,\u0027\u0027)\n +\u0027\u003cbutton class=\"boton verde\" type=\"submit\" name=\"accion\" value=\"pago_verificado\"\u003eAprobar comprobante\u003c/button\u003e\u0027\n +\u0027\u003cbutton class=\"boton rojo\" type=\"submit\" formnovalidate name=\"accion\" value=\"rechazar_comprobante\"\u003eRechazar comprobante\u003c/button\u003e\u0027\n +\u0027\u003c/form\u003e\u0027;\nconst acciones=d.editable_pago===true?\u0027\u003cdiv class=\"acciones\"\u003e\u0027+boton(comprobante,\u0027Ver comprobante\u0027,\u0027azul\u0027)+boton(chat,\u0027Ver conversacion\u0027,\u0027azul\u0027)+formDecision+\u0027\u003c/div\u003e\u0027:\u0027\u003cp class=\"estado\"\u003eEsta decision ya fue procesada o no esta disponible para cambios.\u003c/p\u003e\u0027;\nconst aviso=d.aviso?\u0027\u003cp class=\"aviso\"\u003e\u0027+esc(d.aviso)+\u0027\u003c/p\u003e\u0027:\u0027\u0027;\nconst contenido=d.ok?\u0027\u003ch1\u003eRevisar comprobante\u003c/h1\u003e\u0027+vTabla+aviso+\u0027\u003cp\u003eVerifica los datos del pago y registra la decision.\u003c/p\u003e\u0027+acciones+\u0027\u003cp class=\"ayuda\"\u003eAl aprobar se registra el pago, se actualiza Pabau y se envia la confirmacion de reserva. Al rechazar, la pre-reserva queda protegida y pendiente de validacion.\u003c/p\u003e\u0027:\u0027\u003ch1\u003eNo se pudo abrir la revision\u003c/h1\u003e\u003cp\u003e\u0027+esc(d.mensaje||\u0027Vuelve a abrir el enlace original del correo.\u0027)+\u0027\u003c/p\u003e\u0027;\nconst estilo=\u0027body{font:16px Arial;color:#243330;background:#f2f6f4;margin:0;padding:24px}main{max-width:560px;margin:48px auto;background:#fff;padding:32px;border-radius:12px;box-shadow:0 1px 8px #0001}h1{color:#195d4a;margin-top:0}.acciones{display:grid;gap:12px;margin:26px 0}.boton{box-sizing:border-box;width:100%;border:0;border-radius:7px;padding:14px 18px;font:600 16px Arial;text-align:center;text-decoration:none;cursor:pointer}.azul{background:#2c6e8f;color:#fff}.verde{background:#167447;color:#fff}.rojo{background:#b42318;color:#fff}form{margin:0}.ayuda,.estado{color:#52635b;line-height:1.5}.campo{display:block;margin:0 0 14px}.campo span{display:block;font:600 14px Arial;color:#243330;margin:0 0 6px}.campo input,.campo select{box-sizing:border-box;width:100%;padding:12px 14px;border:1px solid #cbd5d1;border-radius:7px;font:15px Arial}.check{display:block;margin:0 0 16px;font:15px Arial}.check input{width:auto;margin-right:8px}.aviso{background:#fff4e5;border:1px solid #f0c48a;border-radius:7px;padding:12px 14px;color:#8a4b00;font-size:15px}\u0027;\nconst guion=\u0027(function(){try{var e=document.getElementById(\"resp\");if(e){var v=localStorage.getItem(\"inside_responsable\");if(v)e.value=v;}var f=document.getElementById(\"fd\");if(f){f.addEventListener(\"input\",function(){try{var r=document.getElementById(\"resp\");if(r)localStorage.setItem(\"inside_responsable\",r.value);}catch(x){}});}}catch(x){}})();\u0027;\nreturn [{json:{html:\u0027\u003c!doctype html\u003e\u003chtml lang=\"es\"\u003e\u003cmeta charset=\"utf-8\"\u003e\u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1\"\u003e\u003ctitle\u003eRevision de comprobante\u003c/title\u003e\u003cstyle\u003e\u0027+estilo+\u0027\u003c/style\u003e\u003cmain\u003e\u0027+contenido+\u0027\u003c/main\u003e\u003cscript\u003e\u0027+guion+\u0027\u003c/script\u003e\u003c/html\u003e\u0027}}];"
+                                     },
+                      "name":  "Mostrar decisiÃ³n",
+                      "id":  "97ef0fc8-bb9e-4c7e-a64c-faa069a961d1",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       5088,
+                                       2224
+                                   ],
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "text",
+                                         "responseBody":  "={{ $json.html }}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Content-Type",
+                                                                                                     "value":  "text/html; charset=utf-8"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Cache-Control",
+                                                                                                     "value":  "no-store"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Referrer-Policy",
+                                                                                                     "value":  "no-referrer"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "name":  "Responder pÃ¡gina",
+                      "id":  "a89b5161-fa69-4621-be84-ac3efbff0f1e",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.4,
+                      "position":  [
+                                       5536,
+                                       2304
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const esc=x=\u003eString(x??\u0027\u0027).replace(/[\u0026\u003c\u003e\"\u0027]/g,c=\u003e({\u0027\u0026\u0027:\u0027\u0026amp;\u0027,\u0027\u003c\u0027:\u0027\u0026lt;\u0027,\u0027\u003e\u0027:\u0027\u0026gt;\u0027,\u0027\"\u0027:\u0027\u0026quot;\u0027,\"\u0027\":\u0027\u0026#39;\u0027}[c]));\nlet detalle=\u0027\u0027;\ntry{const it=$input.first();const j=(it\u0026\u0026it.json)?it.json:{};detalle=String((j.error\u0026\u0026(j.error.message||j.error))||j.message||\u0027\u0027).slice(0,300);}catch(e){}\nconst estilo=\u0027body{font:16px Arial;color:#243330;background:#f2f6f4;margin:0;padding:24px}main{max-width:560px;margin:48px auto;background:#fff;padding:32px;border-radius:12px;box-shadow:0 1px 8px #0001}h1{color:#b42318;margin-top:0}p{line-height:1.5;color:#52635b}code{background:#f4f4f4;padding:2px 6px;border-radius:4px;font-size:13px;word-break:break-word}\u0027;\nconst html=\u0027\u003c!doctype html\u003e\u003chtml lang=\"es\"\u003e\u003cmeta charset=\"utf-8\"\u003e\u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1\"\u003e\u003ctitle\u003eNo se pudo completar\u003c/title\u003e\u003cstyle\u003e\u0027+estilo+\u0027\u003c/style\u003e\u003cmain\u003e\u003ch1\u003eNo se pudo completar la revision\u003c/h1\u003e\u003cp\u003eOcurrio un problema al procesar esta decision y \u003cstrong\u003eno se registro ningun cambio\u003c/strong\u003e.\u003c/p\u003e\u003cp\u003eVuelve a abrir el enlace mas reciente del correo e intenta de nuevo. Si el problema continua, avisa al equipo tecnico.\u003c/p\u003e\u0027+(detalle?\u0027\u003cp\u003e\u003ccode\u003e\u0027+esc(detalle)+\u0027\u003c/code\u003e\u003c/p\u003e\u0027:\u0027\u0027)+\u0027\u003c/main\u003e\u003c/html\u003e\u0027;\nreturn [{json:{html}}];"
+                                     },
+                      "id":  "24eaa576-6de2-4da2-a635-553be4b22ea6",
+                      "name":  "Pagina de error",
+                      "type":  "n8n-nodes-base.code",
+                      "position":  [
+                                       5312,
+                                       2400
+                                   ],
+                      "typeVersion":  2
+                  }
+              ],
+    "pinData":  {
+
+                },
+    "connections":  {
+                        "Abrir decisiÃ³n":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Normalizar GET",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Normalizar GET":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Consultar estado",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Consultar estado":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Mostrar decisiÃ³n",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ],
+                                                              [
+                                                                  {
+                                                                      "node":  "Pagina de error",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Guardar decisiÃ³n":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Normalizar POST",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Normalizar POST":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Registrar cambio",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Registrar cambio":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Mostrar decisiÃ³n",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ],
+                                                              [
+                                                                  {
+                                                                      "node":  "Pagina de error",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Mostrar decisiÃ³n":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Responder pÃ¡gina",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ],
+                                                               [
+                                                                   {
+                                                                       "node":  "Pagina de error",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Pagina de error":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Responder pÃ¡gina",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            }
+                    },
+    "active":  true,
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "binaryMode":  "separate",
+                     "availableInMCP":  false
+                 },
+    "versionId":  "6481c63c-10f2-42da-b77f-fc73489f420c",
+    "meta":  {
+                 "instanceId":  "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
+             },
+    "nodeGroups":  [
+
+                   ],
+    "id":  "aaueqtHOV5potV7e",
+    "tags":  [
+
+             ]
+}

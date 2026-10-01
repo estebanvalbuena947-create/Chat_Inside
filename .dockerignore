@@ -1,0 +1,21 @@
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+coverage
+logs
+.git
+.gitignore
+Flujos
+Flujos_v2
+*.csv
+# Los secretos no entran en la imagen: se pasan al contenedor por entorno.
+.env
+**/.env
+**/.env.*
+!.env.example
+docs
+plans
+specs

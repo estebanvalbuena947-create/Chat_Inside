@@ -1,0 +1,428 @@
+{
+  "name": "7 Followup v2 - cola global 6 por minuto 09 a 20",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/10 * 9-19 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Cada 10 segundos de 09 a 20 CDMX",
+      "id": "e771c2b0-e55e-415a-9a18-f8afdb7183a2",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1424,
+        192
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Vista previa manual sin enviar",
+      "id": "73ff5585-8b64-4958-acfc-841b1805450c",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1424,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT j AS tarea FROM inside_followup_v2.listar('TODOS',$1,$2::boolean) AS j;",
+        "options": {
+          "queryReplacement": "={{ [String($execution.id),false] }}"
+        }
+      },
+      "name": "Seleccionar seguimientos vencidos",
+      "id": "ab097a37-80f2-4e8a-9e75-8d91bd32d41e",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1200,
+        192
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT j AS tarea FROM inside_followup_v2.listar('TODOS',$1,$2::boolean) AS j;",
+        "options": {
+          "queryReplacement": "={{ [String($execution.id),true] }}"
+        }
+      },
+      "name": "Consultar vista previa",
+      "id": "b18236f7-a66d-49b4-9095-4bcf65e9806d",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1200,
+        384
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().filter(i=>i.json.tarea?.id).map(i=>({json:i.json.tarea}));"
+      },
+      "name": "Una tarea por conversación",
+      "id": "63ceaf35-712a-4969-a301-a0b9334148ec",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -976,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7e6a70cf-2518-578b-a330-fdbb69ca3d35",
+              "leftValue": "={{ $json.simulacion === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Es simulación",
+      "id": "2b589f70-8ff6-41a2-8d6c-96e06cef992a",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -752,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(i=>({json:{simulacion:true,id:i.json.id,subscriber_id:i.json.subscriber_id,mensaje:i.json.payload.mensaje,enviar_desde:i.json.enviar_desde}}));"
+      },
+      "name": "Mostrar mensajes sin enviarlos",
+      "id": "8bd4809e-e711-4cae-92f6-2712493cc9c8",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "69de4e65-8e7a-4939-8d81-9898100ef772",
+              "leftValue": "={{ $json.scope==='IG_ISV' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4d579f41-bfee-4686-b636-34ac6924ef7d",
+      "name": "Es ISV",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -512,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "296bae90-6201-48bd-a3f7-9f1c8b91b243",
+              "leftValue": "={{ $json.scope==='IG_IS' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "37e66af8-6bc6-41f3-befd-89c2fff27efa",
+      "name": "Es IS",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -272,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "V6XrdcSIp5xyxVc8",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/V6XrdcSIp5xyxVc8",
+          "cachedResultName": "7.1 Emisor Followup v2 IG_IS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "name": "Enviar IG_IS",
+      "id": "015ad90d-cec6-4976-8b19-01f3abeb3e8f",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "aHja3uyQBSid8Pib",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/aHja3uyQBSid8Pib",
+          "cachedResultName": "7.1 Emisor Followup v2 IG_ISV"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "name": "Enviar IG_ISV",
+      "id": "cd7cd119-8658-4500-a1ef-c299afd9b1a1",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -256,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Yr1cnK7pzsYK7mT1",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Yr1cnK7pzsYK7mT1",
+          "cachedResultName": "7.1 Emisor Followup v2 TIKTOK"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "name": "Enviar TIKTOK",
+      "id": "46f0460d-3167-4829-9a19-73ed4104399d",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        704
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Vista previa manual sin enviar": {
+      "main": [
+        [
+          {
+            "node": "Consultar vista previa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar seguimientos vencidos": {
+      "main": [
+        [
+          {
+            "node": "Una tarea por conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar vista previa": {
+      "main": [
+        [
+          {
+            "node": "Una tarea por conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Una tarea por conversación": {
+      "main": [
+        [
+          {
+            "node": "Es simulación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Es simulación": {
+      "main": [
+        [
+          {
+            "node": "Mostrar mensajes sin enviarlos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Es ISV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Es ISV": {
+      "main": [
+        [
+          {
+            "node": "Enviar IG_ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Es IS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Es IS": {
+      "main": [
+        [
+          {
+            "node": "Enviar IG_IS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar TIKTOK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 10 segundos de 09 a 20 CDMX": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar seguimientos vencidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "bfa3a504-48f0-45d8-aa63-0dda96ffb2b7",
+  "meta": {
+    "instanceId": "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
+  },
+  "nodeGroups": [],
+  "id": "1tqC9onNH7mOBGeE",
+  "tags": []
+}

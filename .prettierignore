@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+coverage/
+example-spa/
+specs/TEMPLATE.md
+plans/TEMPLATE.md
+
+# Exportaciones de n8n y datos de trabajo: no son codigo fuente.
+Flujos/
+Flujos_v2/
+*.csv

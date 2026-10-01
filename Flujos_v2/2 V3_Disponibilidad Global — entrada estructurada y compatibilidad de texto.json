@@ -1,0 +1,1754 @@
+﻿{
+    "name":  "2 V3_Disponibilidad Global â€” entrada estructurada y compatibilidad de texto (v2 WEPLASH)",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "content":  "CONFIGURACIÃ“N OBLIGATORIA\n\nEn los cinco nodos â€œConsultarâ€¦â€ selecciona el workflow:\nSUB Disponibilidad por sucursal - 5 sucursales v2\n\nNo selecciones el subflujo que guarda el borrador.",
+                                         "height":  260,
+                                         "width":  420,
+                                         "color":  5
+                                     },
+                      "id":  "6da1a74e-cc6e-456f-85f0-a9a2a2abed88",
+                      "name":  "Nota configuraciÃ³n2",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       5984,
+                                       3008
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## Configurar en los bots IS e ISV\nConserva el ID de este workflow. En la herramienta Disponibilidad_Global, actualiza los campos del subflujo y mapea input desde la entrada de la herramienta. EnvÃ­a subscriber_id desde el contexto real del contacto, nunca desde un ID call_ ni inferido de solicitud_id.\nPreferir campos estructurados o un objeto JSON en input. Se admite como compatibilidad la frase explÃ­cita: Consultar disponibilidad para Full Day Spa Pareja, 2 personas, sucursal JuÃ¡rez (24080), fecha 2026-10-04, dÃ­a completo, sin hora preferida.\nSi el bot descarta input antes de llamar al subflujo, es necesario corregir tambiÃ©n ese mapeo en el bot; este workflow no puede recuperar datos que no recibe.\nNo crea citas ni guarda borradores. La disponibilidad real sigue en el flujo 3 con personal vigente.",
+                                         "height":  320,
+                                         "width":  720
+                                     },
+                      "id":  "c7ef91a1-9c46-45b3-a39b-2e1b8b710ce3",
+                      "name":  "Entrada de la herramienta Disponibilidad_Global",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       4144,
+                                       3648
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  2
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "1ccbe31e-5783-4ccb-a927-776b4cd62520",
+                                                                                   "leftValue":  "={{ Boolean(String($json.subscriber_id || \u0027\u0027).trim()) }}",
+                                                                                   "rightValue":  true,
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true",
+                                                                                                    "singleValue":  true
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "c963b32a-bc8a-4354-8ac3-0074874a2761",
+                      "name":  "IF contacto para contexto",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.2,
+                      "position":  [
+                                       4368,
+                                       4464
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const itemsEntrada = $input.all();\n\nif (itemsEntrada.length !== 1) {\n  throw new Error(\u0027DISPONIBILIDAD_REQUIERE_UNA_SOLICITUD\u0027);\n}\n\nconst raiz = itemsEntrada[0].json;\nconst capas = [];\nconst erroresTransporte = [];\n\nfunction presente(v) {\n  return (\n    v !== null \u0026\u0026\n    v !== undefined \u0026\u0026\n    !(\n      typeof v === \u0027string\u0027 \u0026\u0026\n      /^(?:\\s*|null|undefined)$/i.test(v.trim())\n    )\n  );\n}\n\nfunction limpiarTexto(v) {\n  return String(v ?? \u0027\u0027)\n    .trim()\n    .replace(/^```(?:json)?\\s*/i, \u0027\u0027)\n    .replace(/\\s*```$/, \u0027\u0027)\n    .trim();\n}\n\nfunction tieneSolicitudEstructurada(v) {\n  const tiene = (...keys) =\u003e\n    keys.some(key =\u003e presente(v[key]));\n\n  return (\n    tiene(\n      \u0027servicio\u0027,\n      \u0027service\u0027,\n      \u0027servicio_confirmado\u0027,\n      \u0027servicio_canonico\u0027\n    ) \u0026\u0026\n    tiene(\n      \u0027sucursal_solicitada\u0027,\n      \u0027sucursal\u0027,\n      \u0027sucursal_id\u0027,\n      \u0027branch\u0027\n    ) \u0026\u0026\n    tiene(\u0027fecha\u0027, \u0027date\u0027, \u0027fecha \u0027, \u0027fecha   \u0027) \u0026\u0026\n    tiene(\u0027numero_personas\u0027, \u0027personas\u0027, \u0027people\u0027) \u0026\u0026\n    tiene(\u0027modo_busqueda\u0027, \u0027search_mode\u0027)\n  );\n}\n\n// Compatibilidad limitada con solicitudes explÃ­citas.\n// No inventa datos ausentes.\nfunction solicitudTexto(raw) {\n  const t = raw\n    .normalize(\u0027NFD\u0027)\n    .replace(/[\\u0300-\\u036f]/g, \u0027\u0027)\n    .toLowerCase();\n\n  const out = {};\n\n  function unico(key, values) {\n    const valores = [...new Set(values)];\n\n    if (valores.length \u003e 1) {\n      erroresTransporte.push(\u0027Texto ambiguo: \u0027 + key);\n    } else if (valores.length === 1) {\n      out[key] = valores[0];\n    }\n  }\n\n  unico(\n    \u0027fecha\u0027,\n    [...t.matchAll(/\\b\\d{4}-\\d{2}-\\d{2}\\b/g)]\n      .map(m =\u003e m[0])\n  );\n\n  unico(\n    \u0027numero_personas\u0027,\n    [...t.matchAll(/\\b(\\d+)\\s+personas?\\b/g)]\n      .map(m =\u003e Number(m[1]))\n  );\n\n  const branches = {\n    \u002724077\u0027: \u002724077\u0027,\n    \u002724079\u0027: \u002724079\u0027,\n    \u002724080\u0027: \u002724080\u0027,\n    \u002724082\u0027: \u002724082\u0027,\n    \u002724221\u0027: \u002724221\u0027,\n    \u0027del valle\u0027: \u002724077\u0027,\n    valle: \u002724077\u0027,\n    polanco: \u002724079\u0027,\n    juarez: \u002724080\u0027,\n    lomas: \u002724082\u0027,\n    roma: \u002724221\u0027,\n  };\n\n  unico(\n    \u0027sucursal\u0027,\n    [\n      ...t.matchAll(\n        /\\bsucursal\\s+(del valle|valle|polanco|juarez|lomas|roma|24077|24079|24080|24082|24221)(?:\\s*\\((\\d+)\\))?/g\n      ),\n    ].flatMap(m =\u003e\n      m[2]\n        ? [branches[m[1]], branches[m[2]] || \u0027ID_NO_VALIDO\u0027]\n        : [branches[m[1]]]\n    )\n  );\n\n  unico(\n    \u0027servicio\u0027,\n    [\n      ...t.matchAll(\n        /\\b(full day spa|premium day spa(?: facial)?|budha 70|buddha 70|temazcal bliss|elephant glow)(?:\\s+(individual|pareja|tribu))?\\b/g\n      ),\n    ].map(m =\u003e\n      (\n        m[1].replace(\u0027buddha\u0027, \u0027budha\u0027) +\n        (m[2] ? \u0027 \u0027 + m[2] : \u0027\u0027)\n      ).replace(/ /g, \u0027_\u0027)\n    )\n  );\n\n  unico(\n    \u0027solicitud_id\u0027,\n    [...raw.matchAll(/\\bsol_[A-Za-z0-9_]+\\b/g)]\n      .map(m =\u003e m[0])\n  );\n\n  unico(\n    \u0027subscriber_id\u0027,\n    [...t.matchAll(/\\bsubscriber_id\\s*[:=]\\s*(\\d+)\\b/g)]\n      .map(m =\u003e m[1])\n  );\n\n  const horas = [\n    ...t.matchAll(\n      /\\b(?:horario|hora preferida|a las)\\s*[:=]?\\s*(\\d{1,2}(?::\\d{2})?)(?:\\s*(am|pm))?\\b/g\n    ),\n  ].map(m =\u003e m[1] + (m[2] ? \u0027 \u0027 + m[2] : \u0027\u0027));\n\n  unico(\u0027horario\u0027, horas);\n\n  const dia =\n    /\\bdia completo\\b|\\bsin hora preferida\\b/.test(t);\n\n  const tarde = /\\bpor la tarde\\b/.test(t);\n\n  if (\n    (dia \u0026\u0026 horas.length) ||\n    (tarde \u0026\u0026 (dia || horas.length))\n  ) {\n    erroresTransporte.push(\n      \u0027Texto ambiguo: modo de bÃºsqueda y horario\u0027\n    );\n  }\n\n  out.modo_busqueda = tarde\n    ? \u0027tarde\u0027\n    : dia\n      ? \u0027dia_completo\u0027\n      : horas.length\n        ? \u0027hora_preferida\u0027\n        : null;\n\n  if (\n    out.servicio \u0026\u0026\n    out.sucursal \u0026\u0026\n    out.fecha \u0026\u0026\n    out.numero_personas \u0026\u0026\n    out.modo_busqueda\n  ) {\n    capas.push(out);\n    return;\n  }\n\n  erroresTransporte.push(\n    \u0027INPUT_TEXTO_NO_ESTRUCTURADO: enviar servicio, sucursal, \u0027 +\n    \u0027fecha, numero_personas y modo_busqueda como campos o JSON\u0027\n  );\n}\n\nfunction objeto(v, nivel = 0) {\n  if (nivel \u003e 8 || v == null) return;\n\n  if (typeof v === \u0027string\u0027) {\n    const texto = limpiarTexto(v);\n    if (!texto) return;\n\n    let parsed;\n\n    try {\n      parsed = JSON.parse(texto);\n    } catch {\n      if (/^[{\\[]/.test(texto)) {\n        erroresTransporte.push(\n          \u0027El input no contiene JSON vÃ¡lido\u0027\n        );\n      } else {\n        solicitudTexto(texto);\n      }\n\n      return;\n    }\n\n    objeto(parsed, nivel + 1);\n    return;\n  }\n\n  if (Array.isArray(v)) {\n    if (v.length === 1) {\n      objeto(v[0], nivel + 1);\n    } else {\n      erroresTransporte.push(\n        \u0027Se recibiÃ³ mÃ¡s de una solicitud en el mismo input\u0027\n      );\n    }\n\n    return;\n  }\n\n  if (typeof v !== \u0027object\u0027) return;\n\n  capas.push(v);\n\n  const estructurada = tieneSolicitudEstructurada(v);\n\n  for (const key of [\n    \u0027input\u0027,\n    \u0027query\u0027,\n    \u0027solicitud\u0027,\n    \u0027workflowInputs\u0027,\n    \u0027body\u0027,\n    \u0027data\u0027,\n    \u0027json\u0027,\n    \u0027booking_state\u0027,\n  ]) {\n    if (v[key] == null) continue;\n\n    // Si los campos necesarios ya estÃ¡n presentes, el texto\n    // narrativo de input no debe provocar otro error de extracciÃ³n.\n    // Un input con apariencia de JSON sÃ­ continÃºa validÃ¡ndose.\n    if (\n      key === \u0027input\u0027 \u0026\u0026\n      estructurada \u0026\u0026\n      typeof v[key] === \u0027string\u0027\n    ) {\n      const texto = limpiarTexto(v[key]);\n\n      if (!/^[{\\[]/.test(texto)) {\n        continue;\n      }\n    }\n\n    objeto(v[key], nivel + 1);\n  }\n}\n\nobjeto(raiz);\n\nfunction obtener(...nombres) {\n  // Los campos planos explÃ­citos tienen prioridad\n  // sobre los valores de los envoltorios.\n  for (const capa of capas) {\n    for (const nombre of nombres) {\n      if (presente(capa[nombre])) {\n        return capa[nombre];\n      }\n    }\n  }\n\n  return null;\n}\n\nconst normalizada = {\n  subscriber_id: obtener(\n    \u0027subscriber_id\u0027,\n    \u0027subscriberId\u0027,\n    \u0027session_id\u0027,\n    \u0027sessionId\u0027\n  ),\n\n  solicitud_id: obtener(\u0027solicitud_id\u0027),\n\n  servicio: obtener(\n    \u0027servicio\u0027,\n    \u0027service\u0027,\n    \u0027servicio_confirmado\u0027,\n    \u0027servicio_canonico\u0027\n  ),\n\n  servicio_confirmado: obtener(\n    \u0027servicio_confirmado\u0027,\n    \u0027servicio_canonico\u0027,\n    \u0027servicio\u0027,\n    \u0027service\u0027\n  ),\n\n  sucursal: obtener(\n    \u0027sucursal_solicitada\u0027,\n    \u0027sucursal\u0027,\n    \u0027sucursal_id\u0027,\n    \u0027branch\u0027\n  ),\n\n  fecha: obtener(\u0027fecha\u0027, \u0027date\u0027, \u0027fecha \u0027, \u0027fecha   \u0027),\n\n  numero_personas: obtener(\n    \u0027numero_personas\u0027,\n    \u0027personas\u0027,\n    \u0027people\u0027\n  ),\n\n  horario: obtener(\n    \u0027horario\u0027,\n    \u0027hora\u0027,\n    \u0027time\u0027,\n    \u0027horario_normalizado\u0027,\n    \u0027horario \u0027\n  ),\n\n  modo_busqueda: obtener(\u0027modo_busqueda\u0027, \u0027search_mode\u0027),\n\n  hora_minima: obtener(\u0027hora_minima\u0027),\n  es_feriado: obtener(\u0027es_feriado\u0027),\n  live_chat_url: obtener(\u0027live_chat_url\u0027),\n  canal_origen: obtener(\u0027canal_origen\u0027),\n\n  errores_transporte: [...new Set(erroresTransporte)],\n  entrada_desenvuelta: capas.length \u003e 1,\n};\n\nnormalizada.servicio_confirmado =\n  normalizada.servicio_confirmado || normalizada.servicio;\n\nnormalizada.sucursal_solicitada = normalizada.sucursal;\n\n// El ID de llamada call_... nunca se usa como ID del contacto.\n// La validaciÃ³n posterior sigue revisando los valores recibidos.\nreturn [{ json: normalizada }];"
+                                     },
+                      "id":  "b07450f5-3086-4aac-9f94-3840ef83ea1d",
+                      "name":  "Desenvolver parÃ¡metros de disponibilidad",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4096,
+                                       4464
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "tableId":  "n8n_execution_context",
+                                         "fieldsUi":  {
+                                                          "fieldValues":  [
+                                                                              {
+                                                                                  "fieldId":  "execution_id",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.n8n_execution_id }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "workflow_id",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.n8n_workflow_id }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "workflow_name",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.n8n_workflow_name }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "subscriber_id",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.subscriber_id }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "url_n8n",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.url_n8n }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "live_chat_url",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.live_chat_url }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "updated_at",
+                                                                                  "fieldValue":  "={{ $now.toISO() }}"
+                                                                              }
+                                                                          ]
+                                                      }
+                                     },
+                      "type":  "n8n-nodes-base.supabase",
+                      "typeVersion":  1,
+                      "position":  [
+                                       5552,
+                                       4624
+                                   ],
+                      "id":  "ee3b70cd-72da-4b2c-a58b-c69b357e740b",
+                      "name":  "Guardar contexto de ejecuciÃ³n3",
+                      "retryOnFail":  true,
+                      "credentials":  {
+                                          "supabaseApi":  {
+                                                              "id":  "Zu9malXYojiqVIBv",
+                                                              "name":  "New Supabase"
+                                                          }
+                                      },
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "tableId":  "n8n_execution_context",
+                                         "filters":  {
+                                                         "conditions":  [
+                                                                            {
+                                                                                "keyName":  "subscriber_id",
+                                                                                "condition":  "eq",
+                                                                                "keyValue":  "={{ $json.subscriber_id }}"
+                                                                            }
+                                                                        ]
+                                                     },
+                                         "fieldsUi":  {
+                                                          "fieldValues":  [
+                                                                              {
+                                                                                  "fieldId":  "execution_id",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.n8n_execution_id }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "workflow_id",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.n8n_workflow_id }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "workflow_name",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.n8n_workflow_name }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "subscriber_id",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.subscriber_id }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "url_n8n",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.url_n8n }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "live_chat_url",
+                                                                                  "fieldValue":  "={{ $(\u0027Normalizar contexto de ejecuciÃ³n1\u0027).first().json.live_chat_url }}"
+                                                                              },
+                                                                              {
+                                                                                  "fieldId":  "updated_at",
+                                                                                  "fieldValue":  "={{ $now.toISO() }}"
+                                                                              }
+                                                                          ]
+                                                      }
+                                     },
+                      "type":  "n8n-nodes-base.supabase",
+                      "typeVersion":  1,
+                      "position":  [
+                                       5536,
+                                       4352
+                                   ],
+                      "id":  "fd99b148-82ca-4fd4-9794-5c8c0a417992",
+                      "name":  "Guardar contexto de ejecuciÃ³n2",
+                      "retryOnFail":  true,
+                      "credentials":  {
+                                          "supabaseApi":  {
+                                                              "id":  "Zu9malXYojiqVIBv",
+                                                              "name":  "New Supabase"
+                                                          }
+                                      },
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  3
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "68dd12f1-ed8d-4614-88fc-9a81613c92a8",
+                                                                                   "leftValue":  "={{ $json.subscriber_id }}",
+                                                                                   "rightValue":  "",
+                                                                                   "operator":  {
+                                                                                                    "type":  "string",
+                                                                                                    "operation":  "exists",
+                                                                                                    "singleValue":  true
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.3,
+                      "position":  [
+                                       5168,
+                                       4368
+                                   ],
+                      "id":  "1891a703-5e70-44ec-b7b2-8b0452aeb22a",
+                      "name":  "If2"
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "get",
+                                         "tableId":  "n8n_execution_context",
+                                         "filters":  {
+                                                         "conditions":  [
+                                                                            {
+                                                                                "keyName":  "subscriber_id",
+                                                                                "keyValue":  "={{ $json.subscriber_id }}"
+                                                                            }
+                                                                        ]
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.supabase",
+                      "typeVersion":  1,
+                      "position":  [
+                                       4864,
+                                       4368
+                                   ],
+                      "id":  "a8267335-3fe7-4420-adc9-c68fb220c2aa",
+                      "name":  "Guardar contexto de ejecuciÃ³n1",
+                      "retryOnFail":  true,
+                      "executeOnce":  false,
+                      "alwaysOutputData":  true,
+                      "credentials":  {
+                                          "supabaseApi":  {
+                                                              "id":  "Zu9malXYojiqVIBv",
+                                                              "name":  "New Supabase"
+                                                          }
+                                      },
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const d = $input.first().json ?? {};\n\nconst candidatos = [\n  d.subscriber_id,\n  d.subscriberId,\n  d.suscriber_id,\n  d.body?.subscriber_id,\n  d.body?.subscriberId,\n  d.body?.id,\n  d.contact?.subscriber_id,\n  d.session_id,\n  d.sessionId,\n];\n\nconst encontrado = candidatos.find(\n  (value) =\u003e value !== null \u0026\u0026 value !== undefined \u0026\u0026 String(value).trim() !== \u0027\u0027\n);\nconst subscriberId = String(encontrado ?? \u0027\u0027).trim();\nif (!subscriberId) throw new Error(\u0027No se pudo identificar subscriber_id al inicio de la ejecuciÃ³n\u0027);\n\nconst executionId = String($execution?.id ?? \u0027\u0027).trim();\nconst workflowId = String($workflow?.id ?? \u0027\u0027).trim();\nconst workflowName = String($workflow?.name ?? \u0027\u0027).trim();\nif (!executionId || executionId === \u0027undefined\u0027 || executionId === \u0027null\u0027) {\n  throw new Error(\u0027n8n no proporcionÃ³ un execution_id vÃ¡lido\u0027);\n}\nif (!workflowId || workflowId === \u0027undefined\u0027 || workflowId === \u0027null\u0027) {\n  throw new Error(\u0027n8n no proporcionÃ³ un workflow_id vÃ¡lido\u0027);\n}\n\nconst urlN8n =\n  \u0027https://n8n.insidespa.com.mx/workflow/\u0027 + encodeURIComponent(workflowId) +\n  \u0027/execution/\u0027 + encodeURIComponent(executionId);\nconst liveChatRecibido = String(d.live_chat_url ?? d.body?.live_chat_url ?? \u0027\u0027).trim();\nconst liveChatUrl = /^https:\\/\\/app\\.manychat\\.com\\//i.test(liveChatRecibido)\n  ? liveChatRecibido\n  : \u0027https://app.manychat.com/fb1346079/chat/\u0027 + encodeURIComponent(subscriberId);\n\nreturn [{\n  json: {\n    ...d,\n    subscriber_id: subscriberId,\n    n8n_execution_id: executionId,\n    n8n_workflow_id: workflowId,\n    n8n_workflow_name: workflowName,\n    url_n8n: urlN8n,\n    live_chat_url: liveChatUrl,\n  },\n}];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4624,
+                                       4368
+                                   ],
+                      "id":  "92a87a2d-5a74-416a-bfe0-6e3e8e5bbced",
+                      "name":  "Normalizar contexto de ejecuciÃ³n1"
+                  },
+                  {
+                      "parameters":  {
+                                         "workflowId":  {
+                                                            "__rl":  true,
+                                                            "value":  "5R4VKvc54vRqYKXT",
+                                                            "mode":  "list",
+                                                            "cachedResultUrl":  "/workflow/5R4VKvc54vRqYKXT",
+                                                            "cachedResultName":  "3_V3_SUB_Disponibilidad_5_sucursales_FUNCIONAL"
+                                                        },
+                                         "workflowInputs":  {
+                                                                "mappingMode":  "defineBelow",
+                                                                "value":  {
+                                                                              "subscriber_id":  "={{ $json.subscriber_id }}",
+                                                                              "servicio":  "={{ $json.servicio }}",
+                                                                              "sucursal_solicitada":  "={{ $json.sucursal_solicitada }}",
+                                                                              "sucursal":  "={{ $json.sucursal }}",
+                                                                              "fecha":  "={{ $json.fecha }}",
+                                                                              "horario":  "={{ $json.horario || \u0027\u0027 }}",
+                                                                              "numero_personas":  "={{ $json.numero_personas }}",
+                                                                              "es_feriado":  "={{ $json.es_feriado }}",
+                                                                              "servicio_confirmado":  "={{ $json.servicio_confirmado }}",
+                                                                              "modo_busqueda":  "={{ $json.modo_busqueda }}",
+                                                                              "hora_minima":  "={{ $json.hora_minima || \u0027\u0027 }}",
+                                                                              "live_chat_url":  "={{ $json.live_chat_url || \u0027\u0027 }}",
+                                                                              "servicio_busqueda":  "={{ $json.servicio_busqueda }}",
+                                                                              "canal_origen":  "={{ $json.canal_origen || \u0027\u0027 }}"
+                                                                          },
+                                                                "matchingColumns":  [
+
+                                                                                    ],
+                                                                "schema":  [
+                                                                               {
+                                                                                   "id":  "subscriber_id",
+                                                                                   "displayName":  "subscriber_id",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio",
+                                                                                   "displayName":  "servicio",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal_solicitada",
+                                                                                   "displayName":  "sucursal_solicitada",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal",
+                                                                                   "displayName":  "sucursal",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "fecha",
+                                                                                   "displayName":  "fecha",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "horario",
+                                                                                   "displayName":  "horario",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "numero_personas",
+                                                                                   "displayName":  "numero_personas",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "number",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "es_feriado",
+                                                                                   "displayName":  "es_feriado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "boolean",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_confirmado",
+                                                                                   "displayName":  "servicio_confirmado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "modo_busqueda",
+                                                                                   "displayName":  "modo_busqueda",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "live_chat_url",
+                                                                                   "displayName":  "live_chat_url",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "hora_minima",
+                                                                                   "displayName":  "hora_minima",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_busqueda",
+                                                                                   "displayName":  "servicio_busqueda",
+                                                                                   "type":  "string",
+                                                                                   "required":  false,
+                                                                                   "display":  true,
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "canal_origen",
+                                                                                   "displayName":  "canal_origen",
+                                                                                   "type":  "string",
+                                                                                   "required":  false,
+                                                                                   "display":  true,
+                                                                                   "removed":  false
+                                                                               }
+                                                                           ],
+                                                                "attemptToConvertTypes":  true,
+                                                                "convertFieldsToString":  false
+                                                            },
+                                         "options":  {
+                                                         "waitForSubWorkflow":  true
+                                                     }
+                                     },
+                      "id":  "9da38ef9-09bd-4937-8b33-70a17705f46c",
+                      "name":  "Consultar Roma",
+                      "type":  "n8n-nodes-base.executeWorkflow",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       6768,
+                                       4768
+                                   ],
+                      "onError":  "continueRegularOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const d = $input.first().json;\nreturn [{ json: { ...d, sucursal: \u002724221\u0027 } }];"
+                                     },
+                      "id":  "168483fc-3149-423b-8206-626438616d44",
+                      "name":  "Preparar Roma",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       6512,
+                                       4768
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const d = $input.first().json;\nreturn [{ json: {\n  ok: false,\n  estado: \u0027DATOS_INVALIDOS\u0027,\n  disponible: false,\n  errores: d.errores_entrada || [\u0027Datos incompletos\u0027],\n  errores_entrada: d.errores_entrada || [],\n  mensaje: \u0027ðŸ“ Antes de buscar disponibilidad necesitamos corregir: \u0027 + (d.errores_entrada || []).join(\u0027, \u0027),\n  solo_consulta: true,\n  guardar_borrador: false,\n  crear_cita_pabau: false\n} }];"
+                                     },
+                      "id":  "757b88a0-0ace-4a41-b0a5-eab992f1f134",
+                      "name":  "Salida datos invÃ¡lidos",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       6512,
+                                       5040
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "// SelecciÃ³n de presentaciÃ³n: recibe Ãºnicamente opciones ya verificadas.\n// No crea horas, no cambia recursos y no aÃ±ade lÃ­mites de disponibilidad.\nfunction seleccionarHorariosVariados(opciones) {\n  const porHora = new Map();\n  for (const opcion of opciones || []) {\n    if (!opcion || opcion.disponible === false) continue;\n    const m = String(opcion.hora_inicio || \u0027\u0027).trim().match(/^(\\d{1,2}):(\\d{2})$/);\n    if (!m || Number(m[1]) \u003e 23 || Number(m[2]) \u003e 59) continue;\n    const minuto = Number(m[1]) * 60 + Number(m[2]);\n    // En otra sucursal, conservar el orden previo para desempatar la misma hora.\n    if (!porHora.has(minuto)) porHora.set(minuto, { minuto, opcion });\n  }\n  const candidatas = [...porHora.values()].sort((a,b) =\u003e a.minuto-b.minuto);\n  if (candidatas.length \u003c= 3) return candidatas.map(x =\u003e x.opcion);\n  // Son referencias flexibles; todos los candidatos conservan elegibilidad.\n  const referencias = [11*60, 14*60+20, 17*60];\n  let mejor = null;\n  for (let i=0; i\u003ccandidatas.length-2; i++) {\n    for (let j=i+1; j\u003ccandidatas.length-1; j++) {\n      for (let k=j+1; k\u003ccandidatas.length; k++) {\n        const trio = [candidatas[i],candidatas[j],candidatas[k]];\n        const distancia = trio.reduce((total,x,n) =\u003e total+Math.abs(x.minuto-referencias[n]),0);\n        const separacion = Math.min(trio[1].minuto-trio[0].minuto,trio[2].minuto-trio[1].minuto);\n        const amplitud = trio[2].minuto-trio[0].minuto;\n        if (!mejor || distancia\u003cmejor.distancia ||\n          (distancia===mejor.distancia \u0026\u0026 (separacion\u003emejor.separacion ||\n          (separacion===mejor.separacion \u0026\u0026 amplitud\u003emejor.amplitud)))) {\n          mejor = { trio, distancia, separacion, amplitud };\n        }\n      }\n    }\n  }\n  return mejor.trio.map(x =\u003e x.opcion);\n}\n\nconst nombres = {\n  \u002724077\u0027: \u0027Valle\u0027,\n  \u002724079\u0027: \u0027Polanco\u0027,\n  \u002724080\u0027: \u0027JuÃ¡rez\u0027,\n  \u002724082\u0027: \u0027Lomas\u0027,\n  \u002724221\u0027: \u0027Roma\u0027\n};\nconst ordenSucursales = [\u002724077\u0027, \u002724079\u0027, \u002724080\u0027, \u002724082\u0027, \u002724221\u0027];\n\nfunction limpiar(valor) {\n  return String(valor ?? \u0027\u0027).trim();\n}\n\nfunction normalizarTexto(valor) {\n  return limpiar(valor)\n    .normalize(\u0027NFD\u0027)\n    .replace(/[\\u0300-\\u036f]/g, \u0027\u0027)\n    .replace(/\\s+/g, \u0027 \u0027)\n    .toLowerCase();\n}\n\nfunction sucursalId(valor) {\n  const mapa = {\n    \u002724077\u0027: \u002724077\u0027, valle: \u002724077\u0027, \u0027del valle\u0027: \u002724077\u0027,\n    \u002724079\u0027: \u002724079\u0027, polanco: \u002724079\u0027, polanquito: \u002724079\u0027,\n    \u002724080\u0027: \u002724080\u0027, juarez: \u002724080\u0027, \u0027centro juarez\u0027: \u002724080\u0027,\n    \u002724082\u0027: \u002724082\u0027, lomas: \u002724082\u0027, \u0027lomas de chapultepec\u0027: \u002724082\u0027,\n    \u002724221\u0027: \u002724221\u0027, roma: \u002724221\u0027, \u0027roma norte\u0027: \u002724221\u0027, \u0027colonia roma\u0027: \u002724221\u0027\n  };\n  return mapa[normalizarTexto(valor)] || limpiar(valor);\n}\n\nfunction aBooleano(valor) {\n  if (typeof valor === \u0027boolean\u0027) return valor;\n  return [\u00271\u0027, \u0027true\u0027, \u0027si\u0027, \u0027sÃ­\u0027, \u0027yes\u0027].includes(normalizarTexto(valor));\n}\n\nfunction tieneFormaResultado(valor) {\n  return valor \u0026\u0026 typeof valor === \u0027object\u0027 \u0026\u0026 !Array.isArray(valor) \u0026\u0026 (\n    valor.sucursal !== undefined ||\n    valor.sucursal_solicitada !== undefined ||\n    valor.opcion_exacta !== undefined ||\n    valor.resultado_principal !== undefined ||\n    valor.alternativas !== undefined ||\n    valor.alternativas_cercanas !== undefined ||\n    valor.estado !== undefined\n  );\n}\n\nfunction desenvolver(valor, profundidad = 0) {\n  if (profundidad \u003e 5 || valor === undefined || valor === null) return [];\n  if (Array.isArray(valor)) {\n    return valor.flatMap((item) =\u003e desenvolver(item, profundidad + 1));\n  }\n  if (typeof valor !== \u0027object\u0027) return [];\n  if (tieneFormaResultado(valor)) return [valor];\n\n  for (const clave of [\u0027json\u0027, \u0027output\u0027, \u0027data\u0027, \u0027result\u0027]) {\n    if (valor[clave] \u0026\u0026 typeof valor[clave] === \u0027object\u0027) {\n      const encontrados = desenvolver(valor[clave], profundidad + 1);\n      if (encontrados.length) return encontrados;\n    }\n  }\n  return [];\n}\n\nlet solicitud = {};\ntry {\n  solicitud = $(\u0027Normalizar solicitud global\u0027).first().json || {};\n} catch {}\n\nconst resultados = $input.all()\n  .flatMap((item) =\u003e desenvolver(item?.json ?? item))\n  .map((resultado) =\u003e ({\n    ...resultado,\n    sucursal: sucursalId(resultado.sucursal || resultado.nombre_sucursal)\n  }))\n  .filter((resultado) =\u003e ordenSucursales.includes(String(resultado.sucursal)))\n  .sort((a, b) =\u003e ordenSucursales.indexOf(String(a.sucursal)) - ordenSucursales.indexOf(String(b.sucursal)));\n\nconst primera = resultados[0] || {};\nconst sucursalSolicitada = sucursalId(\n  solicitud.sucursal_solicitada ||\n  solicitud.sucursal ||\n  primera.sucursal_solicitada ||\n  primera.sucursal\n);\nconst horarioSolicitado = limpiar(\n  solicitud.horario_normalizado ||\n  solicitud.horario ||\n  primera.horario_solicitado ||\n  primera.horario\n) || null;\nconst fecha = limpiar(solicitud.fecha || primera.fecha) || null;\nconst servicio = limpiar(solicitud.servicio_confirmado || solicitud.servicio || primera.servicio_confirmado || primera.servicio) || null;\n\nconst conflictos=resultados.filter(r=\u003er.ok===true \u0026\u0026 String(r.servicio_confirmado||r.servicio||\u0027\u0027)!==servicio);\nif(conflictos.length)return [{json:{ok:false,estado:\u0027SERVICIO_NO_COINCIDE\u0027,servicio,solicitud_id:solicitud.solicitud_id||\u0027\u0027,disponible:false,hay_disponibilidad:false,opciones_para_cliente:[],mensaje:\u0027La consulta recibiÃ³ resultados de otra experiencia. Requiere revisiÃ³n antes de ofrecer horarios.\u0027,solo_consulta:true,guardar_borrador:false,crear_cita_pabau:false}}];\n\nconst modoBusqueda = solicitud.modo_busqueda || (horarioSolicitado ? \u0027hora_preferida\u0027 : \u0027dia_completo\u0027);\nconst horaMinima = modoBusqueda === \u0027tarde\u0027 ? (limpiar(solicitud.hora_minima) || \u002715:20\u0027) : null;\n\nfunction normalizarOpcion(opcion, resultado) {\n  if (!opcion || typeof opcion !== \u0027object\u0027) return null;\n  const sucursal = sucursalId(opcion.sucursal || resultado?.sucursal);\n  const hora = limpiar(opcion.hora_inicio || opcion.horario || opcion.hora_jacuzzi || opcion.hora_masaje || opcion.hora);\n  const horaJacuzzi = limpiar(opcion.hora_jacuzzi) || null;\n  const horaMasaje = limpiar(opcion.hora_masaje) || null;\n  if (!ordenSucursales.includes(sucursal) || !/^([01]?\\d|2[0-3]):[0-5]\\d$/.test(hora)) return null;\n  if (opcion.disponible===false || String(opcion.fecha || resultado?.fecha || fecha)!==String(fecha)) return null;\n  if (String(opcion.servicio || resultado?.servicio_confirmado || resultado?.servicio || servicio)!==String(servicio)) return null;\n  if (sucursal!==String(resultado?.sucursal)) return null;\n  return {\n    ...opcion,\n    sucursal,\n    nombre_sucursal: nombres[sucursal] || opcion.nombre_sucursal || sucursal,\n    misma_sucursal: sucursal===sucursalSolicitada,\n    fecha: limpiar(opcion.fecha || resultado?.fecha || fecha) || null,\n    hora_inicio: hora,\n    horario: hora,\n    hora_jacuzzi: horaJacuzzi,\n    hora_masaje: horaMasaje\n  };\n}\n\nfunction opcionExacta(resultado) {\n  if (!resultado || resultado.ok!==true || resultado.error) return null;\n  const opcion = resultado.opcion_exacta || resultado.resultado_principal;\n  const marcadaDisponible =\n    aBooleano(resultado.disponible) ||\n    [\u0027DISPONIBLE_EXACTO\u0027, \u0027DISPONIBLE_SUCURSAL_SOLICITADA\u0027].includes(String(resultado.estado || \u0027\u0027));\n  return marcadaDisponible ? normalizarOpcion(opcion, resultado) : null;\n}\n\nfunction alternativasDe(resultado) {\n  if (!resultado || resultado.ok!==true || resultado.error) return [];\n  const lista = Array.isArray(resultado.alternativas)\n    ? resultado.alternativas\n    : (Array.isArray(resultado.alternativas_disponibles)\n      ? resultado.alternativas_disponibles\n      : (Array.isArray(resultado.alternativas_cercanas)\n        ? resultado.alternativas_cercanas\n        : []));\n  return lista.map((opcion) =\u003e normalizarOpcion(opcion, resultado)).filter(Boolean).filter(cumpleHoraMinima);\n}\n\nfunction sinDuplicados(opciones) {\n  const vistas = new Set();\n  return opciones.filter((opcion) =\u003e {\n    const clave = [opcion.sucursal, opcion.fecha, opcion.hora_inicio].join(\u0027|\u0027);\n    if (vistas.has(clave)) return false;\n    vistas.add(clave);\n    return true;\n  });\n}\n\nconst solicitado = resultados.find((resultado) =\u003e String(resultado.sucursal) === sucursalSolicitada);\nconst exactaSolicitada = modoBusqueda === \u0027tarde\u0027 ? null : opcionExacta(solicitado);\n\nconst exactasOtras = resultados\n  .filter(() =\u003e modoBusqueda !== \u0027tarde\u0027)\n  .filter((resultado) =\u003e String(resultado.sucursal) !== sucursalSolicitada)\n  .map((resultado) =\u003e opcionExacta(resultado))\n  .filter(Boolean)\n  .map((opcion) =\u003e ({\n    ...opcion,\n    tipo_opcion: \u0027MISMA_HORA_OTRA_SUCURSAL\u0027\n  }));\n\nconst alternativasSolicitada = alternativasDe(solicitado).map((opcion) =\u003e ({\n  ...opcion,\n  tipo_opcion: \u0027HORARIO_DISPONIBLE_MISMA_SUCURSAL\u0027\n}));\n\nconst alternativasOtras = resultados\n  .filter((resultado) =\u003e String(resultado.sucursal) !== sucursalSolicitada)\n  .flatMap((resultado) =\u003e alternativasDe(resultado).map((opcion) =\u003e ({\n    ...opcion,\n    tipo_opcion: \u0027HORARIO_DISPONIBLE_OTRA_SUCURSAL\u0027\n  })));\n\nfunction minutosHora(valor) {\n  const match = limpiar(valor).match(/^(\\d{1,2}):(\\d{2})$/);\n  return match ? Number(match[1]) * 60 + Number(match[2]) : null;\n}\n\nfunction cumpleHoraMinima(opcion) {\n  if (modoBusqueda !== \u0027tarde\u0027) return true;\n  const minuto = minutosHora(opcion?.hora_inicio);\n  const minimo = minutosHora(horaMinima || \u002715:20\u0027);\n  return minuto !== null \u0026\u0026 minimo !== null \u0026\u0026 minuto \u003e= minimo;\n}\n\nfunction ordenarPorCercania(opciones, minutoReferencia) {\n  const lista = [...opciones];\n  lista.sort((a, b) =\u003e {\n    const minutoA = minutosHora(a.hora_inicio);\n    const minutoB = minutosHora(b.hora_inicio);\n\n    if (minutoReferencia !== null) {\n      const distanciaA = minutoA === null\n        ? Number.MAX_SAFE_INTEGER\n        : Math.abs(minutoA - minutoReferencia);\n      const distanciaB = minutoB === null\n        ? Number.MAX_SAFE_INTEGER\n        : Math.abs(minutoB - minutoReferencia);\n      if (distanciaA !== distanciaB) return distanciaA - distanciaB;\n\n      // En un empate se prefiere el horario posterior al solicitado.\n      const futuroA = minutoA !== null \u0026\u0026 minutoA \u003e= minutoReferencia ? 0 : 1;\n      const futuroB = minutoB !== null \u0026\u0026 minutoB \u003e= minutoReferencia ? 0 : 1;\n      if (futuroA !== futuroB) return futuroA - futuroB;\n    }\n\n    const ordenA = ordenSucursales.indexOf(String(a.sucursal));\n    const ordenB = ordenSucursales.indexOf(String(b.sucursal));\n    if (ordenA !== ordenB) return ordenA - ordenB;\n    return (minutoA ?? Number.MAX_SAFE_INTEGER) - (minutoB ?? Number.MAX_SAFE_INTEGER);\n  });\n  return lista;\n}\n\nconst minutoSolicitado = modoBusqueda === \u0027tarde\u0027\n  ? minutosHora(horaMinima || \u002715:20\u0027)\n  : minutosHora(horarioSolicitado);\nconst alternativasMismaSucursal = modoBusqueda === \u0027dia_completo\u0027 \u0026\u0026 !horarioSolicitado\n  ? seleccionarHorariosVariados(ordenarPorCercania(sinDuplicados(alternativasSolicitada), null))\n  : ordenarPorCercania(sinDuplicados(alternativasSolicitada), minutoSolicitado).slice(0, 3);\nconst alternativasOtrasSucursales = modoBusqueda === \u0027dia_completo\u0027 \u0026\u0026 !horarioSolicitado\n  ? seleccionarHorariosVariados(ordenarPorCercania(sinDuplicados(alternativasOtras), null))\n  : ordenarPorCercania(sinDuplicados(alternativasOtras), minutoSolicitado).slice(0, 3);\nconst exactasOtrasOrdenadas = sinDuplicados(exactasOtras)\n  .sort((a, b) =\u003e\n    ordenSucursales.indexOf(String(a.sucursal)) -\n    ordenSucursales.indexOf(String(b.sucursal))\n  )\n  .slice(0, 3);\n\n// Prioridad estricta:\n// 1) exacta en la sede pedida;\n// 2) cercanas en la misma sede;\n// 3) misma hora en otras sedes;\n// 4) cercanas en otras sedes;\n// 5) sin disponibilidad.\nlet estado = \u0027SIN_DISPONIBILIDAD\u0027;\nlet opciones = [];\nlet nivelPrioridad = 5;\nlet mensaje = \u0027ðŸ˜• Por el momento no encontramos horarios disponibles para \u0027 +\n  (servicio || \u0027la experiencia solicitada\u0027) + \u0027 el \u0027 + (fecha || \u0027dÃ­a seleccionado\u0027) +\n  \u0027 en ninguna de nuestras sucursales. Podemos revisar otra fecha.\u0027;\n\nif (exactaSolicitada) {\n  nivelPrioridad = 1;\n  estado = \u0027DISPONIBLE_SUCURSAL_SOLICITADA\u0027;\n  opciones = [{\n    ...exactaSolicitada,\n    tipo_opcion: \u0027HORARIO_EXACTO_SOLICITADO\u0027\n  }];\n  mensaje = \u0027âœ… Tenemos disponibilidad para \u0027 +\n    (servicio || \u0027la experiencia solicitada\u0027) + \u0027 en \u0027 +\n    (nombres[sucursalSolicitada] || sucursalSolicitada) +\n    \u0027 el \u0027 + fecha + \u0027 a las \u0027 + horarioSolicitado +\n    \u0027. Â¿Te funciona este horario? ðŸ˜Š\u0027;\n} else if (alternativasMismaSucursal.length) {\n  nivelPrioridad = 2;\n  estado = modoBusqueda === \u0027tarde\u0027\n    ? \u0027HORARIOS_TARDE_DISPONIBLES\u0027\n    : (modoBusqueda === \u0027dia_completo\u0027 ? \u0027HORARIOS_DIA_DISPONIBLES\u0027 : \u0027ALTERNATIVAS_MISMA_SUCURSAL\u0027);\n  opciones = alternativasMismaSucursal;\n  mensaje = \u0027âœ¨ Para \u0027 + (servicio || \u0027la experiencia solicitada\u0027) + \u0027 en \u0027 +\n    (nombres[sucursalSolicitada] || sucursalSolicitada) + \u0027 el \u0027 + fecha +\n    \u0027, estos horarios sÃ­ estÃ¡n disponibles:\\n\\n\u0027 +\n    opciones.map((opcion, indice) =\u003e\n      (indice + 1) + \u0027. ðŸ• \u0027 + opcion.hora_inicio\n    ).join(\u0027\\n\u0027) +\n    \u0027\\n\\nÂ¿CuÃ¡l te funciona mejor? ðŸ˜Š\u0027;\n} else if (exactasOtrasOrdenadas.length) {\n  nivelPrioridad = 3;\n  estado = \u0027MISMA_HORA_OTRA_SUCURSAL\u0027;\n  opciones = exactasOtrasOrdenadas;\n  mensaje = \u0027ðŸ“ No encontramos disponibilidad en \u0027 +\n    (nombres[sucursalSolicitada] || sucursalSolicitada) +\n    \u0027, pero el horario de las \u0027 + horarioSolicitado + \u0027 estÃ¡ disponible en: \u0027 +\n    exactasOtrasOrdenadas.map((opcion) =\u003e opcion.nombre_sucursal).join(\u0027, \u0027) +\n    \u0027. Â¿CuÃ¡l sucursal te funciona? ðŸ˜Š\u0027;\n} else if (alternativasOtrasSucursales.length) {\n  nivelPrioridad = 4;\n  estado = \u0027ALTERNATIVAS_OTRAS_SUCURSALES\u0027;\n  opciones = alternativasOtrasSucursales;\n  mensaje = \u0027ðŸ“ No encontramos horarios disponibles en \u0027 +\n    (nombres[sucursalSolicitada] || sucursalSolicitada) +\n    \u0027, pero tenemos estas opciones en otras sucursales:\\n\\n\u0027 +\n    opciones.map((opcion, indice) =\u003e\n      (indice + 1) + \u0027. ðŸ• \u0027 + opcion.hora_inicio + \u0027 en \u0027 + opcion.nombre_sucursal\n    ).join(\u0027\\n\u0027) +\n    \u0027\\n\\nÂ¿CuÃ¡l te funciona mejor? ðŸ˜Š\u0027;\n}\n\n// Un resultado ausente o fallido no demuestra falta de espacios.\nconst sucursalesFallidas=resultados.filter(r=\u003er.ok!==true || r.error);\nconst faltantes=ordenSucursales.filter(id=\u003e!resultados.some(r=\u003eString(r.sucursal)===id));\nconst erroresIds=[...new Set([...sucursalesFallidas.map(r=\u003eString(r.sucursal)),...faltantes])];\nconst consultaParcial=erroresIds.length\u003e0;\nconst solicitadaFallida=!solicitado || solicitado.ok!==true || !!solicitado.error;\nif(consultaParcial){\n const sedes=erroresIds.map(id=\u003enombres[id]).join(\u0027, \u0027);\n if(opciones.length){\n   estado=\u0027DISPONIBILIDAD_PARCIAL\u0027;\n   mensaje=\u0027No pude confirmar la disponibilidad en \u0027+sedes+\u0027. Esto no significa que no haya espacios.\\n\\n\u0027+\n     \u0027Para \u0027+servicio+\u0027 el \u0027+fecha+\u0027, estas opciones sÃ­ estÃ¡n verificadas:\\n\u0027+\n     opciones.map((o,i)=\u003e(i+1)+\u0027. \u0027+o.hora_inicio+\u0027 en \u0027+o.nombre_sucursal).join(\u0027\\n\u0027)+\n     \u0027\\n\\nÂ¿CuÃ¡l te funciona o prefieres que una asesora revise la sucursal solicitada?\u0027;\n }else{\n   estado=\u0027CONSULTA_INCOMPLETA\u0027;\n   mensaje=\u0027No pude completar la consulta en \u0027+sedes+\u0027. Necesitamos revisar esas sucursales antes de confirmar si hay espacios. Â¿Prefieres que una asesora revise tu solicitud?\u0027;\n }\n}\nconst alternativasDisponibles = alternativasMismaSucursal.length\n  ? alternativasMismaSucursal\n  : alternativasOtrasSucursales;\n\nconst hayDisponibilidad = opciones.length \u003e 0;\nconst erroresSucursales = [\n ...sucursalesFallidas.map(r=\u003e({sucursal:String(r.sucursal),estado:r.estado||\u0027ERROR_CONSULTA\u0027,error:String(r.mensaje || r.error?.message || r.error || (r.errores||[]).join(\u0027 \u0027) || \u0027Consulta fallida\u0027)})),\n ...faltantes.map(id=\u003e({sucursal:id,estado:\u0027SIN_RESPUESTA\u0027,error:\u0027La sucursal no devolviÃ³ resultado\u0027}))\n];\n\nreturn [{\n  json: {\n    ok: hayDisponibilidad || (!consultaParcial \u0026\u0026 resultados.length\u003e0),\n    consulta_parcial: consultaParcial,\n    consulta_sucursal_solicitada_exitosa: !solicitadaFallida,\n    requiere_revision: consultaParcial,\n    estado,\n    // Disponible significa que existe al menos una opciÃ³n utilizable,\n    // aunque no sea el horario exacto de la sucursal solicitada.\n    disponible: hayDisponibilidad,\n    hay_disponibilidad: hayDisponibilidad,\n    disponible_sucursal_solicitada: Boolean(exactaSolicitada),\n    hay_opciones_sucursal_solicitada: Boolean(exactaSolicitada || alternativasMismaSucursal.length),\n    nivel_prioridad_aplicado: nivelPrioridad,\n    alternativas_misma_sucursal: alternativasMismaSucursal,\n    alternativas_otras_sucursales: alternativasOtrasSucursales,\n    hay_misma_hora_otra_sucursal: exactasOtras.length \u003e 0,\n    hay_alternativas: alternativasDisponibles.length \u003e 0,\n    cantidad_opciones: opciones.length,\n    sucursal_solicitada: sucursalSolicitada || null,\n    nombre_sucursal_solicitada: nombres[sucursalSolicitada] || null,\n    fecha,\n    servicio,\n    servicio_confirmado: servicio,\n    solicitud_id: solicitud.solicitud_id || \u0027\u0027,\n    subscriber_id: solicitud.subscriber_id || \u0027\u0027,\n    modo_busqueda: modoBusqueda,\n    hora_minima: horaMinima,\n    horario_solicitado: horarioSolicitado,\n    resultado_principal: exactaSolicitada,\n    misma_hora_otras_sucursales: exactasOtras,\n    alternativas_disponibles: alternativasDisponibles,\n    // Se conserva este alias para no romper nodos anteriores.\n    alternativas_cercanas: alternativasDisponibles,\n    opciones_para_cliente: opciones,\n    requiere_confirmacion_cliente: hayDisponibilidad,\n    mensaje,\n    cantidad_resultados_recibidos: resultados.length,\n    sucursales_con_resultado: resultados.map((resultado) =\u003e String(resultado.sucursal)),\n    errores_sucursales: erroresSucursales,\n    resultados_por_sucursal: resultados,\n    solo_consulta: true,\n    guardar_borrador: false,\n    crear_cita_pabau: false\n  }\n}];"
+                                     },
+                      "id":  "72258c3b-1d60-4f31-ad6c-45c9d4554c90",
+                      "name":  "Ordenar disponibilidad global",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       7344,
+                                       4320
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "numberInputs":  5
+                                     },
+                      "id":  "03bf734b-69d1-4dd8-84d5-ba9243eb4e16",
+                      "name":  "Unir cinco sucursales",
+                      "type":  "n8n-nodes-base.merge",
+                      "typeVersion":  3.2,
+                      "position":  [
+                                       7072,
+                                       4272
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "workflowId":  {
+                                                            "__rl":  true,
+                                                            "value":  "5R4VKvc54vRqYKXT",
+                                                            "mode":  "list",
+                                                            "cachedResultUrl":  "/workflow/5R4VKvc54vRqYKXT",
+                                                            "cachedResultName":  "3_V3_SUB_Disponibilidad_5_sucursales_PERSONAL_VIGENTE"
+                                                        },
+                                         "workflowInputs":  {
+                                                                "mappingMode":  "defineBelow",
+                                                                "value":  {
+                                                                              "subscriber_id":  "={{ $json.subscriber_id }}",
+                                                                              "servicio":  "={{ $json.servicio }}",
+                                                                              "sucursal_solicitada":  "={{ $json.sucursal_solicitada }}",
+                                                                              "sucursal":  "={{ $json.sucursal }}",
+                                                                              "fecha":  "={{ $json.fecha }}",
+                                                                              "horario":  "={{ $json.horario || \u0027\u0027 }}",
+                                                                              "numero_personas":  "={{ $json.numero_personas }}",
+                                                                              "es_feriado":  "={{ $json.es_feriado }}",
+                                                                              "servicio_confirmado":  "={{ $json.servicio_confirmado }}",
+                                                                              "modo_busqueda":  "={{ $json.modo_busqueda }}",
+                                                                              "hora_minima":  "={{ $json.hora_minima || \u0027\u0027 }}",
+                                                                              "live_chat_url":  "={{ $json.live_chat_url || \u0027\u0027 }}",
+                                                                              "servicio_busqueda":  "={{ $json.servicio_busqueda }}",
+                                                                              "canal_origen":  "={{ $json.canal_origen || \u0027\u0027 }}"
+                                                                          },
+                                                                "matchingColumns":  [
+
+                                                                                    ],
+                                                                "schema":  [
+                                                                               {
+                                                                                   "id":  "subscriber_id",
+                                                                                   "displayName":  "subscriber_id",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio",
+                                                                                   "displayName":  "servicio",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal_solicitada",
+                                                                                   "displayName":  "sucursal_solicitada",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal",
+                                                                                   "displayName":  "sucursal",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "fecha",
+                                                                                   "displayName":  "fecha",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "horario",
+                                                                                   "displayName":  "horario",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "numero_personas",
+                                                                                   "displayName":  "numero_personas",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "number",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "es_feriado",
+                                                                                   "displayName":  "es_feriado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "boolean",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_confirmado",
+                                                                                   "displayName":  "servicio_confirmado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "modo_busqueda",
+                                                                                   "displayName":  "modo_busqueda",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "live_chat_url",
+                                                                                   "displayName":  "live_chat_url",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "hora_minima",
+                                                                                   "displayName":  "hora_minima",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_busqueda",
+                                                                                   "displayName":  "servicio_busqueda",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "canal_origen",
+                                                                                   "displayName":  "canal_origen",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               }
+                                                                           ],
+                                                                "attemptToConvertTypes":  true,
+                                                                "convertFieldsToString":  false
+                                                            },
+                                         "options":  {
+                                                         "waitForSubWorkflow":  true
+                                                     }
+                                     },
+                      "id":  "6f6eb2da-cd55-4823-947e-d9ccd411cf35",
+                      "name":  "Consultar Lomas",
+                      "type":  "n8n-nodes-base.executeWorkflow",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       6768,
+                                       4560
+                                   ],
+                      "onError":  "continueRegularOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "workflowId":  {
+                                                            "__rl":  true,
+                                                            "value":  "5R4VKvc54vRqYKXT",
+                                                            "mode":  "list",
+                                                            "cachedResultUrl":  "/workflow/5R4VKvc54vRqYKXT",
+                                                            "cachedResultName":  "3_V3_SUB_Disponibilidad_5_sucursales_PERSONAL_VIGENTE"
+                                                        },
+                                         "workflowInputs":  {
+                                                                "mappingMode":  "defineBelow",
+                                                                "value":  {
+                                                                              "subscriber_id":  "={{ $json.subscriber_id }}",
+                                                                              "servicio":  "={{ $json.servicio }}",
+                                                                              "sucursal_solicitada":  "={{ $json.sucursal_solicitada }}",
+                                                                              "sucursal":  "={{ $json.sucursal }}",
+                                                                              "fecha":  "={{ $json.fecha }}",
+                                                                              "horario":  "={{ $json.horario || \u0027\u0027 }}",
+                                                                              "numero_personas":  "={{ $json.numero_personas }}",
+                                                                              "es_feriado":  "={{ $json.es_feriado }}",
+                                                                              "servicio_confirmado":  "={{ $json.servicio_confirmado }}",
+                                                                              "modo_busqueda":  "={{ $json.modo_busqueda }}",
+                                                                              "hora_minima":  "={{ $json.hora_minima || \u0027\u0027 }}",
+                                                                              "live_chat_url":  "={{ $json.live_chat_url || \u0027\u0027 }}",
+                                                                              "servicio_busqueda":  "={{ $json.servicio_busqueda }}",
+                                                                              "canal_origen":  "={{ $json.canal_origen || \u0027\u0027 }}"
+                                                                          },
+                                                                "matchingColumns":  [
+
+                                                                                    ],
+                                                                "schema":  [
+                                                                               {
+                                                                                   "id":  "subscriber_id",
+                                                                                   "displayName":  "subscriber_id",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio",
+                                                                                   "displayName":  "servicio",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal_solicitada",
+                                                                                   "displayName":  "sucursal_solicitada",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal",
+                                                                                   "displayName":  "sucursal",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "fecha",
+                                                                                   "displayName":  "fecha",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "horario",
+                                                                                   "displayName":  "horario",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "numero_personas",
+                                                                                   "displayName":  "numero_personas",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "number",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "es_feriado",
+                                                                                   "displayName":  "es_feriado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "boolean",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_confirmado",
+                                                                                   "displayName":  "servicio_confirmado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "modo_busqueda",
+                                                                                   "displayName":  "modo_busqueda",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "live_chat_url",
+                                                                                   "displayName":  "live_chat_url",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "hora_minima",
+                                                                                   "displayName":  "hora_minima",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_busqueda",
+                                                                                   "displayName":  "servicio_busqueda",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "canal_origen",
+                                                                                   "displayName":  "canal_origen",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               }
+                                                                           ],
+                                                                "attemptToConvertTypes":  true,
+                                                                "convertFieldsToString":  false
+                                                            },
+                                         "options":  {
+                                                         "waitForSubWorkflow":  true
+                                                     }
+                                     },
+                      "id":  "b8ad79fa-9533-47d2-beaf-69b82ed92eae",
+                      "name":  "Consultar JuÃ¡rez",
+                      "type":  "n8n-nodes-base.executeWorkflow",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       6768,
+                                       4368
+                                   ],
+                      "onError":  "continueRegularOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "workflowId":  {
+                                                            "__rl":  true,
+                                                            "value":  "5R4VKvc54vRqYKXT",
+                                                            "mode":  "list",
+                                                            "cachedResultUrl":  "/workflow/5R4VKvc54vRqYKXT",
+                                                            "cachedResultName":  "3_V3_SUB_Disponibilidad_5_sucursales_PERSONAL_VIGENTE"
+                                                        },
+                                         "workflowInputs":  {
+                                                                "mappingMode":  "defineBelow",
+                                                                "value":  {
+                                                                              "subscriber_id":  "={{ $json.subscriber_id }}",
+                                                                              "servicio":  "={{ $json.servicio }}",
+                                                                              "sucursal_solicitada":  "={{ $json.sucursal_solicitada }}",
+                                                                              "sucursal":  "={{ $json.sucursal }}",
+                                                                              "fecha":  "={{ $json.fecha }}",
+                                                                              "horario":  "={{ $json.horario || \u0027\u0027 }}",
+                                                                              "numero_personas":  "={{ $json.numero_personas }}",
+                                                                              "es_feriado":  "={{ $json.es_feriado }}",
+                                                                              "servicio_confirmado":  "={{ $json.servicio_confirmado }}",
+                                                                              "modo_busqueda":  "={{ $json.modo_busqueda }}",
+                                                                              "hora_minima":  "={{ $json.hora_minima || \u0027\u0027 }}",
+                                                                              "live_chat_url":  "={{ $json.live_chat_url || \u0027\u0027 }}",
+                                                                              "servicio_busqueda":  "={{ $json.servicio_busqueda }}",
+                                                                              "canal_origen":  "={{ $json.canal_origen || \u0027\u0027 }}"
+                                                                          },
+                                                                "matchingColumns":  [
+
+                                                                                    ],
+                                                                "schema":  [
+                                                                               {
+                                                                                   "id":  "subscriber_id",
+                                                                                   "displayName":  "subscriber_id",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio",
+                                                                                   "displayName":  "servicio",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal_solicitada",
+                                                                                   "displayName":  "sucursal_solicitada",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal",
+                                                                                   "displayName":  "sucursal",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "fecha",
+                                                                                   "displayName":  "fecha",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "horario",
+                                                                                   "displayName":  "horario",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "numero_personas",
+                                                                                   "displayName":  "numero_personas",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "number",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "es_feriado",
+                                                                                   "displayName":  "es_feriado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "boolean",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_confirmado",
+                                                                                   "displayName":  "servicio_confirmado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "modo_busqueda",
+                                                                                   "displayName":  "modo_busqueda",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "live_chat_url",
+                                                                                   "displayName":  "live_chat_url",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "hora_minima",
+                                                                                   "displayName":  "hora_minima",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_busqueda",
+                                                                                   "displayName":  "servicio_busqueda",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "canal_origen",
+                                                                                   "displayName":  "canal_origen",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               }
+                                                                           ],
+                                                                "attemptToConvertTypes":  true,
+                                                                "convertFieldsToString":  false
+                                                            },
+                                         "options":  {
+                                                         "waitForSubWorkflow":  true
+                                                     }
+                                     },
+                      "id":  "2a3d9834-85bd-4a8e-a262-c600b97d3430",
+                      "name":  "Consultar Polanco",
+                      "type":  "n8n-nodes-base.executeWorkflow",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       6768,
+                                       4160
+                                   ],
+                      "onError":  "continueRegularOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "workflowId":  {
+                                                            "__rl":  true,
+                                                            "value":  "5R4VKvc54vRqYKXT",
+                                                            "mode":  "list",
+                                                            "cachedResultUrl":  "/workflow/5R4VKvc54vRqYKXT",
+                                                            "cachedResultName":  "3_V3_SUB_Disponibilidad_5_sucursales_PERSONAL_VIGENTE"
+                                                        },
+                                         "workflowInputs":  {
+                                                                "mappingMode":  "defineBelow",
+                                                                "value":  {
+                                                                              "subscriber_id":  "={{ $json.subscriber_id }}",
+                                                                              "servicio":  "={{ $json.servicio }}",
+                                                                              "sucursal":  "={{ $json.sucursal }}",
+                                                                              "fecha":  "={{ $json.fecha }}",
+                                                                              "horario":  "={{ $json.horario || \u0027\u0027 }}",
+                                                                              "numero_personas":  "={{ $json.numero_personas }}",
+                                                                              "es_feriado":  "={{ $json.es_feriado }}",
+                                                                              "servicio_confirmado":  "={{ $json.servicio_confirmado }}",
+                                                                              "modo_busqueda":  "={{ $json.modo_busqueda }}",
+                                                                              "hora_minima":  "={{ $json.hora_minima || \u0027\u0027 }}",
+                                                                              "sucursal_solicitada":  "={{ $json.sucursal_solicitada }}",
+                                                                              "live_chat_url":  "={{ $json.live_chat_url || \u0027\u0027 }}",
+                                                                              "servicio_busqueda":  "={{ $json.servicio_busqueda }}",
+                                                                              "canal_origen":  "={{ $json.canal_origen || \u0027\u0027 }}"
+                                                                          },
+                                                                "matchingColumns":  [
+
+                                                                                    ],
+                                                                "schema":  [
+                                                                               {
+                                                                                   "id":  "subscriber_id",
+                                                                                   "displayName":  "subscriber_id",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio",
+                                                                                   "displayName":  "servicio",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal_solicitada",
+                                                                                   "displayName":  "sucursal_solicitada",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "sucursal",
+                                                                                   "displayName":  "sucursal",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "fecha",
+                                                                                   "displayName":  "fecha",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "horario",
+                                                                                   "displayName":  "horario",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "numero_personas",
+                                                                                   "displayName":  "numero_personas",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "number",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "es_feriado",
+                                                                                   "displayName":  "es_feriado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "boolean",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_confirmado",
+                                                                                   "displayName":  "servicio_confirmado",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "modo_busqueda",
+                                                                                   "displayName":  "modo_busqueda",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "live_chat_url",
+                                                                                   "displayName":  "live_chat_url",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "hora_minima",
+                                                                                   "displayName":  "hora_minima",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "servicio_busqueda",
+                                                                                   "displayName":  "servicio_busqueda",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               },
+                                                                               {
+                                                                                   "id":  "canal_origen",
+                                                                                   "displayName":  "canal_origen",
+                                                                                   "required":  false,
+                                                                                   "defaultMatch":  false,
+                                                                                   "display":  true,
+                                                                                   "canBeUsedToMatch":  true,
+                                                                                   "type":  "string",
+                                                                                   "removed":  false
+                                                                               }
+                                                                           ],
+                                                                "attemptToConvertTypes":  true,
+                                                                "convertFieldsToString":  false
+                                                            },
+                                         "options":  {
+                                                         "waitForSubWorkflow":  true
+                                                     }
+                                     },
+                      "id":  "028c9cc5-4ebc-4686-b7af-484feebff821",
+                      "name":  "Consultar Valle",
+                      "type":  "n8n-nodes-base.executeWorkflow",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       6768,
+                                       3968
+                                   ],
+                      "onError":  "continueRegularOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const d = $input.first().json;\nreturn [{ json: { ...d, sucursal: \u002724082\u0027 } }];"
+                                     },
+                      "id":  "deb30c91-1d3c-4dc4-bd08-5c13b40fc234",
+                      "name":  "Preparar Lomas",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       6512,
+                                       4560
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const d = $input.first().json;\nreturn [{ json: { ...d, sucursal: \u002724080\u0027 } }];"
+                                     },
+                      "id":  "96bd5fcb-fc37-43e6-bd14-081b5f3c4d57",
+                      "name":  "Preparar JuÃ¡rez",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       6512,
+                                       4368
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const d = $input.first().json;\nreturn [{ json: { ...d, sucursal: \u002724079\u0027 } }];"
+                                     },
+                      "id":  "238da6a2-54e2-4604-a71b-f438646e23b5",
+                      "name":  "Preparar Polanco",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       6512,
+                                       4160
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const d = $input.first().json;\nreturn [{ json: { ...d, sucursal: \u002724077\u0027 } }];"
+                                     },
+                      "id":  "4579cee9-f78e-4780-80eb-eb2905a7f0e0",
+                      "name":  "Preparar Valle",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       6512,
+                                       3968
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  3
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "d15p0n1b-1l1d-4d00-8000-000000000203",
+                                                                                   "leftValue":  "={{ $json.entrada_valida }}",
+                                                                                   "rightValue":  true,
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true",
+                                                                                                    "singleValue":  true
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "33f76c39-6046-4bd5-8a50-53fc00fab413",
+                      "name":  "IF entrada vÃ¡lida",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.3,
+                      "position":  [
+                                       6160,
+                                       4464
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "// Identidad exacta del servicio. Las filas vigentes se leen de Google Sheets.\nfunction spaNorm(v) {\n  return String(v ?? \u0027\u0027).normalize(\u0027NFD\u0027).replace(/[\\u0300-\\u036f]/g, \u0027\u0027)\n    .toLowerCase().replace(/buddha|budhas|budas|buda\\b/g, \u0027budha\u0027)\n    .replace(/fulldayspa/g, \u0027full day spa\u0027).replace(/3\\s*p(?:x|ax)\\b/g, \u0027tribu\u0027)\n    .replace(/[^a-z0-9]+/g, \u0027 \u0027).replace(/\\s+/g, \u0027 \u0027).trim();\n}\nfunction spaFamily(v, n) {\n  let t = spaNorm(v).replace(/^(masaje|jacuzzi) /, \u0027\u0027);\n  t = t.replace(/^sauna elephant glow/, \u0027elephant glow\u0027).replace(/^premium budha/, \u0027budha\u0027);\n  const m = t.match(/^(premium(?: day(?: spa)?)?(?: facial)?|full(?: day(?: spa)?)?|budha(?: 70)?|temazcal bliss|elephant glow)(?: (individual|pareja|tribu))?$/);\n  if (!m) return null;\n  const root = m[1].startsWith(\u0027premium\u0027) ? (m[1].includes(\u0027facial\u0027) ? \u0027premium_day_spa_facial\u0027 : \u0027premium_day_spa\u0027)\n    : m[1].startsWith(\u0027full\u0027) ? \u0027full_day_spa\u0027 : m[1].startsWith(\u0027budha\u0027) ? \u0027budha_70\u0027 : m[1].replace(/ /g, \u0027_\u0027);\n  const mod = m[2] || (n === 1 ? \u0027individual\u0027 : n === 2 ? \u0027pareja\u0027 : n \u003e= 3 ? \u0027tribu\u0027 : \u0027\u0027);\n  return {root, mod, canonical: root + (mod ? \u0027_\u0027 + mod : \u0027\u0027)};\n}\nfunction spaCanonical(v, n) {\n  const f = spaFamily(v, n);\n  return f ? f.canonical : spaNorm(v).replace(/ /g, \u0027_\u0027) || null;\n}\nconst d = $(\u0027Desenvolver parÃ¡metros de disponibilidad\u0027).first().json || {};\n\nfunction limpiar(v) { return String(v ?? \u0027\u0027).trim(); }\nfunction texto(v) {\n  return limpiar(v).normalize(\u0027NFD\u0027).replace(/[\\u0300-\\u036f]/g, \u0027\u0027).replace(/[_-]+/g, \u0027 \u0027).replace(/\\s+/g, \u0027 \u0027).toLowerCase();\n}\nfunction slug(v) { return texto(v).replace(/[^a-z0-9\\s]/g, \u0027 \u0027).replace(/\\s+/g, \u0027_\u0027).replace(/^_+|_+$/g, \u0027\u0027); }\nfunction sucursal(v) {\n  const t = texto(v).replace(/^inside\\s+spa\\s+/, \u0027\u0027).replace(/^sucursal\\s+/, \u0027\u0027);\n  const mapa = {\n    \u002724077\u0027:\u002724077\u0027, valle:\u002724077\u0027, \u0027del valle\u0027:\u002724077\u0027,\n    \u002724079\u0027:\u002724079\u0027, polanco:\u002724079\u0027, polanquito:\u002724079\u0027,\n    \u002724080\u0027:\u002724080\u0027, juarez:\u002724080\u0027, \u0027centro juarez\u0027:\u002724080\u0027,\n    \u002724082\u0027:\u002724082\u0027, lomas:\u002724082\u0027, \u0027lomas de chapultepec\u0027:\u002724082\u0027,\n    \u002724221\u0027:\u002724221\u0027, roma:\u002724221\u0027, \u0027roma norte\u0027:\u002724221\u0027, \u0027colonia roma\u0027:\u002724221\u0027\n  };\n  return mapa[t] || limpiar(v);\n}\nfunction hora(v) {\n  let h = limpiar(v).toLowerCase();\n  if (!h) return null;\n  const ampm = h.match(/^(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)$/);\n  if (ampm) {\n    let hh = Number(ampm[1]); const mm = Number(ampm[2] || 0);\n    if (hh \u003c 1 || hh \u003e 12 || mm \u003e 59) return null;\n    if (ampm[3] === \u0027pm\u0027 \u0026\u0026 hh !== 12) hh += 12;\n    if (ampm[3] === \u0027am\u0027 \u0026\u0026 hh === 12) hh = 0;\n    return String(hh).padStart(2, \u00270\u0027) + \u0027:\u0027 + String(mm).padStart(2, \u00270\u0027);\n  }\n  if (/^\\d{1,2}$/.test(h)) h += \u0027:00\u0027;\n  const m = h.match(/^(\\d{1,2}):(\\d{2})(?::\\d{2})?$/);\n  if (!m || Number(m[1]) \u003e 23 || Number(m[2]) \u003e 59) return null;\n  return String(Number(m[1])).padStart(2, \u00270\u0027) + \u0027:\u0027 + m[2];\n}\nfunction canonico(v,personas) { return spaCanonical(v,personas); }\n\nconst personas = Number(d.numero_personas ?? d.personas ?? 0);\nconst recibido = limpiar(d.servicio_confirmado ?? d.servicio_canonico ?? d.servicio);\nconst servicio = canonico(recibido, personas);\nconst sucursalSolicitada = sucursal(d.sucursal_solicitada ?? d.sucursal);\nconst fecha = limpiar(d.fecha ?? d[\u0027fecha   \u0027] ?? d[\u0027fecha \u0027]);\nconst modoRecibido = texto(d.modo_busqueda);\nconst esTarde = [\u0027tarde\u0027, \u0027vespertino\u0027, \u0027vespertina\u0027].includes(modoRecibido);\nconst horario = esTarde ? null : hora(d.horario ?? d[\u0027horario \u0027] ?? d.hora ?? d.horario_normalizado);\nconst minimoRecibido = hora(d.hora_minima) || \u002715:20\u0027;\nconst horaMinima = esTarde ? (minimoRecibido \u003c \u002715:20\u0027 ? \u002715:20\u0027 : minimoRecibido) : null;\nconst modo = esTarde ? \u0027tarde\u0027 : (horario ? \u0027hora_preferida\u0027 : \u0027dia_completo\u0027);\nconst errores = [...(Array.isArray(d.errores_transporte) ? d.errores_transporte : [])];\nconst hOriginal=limpiar(d.horario??d.hora??\u0027\u0027);\nif(hOriginal\u0026\u0026!esTarde\u0026\u0026!horario)errores.push(\u0027Horario invÃ¡lido\u0027);\nif(d.servicio \u0026\u0026 d.servicio_confirmado \u0026\u0026 spaCanonical(d.servicio,personas)!==spaCanonical(d.servicio_confirmado,personas))errores.push(\u0027SERVICIO_NO_COINCIDE\u0027);\nif (!String(d.subscriber_id??\u0027\u0027).trim()) errores.push(\u0027Falta subscriber_id: revisar mapeo del bot\u0027);\nif (!servicio) errores.push(\u0027Falta servicio\u0027);\nif (![\u002724077\u0027,\u002724079\u0027,\u002724080\u0027,\u002724082\u0027,\u002724221\u0027].includes(sucursalSolicitada)) errores.push(\u0027Sucursal no vÃ¡lida\u0027);\nconst fechaObjeto = /^\\d{4}-\\d{2}-\\d{2}$/.test(fecha) ? new Date(fecha + \u0027T12:00:00Z\u0027) : null;\nif (!fechaObjeto || !Number.isFinite(fechaObjeto.getTime()) || fechaObjeto.toISOString().slice(0,10) !== fecha) errores.push(\u0027Fecha invÃ¡lida\u0027);\nif (!Number.isInteger(personas) || personas \u003c 1) errores.push(\u0027NÃºmero de personas invÃ¡lido\u0027);\n\nreturn [{json:{\n  canal_origen: limpiar(d.canal_origen), solicitud_id: limpiar(d.solicitud_id), servicio_busqueda: recibido, subscriber_id: limpiar(d.subscriber_id), live_chat_url: limpiar(d.live_chat_url), servicio, servicio_confirmado: servicio,\n  sucursal_solicitada: sucursalSolicitada, fecha, horario, horario_normalizado: horario,\n  modo_busqueda: modo, hora_minima: horaMinima, numero_personas: personas, personas,\n  es_feriado: d.es_feriado === true || [\u00271\u0027,\u0027true\u0027,\u0027si\u0027,\u0027sÃ­\u0027].includes(texto(d.es_feriado)),\n  errores_entrada: errores, entrada_valida: errores.length === 0\n}}];"
+                                     },
+                      "id":  "49b70c04-30eb-42b1-a6b1-e788d5cfc3e8",
+                      "name":  "Normalizar solicitud global",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       5904,
+                                       4464
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "workflowInputs":  {
+                                                                "values":  [
+                                                                               {
+                                                                                   "name":  "subscriber_id"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "servicio"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "sucursal"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "fecha"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "horario"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "numero_personas",
+                                                                                   "type":  "number"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "es_feriado",
+                                                                                   "type":  "boolean"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "servicio_confirmado"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "modo_busqueda"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "live_chat_url"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "hora_minima"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "solicitud_id"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "input"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "sucursal_solicitada"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "canal_origen"
+                                                                               }
+                                                                           ]
+                                                            }
+                                     },
+                      "id":  "6dc1ec53-bcc4-4c8a-99f9-d887ee8133bf",
+                      "name":  "Inicio disponibilidad global",
+                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       3840,
+                                       4464
+                                   ]
+                  }
+              ],
+    "pinData":  {
+
+                },
+    "connections":  {
+                        "Desenvolver parÃ¡metros de disponibilidad":  {
+                                                                          "main":  [
+                                                                                       [
+                                                                                           {
+                                                                                               "node":  "IF contacto para contexto",
+                                                                                               "type":  "main",
+                                                                                               "index":  0
+                                                                                           }
+                                                                                       ]
+                                                                                   ]
+                                                                      },
+                        "IF contacto para contexto":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Normalizar contexto de ejecuciÃ³n1",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ],
+                                                                       [
+                                                                           {
+                                                                               "node":  "Normalizar solicitud global",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "If2":  {
+                                    "main":  [
+                                                 [
+                                                     {
+                                                         "node":  "Guardar contexto de ejecuciÃ³n2",
+                                                         "type":  "main",
+                                                         "index":  0
+                                                     }
+                                                 ],
+                                                 [
+                                                     {
+                                                         "node":  "Guardar contexto de ejecuciÃ³n3",
+                                                         "type":  "main",
+                                                         "index":  0
+                                                     }
+                                                 ]
+                                             ]
+                                },
+                        "Guardar contexto de ejecuciÃ³n1":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "If2",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ],
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "If2",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            },
+                        "Normalizar contexto de ejecuciÃ³n1":  {
+                                                                   "main":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Guardar contexto de ejecuciÃ³n1",
+                                                                                        "type":  "main",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                               },
+                        "Guardar contexto de ejecuciÃ³n3":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Normalizar solicitud global",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ],
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Normalizar solicitud global",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            },
+                        "Guardar contexto de ejecuciÃ³n2":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Normalizar solicitud global",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ],
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Normalizar solicitud global",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            },
+                        "Preparar Roma":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Consultar Roma",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "Consultar Roma":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Unir cinco sucursales",
+                                                                    "type":  "main",
+                                                                    "index":  4
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Unir cinco sucursales":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Ordenar disponibilidad global",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "Consultar Lomas":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Unir cinco sucursales",
+                                                                     "type":  "main",
+                                                                     "index":  3
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Consultar JuÃ¡rez":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Unir cinco sucursales",
+                                                                       "type":  "main",
+                                                                       "index":  2
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Consultar Polanco":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Unir cinco sucursales",
+                                                                       "type":  "main",
+                                                                       "index":  1
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Consultar Valle":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Unir cinco sucursales",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Preparar Lomas":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Consultar Lomas",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Preparar JuÃ¡rez":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Consultar JuÃ¡rez",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Preparar Polanco":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Consultar Polanco",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Preparar Valle":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Consultar Valle",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "IF entrada vÃ¡lida":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Preparar Roma",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    },
+                                                                    {
+                                                                        "node":  "Preparar Lomas",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    },
+                                                                    {
+                                                                        "node":  "Preparar JuÃ¡rez",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    },
+                                                                    {
+                                                                        "node":  "Preparar Polanco",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    },
+                                                                    {
+                                                                        "node":  "Preparar Valle",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ],
+                                                                [
+                                                                    {
+                                                                        "node":  "Salida datos invÃ¡lidos",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Normalizar solicitud global":  {
+                                                            "main":  [
+                                                                         [
+                                                                             {
+                                                                                 "node":  "IF entrada vÃ¡lida",
+                                                                                 "type":  "main",
+                                                                                 "index":  0
+                                                                             }
+                                                                         ]
+                                                                     ]
+                                                        },
+                        "Inicio disponibilidad global":  {
+                                                             "main":  [
+                                                                          [
+                                                                              {
+                                                                                  "node":  "Desenvolver parÃ¡metros de disponibilidad",
+                                                                                  "type":  "main",
+                                                                                  "index":  0
+                                                                              }
+                                                                          ]
+                                                                      ]
+                                                         }
+                    },
+    "active":  true,
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "binaryMode":  "separate",
+                     "availableInMCP":  false
+                 },
+    "versionId":  "e89f81f5-97f5-43ef-b751-cfd67d0dd390",
+    "meta":  {
+                 "instanceId":  "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
+             },
+    "nodeGroups":  [
+
+                   ],
+    "id":  "c57x4DonMHnhNTg2",
+    "tags":  [
+
+             ]
+}

@@ -1,43 +1,44 @@
-# Kit reutilizable para desarrollo de software asistido por IA
+# Chat Zernio
 
-Este repositorio base sirve para iniciar o normalizar proyectos desarrollados con Codex u otros agentes de programación.
+Plataforma web multiusuario para atender conversaciones de los canales conectados a Zernio. Centraliza conversaciones, mensajes, adjuntos, asignaciones, etiquetas, respuestas rápidas y colaboración entre agentes humanos, con automatización controlada mediante un agente existente en n8n.
 
-## Objetivo
+## Alcance
 
-Conseguir velocidad sin degradar la arquitectura. La IA puede proponer y ejecutar cambios, pero no decide por sí sola dónde debe vivir la lógica, qué significa que una función esté terminada ni qué riesgos son aceptables.
+El producto es una plataforma de atención por chat. No incluye reservas, citas, calendario, disponibilidad, pagos, catálogo de servicios ni lógica operativa de un spa. El directorio `example-spa/` es material de referencia fuera de alcance y no define requisitos funcionales.
 
-## Archivos principales
+## Estado
 
-- `AGENTS.md`: instrucciones que el agente debe aplicar en cada tarea.
-- `docs/AI_CONTRACT.md`: reglas no negociables.
-- `docs/PROJECT_MAP.md`: propósito, dominios y propietarios de reglas.
-- `docs/ARCHITECTURE.md`: capas, dependencias y flujos.
-- `docs/DECISIONS.md`: decisiones técnicas relevantes.
-- `docs/QUALITY_GATES.md`: controles obligatorios antes de terminar.
-- `docs/SECURITY.md`: reglas de seguridad y privacidad.
-- `specs/TEMPLATE.md`: plantilla de especificación funcional.
-- `plans/TEMPLATE.md`: plantilla de plan de ejecución.
-- `prompts/`: prompts operativos para análisis, implementación y revisión.
-- `.agents/skills/software-change-guardrails/`: skill reutilizable para aplicar el flujo en Codex.
-- `example-spa/`: ejemplo aplicado a un spa con atención por mensajería y reservas.
+La documentación de arquitectura está aprobada y la implementación no ha comenzado. Las integraciones de Zernio, Supabase y n8n permanecen sin configurar ni verificar con entornos reales.
 
-## Uso recomendado
+## Documentación
 
-1. Copiar la carpeta `general-template` o los archivos de la raíz al nuevo repositorio.
-2. Reemplazar los campos entre corchetes.
-3. Mantener `AGENTS.md` breve y exacto.
-4. Crear una especificación por cada cambio de dominio o funcionalidad importante.
-5. Pedir un análisis de diseño antes de autorizar código.
-6. Implementar por cortes pequeños y verificables.
-7. Ejecutar los controles de calidad y revisar el diff.
-8. Actualizar documentación y decisiones cuando cambien las reglas.
+- [Contrato de desarrollo](docs/AI_CONTRACT.md)
+- [Mapa del proyecto](docs/PROJECT_MAP.md)
+- [Arquitectura](docs/ARCHITECTURE.md)
+- [Seguridad](docs/SECURITY.md)
+- [Especificación maestra](docs/ZERNIO_CHAT_MASTER_SPEC.md)
+- [Decisiones](docs/DECISIONS.md)
+- [Especificación de la plataforma](specs/001-zernio-chat-platform.md)
+- [Plan de documentación](plans/001-documentation-baseline.md)
 
-## Principio rector
+## Restricciones operativas
 
-Una corrección no es válida solo porque resuelve el caso reportado. Debe resolver la regla general, vivir en la capa correcta y quedar protegida por pruebas que hagan costoso reintroducir el atajo.
+- La UI se comunica únicamente con la API propia.
+- Las credenciales de Zernio, Supabase privilegiadas y n8n solo existen en backend o workers.
+- Zernio se consume mediante un adaptador de servidor; los webhooks se validan, persisten y deduplican.
+- Todo dato operativo pertenece a un tenant y se autoriza por usuario, rol y recurso.
+- Los archivos se almacenan privados y se aprueban antes del envío.
+- El agente n8n opera detrás de un Agent Gateway; no accede directamente a Zernio, Supabase ni secretos.
 
-## Especificación maestra del chat Zernio
+Las fundaciones locales están disponibles; todavía no hay despliegue ni integraciones reales configuradas.
 
-Para construir la bandeja omnicanal segura, escalable, con agente existente y multimedia, consulte:
+## Desarrollo local
 
-- `docs/ZERNIO_CHAT_MASTER_SPEC.md`
+Requiere Node.js 22 y Corepack. En Windows, usar explícitamente `corepack pnpm` si el shim global de pnpm no está disponible.
+
+```text
+corepack pnpm install --frozen-lockfile
+corepack pnpm dev
+```
+
+Controles: `corepack pnpm test`, `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm format:check` y `corepack pnpm build`.

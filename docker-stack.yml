@@ -1,0 +1,99 @@
+# API y trabajador como servicios de Swarm, publicados por Traefik (el proxy que ya usas).
+#
+#   docker build -t wepflash-api:latest .
+#   docker stack deploy -c docker-stack.yml wepflash
+#
+# Los valores ${...} NO van escritos aqui: los toma del entorno al desplegar. Crea un archivo
+# .env junto a este YAML (permisos 600) con esas variables, o ponlas en Portainer al pegar el
+# stack. Asi el archivo del stack se puede guardar en el repositorio sin secretos.
+#
+# Red y proxy (leidos del propio Traefik, no supuestos):
+#   red externa:        global
+#   entrypoint:         websecure      (el 80 redirige a 443 automaticamente)
+#   resolutor de cert.: letsencryptresolver
+
+services:
+  api:
+    image: wepflash-api:latest
+    environment:
+      APP_ENV: production
+      API_PORT: '4000'
+      # Dentro del contenedor debe escuchar en todas las interfaces o el enrutado no llega.
+      API_HOST: 0.0.0.0
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
+      ZERNIO_API_KEY: ${ZERNIO_API_KEY}
+      ZERNIO_WEBHOOK_SECRET: ${ZERNIO_WEBHOOK_SECRET}
+      ZERNIO_CONNECT_REDIRECT_URL: ${ZERNIO_CONNECT_REDIRECT_URL}
+    networks:
+      - global
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 640M
+      labels:
+        traefik.enable: 'true'
+        traefik.docker.network: global
+        traefik.http.routers.wepflash-api.rule: Host(`apichat.insidespa.com.mx`)
+        traefik.http.routers.wepflash-api.entrypoints: websecure
+        traefik.http.routers.wepflash-api.tls.certresolver: letsencryptresolver
+        traefik.http.services.wepflash-api.loadbalancer.server.port: '4000'
+
+  worker:
+    image: wepflash-api:latest
+    command: node apps/worker/dist/main.js
+    environment:
+      APP_ENV: production
+      API_PORT: '4000'
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
+      ZERNIO_API_KEY: ${ZERNIO_API_KEY}
+      ZERNIO_WEBHOOK_SECRET: ${ZERNIO_WEBHOOK_SECRET}
+    networks:
+      - global
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 640M
+
+  web:
+    image: wepflash-api:latest
+    command: ['sh', '-c', 'cd apps/web && ./node_modules/.bin/next start -p 3000']
+    environment:
+      NODE_ENV: production
+      # La web llama a la API por dentro de la red del swarm.
+      # Dentro del swarm, el nombre del servicio resuelve solo: no hace falta DNS ni dominio.
+      INTERNAL_API_URL: http://wepflash_api:4000
+      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+    networks:
+      - global
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 512M
+      labels:
+        traefik.enable: 'true'
+        traefik.docker.network: global
+        traefik.http.routers.wepflash-web.rule: Host(`chat.insidespa.com.mx`)
+        traefik.http.routers.wepflash-web.entrypoints: websecure
+        traefik.http.routers.wepflash-web.tls.certresolver: letsencryptresolver
+        traefik.http.services.wepflash-web.loadbalancer.server.port: '3000'
+    ports:
+      # Acceso directo por IP mientras no exista el registro DNS. Cuando el dominio funcione,
+      # esta linea se puede quitar y todo el trafico entra por Traefik con certificado.
+      - '8080:3000'
+networks:
+  global:
+    external: true

@@ -1,0 +1,1119 @@
+{
+  "name": "SUB Verificar pago Banxico - solicitar faltantes sin asesora",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "fecha_pago"
+            },
+            {
+              "name": "clave_rastreo"
+            },
+            {
+              "name": "numero_referencia"
+            },
+            {
+              "name": "banco_emisor"
+            },
+            {
+              "name": "banco_receptor"
+            },
+            {
+              "name": "monto_pago"
+            },
+            {
+              "name": "monto_esperado"
+            },
+            {
+              "name": "numero_personas"
+            },
+            {
+              "name": "subscriber_id"
+            },
+            {
+              "name": "reserva_draft_id"
+            },
+            {
+              "name": "live_chat_url"
+            },
+            {
+              "name": "cuenta_beneficiaria"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -13184,
+        4768
+      ],
+      "id": "0ebf7cb1-1d1d-45ee-a7d8-acb36b20f9eb",
+      "name": "Entrada desde flujo de comprobantes"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -13392,
+        4448
+      ],
+      "id": "472739d4-4bee-429e-a5a0-384d98fe2cdb",
+      "name": "Prueba manual"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "test-01",
+              "name": "fecha_pago",
+              "value": "2026-09-03",
+              "type": "string"
+            },
+            {
+              "id": "test-02",
+              "name": "clave_rastreo",
+              "value": "CAMBIAR_CLAVE_RASTREO",
+              "type": "string"
+            },
+            {
+              "id": "test-03",
+              "name": "banco_emisor",
+              "value": "CAMBIAR_BANCO_EMISOR",
+              "type": "string"
+            },
+            {
+              "id": "test-04",
+              "name": "banco_receptor",
+              "value": "BBVA MEXICO",
+              "type": "string"
+            },
+            {
+              "id": "test-05",
+              "name": "cuenta_beneficiaria",
+              "value": "012225004875095530",
+              "type": "string"
+            },
+            {
+              "id": "test-06",
+              "name": "monto_pago",
+              "value": 1000,
+              "type": "number"
+            },
+            {
+              "id": "test-07",
+              "name": "monto_esperado",
+              "value": 1000,
+              "type": "number"
+            },
+            {
+              "id": "test-08",
+              "name": "subscriber_id",
+              "value": "2141480087",
+              "type": "string"
+            },
+            {
+              "id": "test-09",
+              "name": "reserva_draft_id",
+              "value": "CAMBIAR_ID_BORRADOR",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -13168,
+        4448
+      ],
+      "id": "d56e566e-ad2c-4d0e-998e-a048e9678a02",
+      "name": "Datos para prueba - CAMBIAR"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json ?? {};\n\nconst texto = (v) => String(v ?? '').trim();\nconst primero = (...valores) => valores.find(v => texto(v) !== '');\n\nfunction fechaParaBanxico(valor) {\n  const s = texto(valor);\n  let m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (m) return m[3] + '-' + m[2] + '-' + m[1];\n  m = s.match(/^(\\d{2})[\\/-](\\d{2})[\\/-](\\d{4})/);\n  if (m) return m[1] + '-' + m[2] + '-' + m[3];\n  return '';\n}\n\nfunction numero(valor) {\n  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null;\n  const limpio = texto(valor)\n    .replace(/MXN/gi, '')\n    .replace(/\\$/g, '')\n    .replace(/,/g, '')\n    .replace(/\\s/g, '');\n  if (!limpio) return null;\n  const n = Number(limpio);\n  return Number.isFinite(n) ? n : null;\n}\n\nconst fechaPago = fechaParaBanxico(primero(\n  d.fecha_pago,\n  d.fecha,\n  d.transferencia?.fecha,\n  d.ocr?.fecha_pago,\n));\n\nconst claveRastreo = texto(primero(\n  d.clave_rastreo,\n  d.claveRastreo,\n  d.rastreo,\n  d.transferencia?.clave_rastreo,\n  d.ocr?.clave_rastreo,\n));\n\nconst referencia = texto(primero(\n  d.numero_referencia,\n  d.referencia,\n  d.transferencia?.referencia,\n  d.ocr?.referencia,\n));\n\nconst tipoCriterio = claveRastreo ? 'T' : 'R';\nconst criterioBusqueda = claveRastreo || referencia;\n\nconst bancoEmisor = texto(primero(\n  d.banco_emisor,\n  d.institucion_emisora,\n  d.transferencia?.banco_emisor,\n  d.ocr?.banco_emisor,\n));\n\nconst bancoReceptor = texto(primero(\n  d.banco_receptor,\n  d.institucion_receptora,\n  d.transferencia?.banco_receptor,\n  d.ocr?.banco_receptor,\n  'BBVA MEXICO',\n));\n\nconst cuentaBeneficiaria = texto(primero(\n  d.cuenta_beneficiaria,\n  d.clabe_beneficiaria,\n  d.transferencia?.cuenta_beneficiaria,\n  d.ocr?.cuenta_beneficiaria,\n)).replace(/\\D/g, '');\n\nconst cuentaDestinoEsperada = texto(primero(\n  d.cuenta_destino_esperada,\n  '012225004875095530',\n)).replace(/\\D/g, '');\n\nconst montoPago = numero(primero(\n  d.monto_pago,\n  d.monto,\n  d.transferencia?.monto,\n  d.ocr?.monto,\n));\n\nconst personas = numero(primero(d.numero_personas, d.personas));\nconst montoEsperado = numero(primero(\n  d.monto_esperado,\n  d.deposito_esperado,\n  personas ? personas * 500 : null,\n));\n\nconst subscriberId = texto(primero(\n  d.subscriber_id,\n  d.subscriberId,\n  d.suscriber_id,\n  d.body?.id,\n  d.body?.subscriber_id,\n));\n\nconst liveChatUrl = texto(primero(\n  d.live_chat_url,\n  d.body?.live_chat_url,\n  subscriberId ? 'https://app.manychat.com/fb1346079/chat/' + encodeURIComponent(subscriberId) : '',\n));\n\nconst faltantes = [];\nif (!fechaPago) faltantes.push('fecha_pago');\nif (!criterioBusqueda || /^CAMBIAR/i.test(criterioBusqueda)) faltantes.push('clave_rastreo o numero_referencia');\nif (!bancoEmisor || /^CAMBIAR/i.test(bancoEmisor)) faltantes.push('banco_emisor');\nif (!bancoReceptor) faltantes.push('banco_receptor');\nif (!cuentaBeneficiaria) faltantes.push('cuenta_beneficiaria');\nif (!(montoPago > 0)) faltantes.push('monto_pago');\nif (!(montoEsperado > 0)) faltantes.push('monto_esperado o numero_personas');\n\nconst cuentaCoincide = Boolean(\n  cuentaBeneficiaria &&\n  cuentaDestinoEsperada &&\n  cuentaBeneficiaria === cuentaDestinoEsperada\n);\n\nconst montoCoincide = Boolean(\n  montoPago !== null &&\n  montoEsperado !== null &&\n  Math.abs(montoPago - montoEsperado) < 0.01\n);\n\nreturn [{\n  json: {\n    ...d,\n    fecha_banxico: fechaPago,\n    tipo_criterio: tipoCriterio,\n    criterio_busqueda: criterioBusqueda,\n    banco_emisor: bancoEmisor,\n    banco_receptor: bancoReceptor,\n    cuenta_beneficiaria: cuentaBeneficiaria,\n    cuenta_destino_esperada: cuentaDestinoEsperada,\n    monto_pago: montoPago,\n    monto_esperado: montoEsperado,\n    cuenta_coincide: cuentaCoincide,\n    monto_coincide: montoCoincide,\n    subscriber_id: subscriberId,\n    live_chat_url: liveChatUrl,\n    datos_completos: faltantes.length === 0,\n    faltantes,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -12944,
+        4544
+      ],
+      "id": "dc205cad-726d-40d5-a8e4-7570e4000cfc",
+      "name": "Normalizar datos para CEP"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-completos",
+              "leftValue": "={{ $json.datos_completos }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -12720,
+        4544
+      ],
+      "id": "9f793789-f667-49a3-a743-fa611cd0974f",
+      "name": "IF datos completos"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "browserless-token",
+              "name": "browserless_token",
+              "value": "=8971152ff5aa384ac288e001463b9eb65571fbb754c6c558ffdae2ea58383ba6",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -12496,
+        4464
+      ],
+      "id": "319c0ea8-062e-41eb-b082-3ebf865db01d",
+      "name": "CONFIGURAR Browserless",
+      "notes": "Reemplaza PEGA_AQUI_TU_TOKEN_BROWSERLESS. En producción conviene usar una credencial de query/header y no guardar el token en el nodo."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\n\nconst token = String(d.browserless_token ?? '').trim();\nif (!token || /^CAMBIAR|^PEGA_/i.test(token)) {\n  throw new Error('Configura browserless_token en el nodo CONFIGURAR Browserless');\n}\n\nreturn [{\n  json: {\n    ...d,\n    browserless_endpoint: 'http://browserless:3000/function',\n    browserless_token: token,\n    browserless_payload: {\n      code: \"export default async ({ page, context }) => {\\n  const responder = (estado, detalle = '', texto = '', extra = {}) => ({\\n    data: {\\n      ok: estado === 'liquidado',\\n      estado_banxico: estado,\\n      captcha_requerido: estado === 'requiere_codigo_seguridad',\\n      texto_resultado: texto,\\n      error: detalle,\\n      ...extra,\\n    },\\n    type: 'application/json',\\n  });\\n\\n  const normalizar = (v) => String(v ?? '')\\n    .normalize('NFD')\\n    .replace(/[\\\\u0300-\\\\u036f]/g, '')\\n    .replace(/\\\\s+/g, ' ')\\n    .trim()\\n    .toUpperCase();\\n\\n  async function asignar(selector, valor) {\\n    await page.$eval(selector, (el, nuevoValor) => {\\n      const proto = el.tagName === 'TEXTAREA'\\n        ? HTMLTextAreaElement.prototype\\n        : HTMLInputElement.prototype;\\n      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;\\n      if (setter) setter.call(el, String(nuevoValor));\\n      else el.value = String(nuevoValor);\\n      for (const tipo of ['input', 'change', 'keyup', 'blur']) {\\n        el.dispatchEvent(new Event(tipo, { bubbles: true }));\\n      }\\n    }, valor);\\n  }\\n\\n  async function seleccionarBanco(selector, banco) {\\n    const valor = await page.$eval(selector, (select, buscado) => {\\n      const norm = (v) => String(v ?? '')\\n        .normalize('NFD')\\n        .replace(/[\\\\u0300-\\\\u036f]/g, '')\\n        .trim()\\n        .toUpperCase();\\n      const limpiar = (v) => norm(v).split('(')[0].trim();\\n      const genericas = new Set(['BANCO','BANCA','DE','DEL','LA','EL','SA','CV','SOFOM','ENR','INSTITUCION','NACIONAL','CREDITO','SERVICIOS','FINANCIEROS','GRUPO','MULTIPLE','MEXICO','Y']);\\n      const palabras = limpiar(buscado).split(' ').filter(p => p.length > 2 && !genericas.has(p));\\n      const objetivos = [...new Set([\\n        norm(buscado),\\n        limpiar(buscado),\\n        palabras.join(' '),\\n        palabras.slice(0, 2).join(' ')\\n      ].filter(v => v && v.length >= 4))];\\n      const opciones = Array.from(select.options);\\n      const porCodigo = opciones.find(o => String(o.value) === String(buscado));\\n      if (porCodigo) return porCodigo.value;\\n      for (const objetivo of objetivos) {\\n        const exacto = opciones.find(o => norm(o.textContent) === objetivo);\\n        if (exacto) return exacto.value;\\n      }\\n      for (const objetivo of objetivos) {\\n        const contenido = opciones.find(o => norm(o.textContent).includes(objetivo));\\n        if (contenido) return contenido.value;\\n      }\\n      for (const palabra of [...palabras].sort((a, b) => b.length - a.length)) {\\n        if (palabra.length < 5) continue;\\n        const porPalabra = opciones.find(o => norm(o.textContent).includes(palabra));\\n        if (porPalabra) return porPalabra.value;\\n      }\\n      return '';\\n    }, banco);\\n    if (!valor) throw new Error('Banco no reconocido por Banxico: ' + banco);\\n    await page.select(selector, valor);\\n    return valor;\\n  }\\n\\n  async function captchaVisible() {\\n    return await page.$eval('#captchaImage', (el) => {\\n      const estilo = window.getComputedStyle(el);\\n      const rect = el.getBoundingClientRect();\\n      return !el.classList.contains('oculta') &&\\n        estilo.display !== 'none' &&\\n        estilo.visibility !== 'hidden' &&\\n        rect.width > 0 && rect.height > 0;\\n    }).catch(() => false);\\n  }\\n\\n  try {\\n    await page.goto('https://www.banxico.org.mx/cep/', {\\n      waitUntil: 'networkidle2',\\n      timeout: 30000,\\n    });\\n    await page.waitForSelector('#input_fecha', { visible: true, timeout: 15000 });\\n\\n    // Al cambiar la fecha, Banxico vuelve a cargar por AJAX los dos selectores\\n    // de instituciones. Hay que esperar esa respuesta antes de seleccionar\\n    // bancos; de lo contrario la respuesta AJAX borra las selecciones.\\n    const fechaCodificada = encodeURIComponent(context.fecha_banxico);\\n    const institucionesCargadas = page.waitForResponse(\\n      response =>\\n        response.url().includes('/cep/instituciones.do?fecha=' + fechaCodificada) &&\\n        response.status() === 200,\\n      { timeout: 15000 },\\n    ).catch(() => null);\\n\\n    await asignar('#input_fecha', context.fecha_banxico);\\n    const respuestaInstituciones = await institucionesCargadas;\\n\\n    if (!respuestaInstituciones) {\\n      return responder(\\n        'instituciones_no_cargadas',\\n        'Banxico no terminó de cargar las instituciones para la fecha solicitada.',\\n      );\\n    }\\n\\n    await page.waitForFunction(() => {\\n      const emisor = document.querySelector('#input_emisor');\\n      const receptor = document.querySelector('#input_receptor');\\n      return emisor?.options?.length > 1 && receptor?.options?.length > 1;\\n    }, { timeout: 8000 });\\n\\n    // El código de Banxico espera 500 ms después del AJAX y vuelve a elegir\\n    // un receptor predeterminado. Esperamos ese temporizador para que no borre\\n    // la selección que se hará a continuación.\\n    await new Promise(resolve => setTimeout(resolve, 800));\\n\\n    await page.select('#input_tipoCriterio', context.tipo_criterio);\\n    await asignar('#input_criterio', context.criterio_busqueda);\\n    await seleccionarBanco('#input_emisor', context.banco_emisor);\\n    await seleccionarBanco('#input_receptor', context.banco_receptor);\\n    await asignar('#input_cuenta', context.cuenta_beneficiaria);\\n    await asignar('#input_monto', Number(context.monto_pago).toFixed(2));\\n\\n    if (await captchaVisible()) {\\n      return responder(\\n        'requiere_codigo_seguridad',\\n        'Banxico mostró la imagen de seguridad; se requiere revisión humana.',\\n      );\\n    }\\n\\n    // El botón depende de un manejador jQuery que no siempre se ejecuta dentro\\n    // de Browserless. Enviamos, desde la misma página y con la misma sesión, el\\n    // POST que realiza el JavaScript oficial de Banxico a valida.do.\\n    const resultadoConsulta = await page.evaluate(async () => {\\n      const campo = (nombre) => document.querySelector('[name=\\\"' + nombre + '\\\"]');\\n      const valor = (nombre) => String(campo(nombre)?.value ?? '').trim();\\n      const campoCaptcha = campo('captcha');\\n\\n      const payload = {\\n        tipoCriterio: valor('tipoCriterio'),\\n        fecha: valor('fecha'),\\n        criterio: valor('criterio'),\\n        emisor: valor('emisor'),\\n        receptor: valor('receptor'),\\n        cuenta: valor('cuenta'),\\n        receptorParticipante: valor('receptorParticipante') || '0',\\n        monto: valor('monto').replace(/[, ]/g, ''),\\n        captcha: campoCaptcha ? String(campoCaptcha.value ?? '').trim() : 'c',\\n        tipoConsulta: '0',\\n      };\\n\\n      const obligatorios = [\\n        'tipoCriterio',\\n        'fecha',\\n        'criterio',\\n        'emisor',\\n        'receptor',\\n        'cuenta',\\n        'monto',\\n      ];\\n      const faltantes = obligatorios.filter(nombre => !payload[nombre]);\\n      if (faltantes.length) {\\n        return {\\n          okHttp: false,\\n          status: 0,\\n          contentType: '',\\n          texto: '',\\n          error: 'Campos vacíos antes de consultar: ' + faltantes.join(', '),\\n        };\\n      }\\n\\n      const controller = new AbortController();\\n      const temporizador = setTimeout(() => controller.abort(), 120000);\\n\\n      try {\\n        const respuesta = await fetch('valida.do', {\\n          method: 'POST',\\n          credentials: 'same-origin',\\n          headers: {\\n            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',\\n            'X-Requested-With': 'XMLHttpRequest',\\n          },\\n          body: new URLSearchParams(payload).toString(),\\n          signal: controller.signal,\\n        });\\n\\n        const html = await respuesta.text();\\n        const documento = new DOMParser().parseFromString(String(html ?? ''), 'text/html');\\n        documento.querySelectorAll('script, style, noscript, template').forEach(el => el.remove());\\n        const contenedor = documento.querySelector('#consultaMISPEI') || documento.body;\\n        let texto = String(contenedor?.innerText || contenedor?.textContent || '')\\n          .replace(/\\\\u00a0/g, ' ')\\n          .replace(/[ \\\\t]+/g, ' ')\\n          .replace(/\\\\n\\\\s*\\\\n+/g, '\\\\n')\\n          .trim();\\n\\n        // La respuesta también contiene un glosario con todos los estados.\\n        // Se elimina para que \\\"Liquidado\\\" no provoque falsos positivos cuando\\n        // el estado real sea No encontrado, Devuelto, Rechazado, etc.\\n        const inicioGlosario = texto.search(/Descripción de los estados del pago/i);\\n        if (inicioGlosario >= 0) texto = texto.slice(0, inicioGlosario).trim();\\n\\n        return {\\n          okHttp: respuesta.ok,\\n          status: respuesta.status,\\n          contentType: respuesta.headers.get('content-type') || '',\\n          texto,\\n          error: respuesta.ok ? '' : 'Banxico respondió HTTP ' + respuesta.status,\\n        };\\n      } catch (error) {\\n        return {\\n          okHttp: false,\\n          status: 0,\\n          contentType: '',\\n          texto: '',\\n          error: error?.name === 'AbortError'\\n            ? 'La consulta directa a Banxico excedió 120 segundos.'\\n            : String(error?.message ?? error),\\n        };\\n      } finally {\\n        clearTimeout(temporizador);\\n      }\\n    });\\n\\n    if (!resultadoConsulta.okHttp && !resultadoConsulta.texto) {\\n      return responder(\\n        'error_consulta_banxico',\\n        resultadoConsulta.error || 'Banxico no devolvió contenido para interpretar.',\\n        '',\\n        {\\n          formulario_enviado: true,\\n          http_status_banxico: resultadoConsulta.status,\\n          content_type_banxico: resultadoConsulta.contentType,\\n        },\\n      );\\n    }\\n\\n    const textoResultado = resultadoConsulta.texto;\\n\\n    const plano = normalizar(textoResultado);\\n    const coincidenciaEstado = plano.match(\\n      /ESTADO DEL PAGO EN BANXICO\\\\s*(EN PROCESO DE DEVOLUCION|NO LIQUIDADO|NO ENCONTRADO|EN PROCESO|LIQUIDADO|DEVUELTO|CANCELADO|RECHAZADO|RETORNADO)/,\\n    );\\n    const estados = {\\n      'LIQUIDADO': 'liquidado',\\n      'EN PROCESO': 'pendiente',\\n      'EN PROCESO DE DEVOLUCION': 'en_proceso_de_devolucion',\\n      'DEVUELTO': 'devuelto',\\n      'CANCELADO': 'cancelado',\\n      'RECHAZADO': 'rechazado',\\n      'NO LIQUIDADO': 'no_liquidado',\\n      'NO ENCONTRADO': 'no_encontrado',\\n      'RETORNADO': 'retornado',\\n    };\\n    const estado = estados[coincidenciaEstado?.[1]] || 'respuesta_no_reconocida';\\n\\n    return responder(\\n      estado,\\n      estado === 'respuesta_no_reconocida'\\n        ? 'Banxico respondió, pero el estado no pudo interpretarse.'\\n        : '',\\n      textoResultado.slice(0, 20000),\\n      {\\n        formulario_enviado: true,\\n        http_status_banxico: resultadoConsulta.status,\\n        content_type_banxico: resultadoConsulta.contentType,\\n      },\\n    );\\n  } catch (error) {\\n    return responder(\\n      'error_automatizacion',\\n      String(error?.message ?? error),\\n    );\\n  }\\n};\",\n      context: {\n        fecha_banxico: d.fecha_banxico,\n        tipo_criterio: d.tipo_criterio,\n        criterio_busqueda: d.criterio_busqueda,\n        banco_emisor: d.banco_emisor,\n        banco_receptor: d.banco_receptor,\n        cuenta_beneficiaria: d.cuenta_beneficiaria,\n        monto_pago: d.monto_pago,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -12272,
+        4464
+      ],
+      "id": "86d23169-9c98-4163-aa06-a798eb7cbfdf",
+      "name": "Preparar consulta Browserless"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.browserless_endpoint }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $json.browserless_token }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.browserless_payload }}",
+        "options": {
+          "timeout": 210000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -12048,
+        4464
+      ],
+      "id": "68399720-415a-4996-9978-da8bb21aba2b",
+      "name": "Consultar estado en Banxico",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput",
+      "notes": "Usa Browserless /function y ejecuta desde la sesión de Banxico el POST oficial a valida.do. No intenta resolver ni saltar códigos de seguridad."
+    },
+    {
+      "parameters": {
+        "jsCode": "const respuesta = $input.first().json ?? {};\nconst original = $('Preparar consulta Browserless').first().json;\n\nlet resultado = respuesta;\nif (resultado.data && typeof resultado.data === 'object') resultado = resultado.data;\nif (resultado.data && typeof resultado.data === 'object') resultado = resultado.data;\n\nconst textoResultado = String(\n  resultado.texto_resultado ??\n  resultado.text ??\n  resultado.content ??\n  ''\n).trim();\n\nconst normalizar = (v) => String(v ?? '')\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .toUpperCase();\n\nconst plano = normalizar(textoResultado);\nconst compacto = plano.replace(/[^A-Z0-9]/g, '');\nconst soloDigitos = textoResultado.replace(/\\D/g, '');\nconst cuenta = String(original.cuenta_destino_esperada ?? '');\n\nconst estadoMatch = plano.match(\n  /ESTADO DEL PAGO EN BANXICO\\s*:?\\s*(EN PROCESO DE DEVOLUCION|NO LIQUIDADO|NO ENCONTRADO|EN PROCESO|LIQUIDADO|DEVUELTO|CANCELADO|RECHAZADO|RETORNADO)/,\n);\nconst estadosBanxico = {\n  'LIQUIDADO': 'liquidado',\n  'EN PROCESO': 'pendiente',\n  'EN PROCESO DE DEVOLUCION': 'en_proceso_de_devolucion',\n  'DEVUELTO': 'devuelto',\n  'CANCELADO': 'cancelado',\n  'RECHAZADO': 'rechazado',\n  'NO LIQUIDADO': 'no_liquidado',\n  'NO ENCONTRADO': 'no_encontrado',\n  'RETORNADO': 'retornado',\n};\nconst estadoBanxico = estadosBanxico[estadoMatch?.[1]] || 'respuesta_no_reconocida';\n\nconst montoMatch = textoResultado.match(\n  /(?:^|\\n)\\s*Monto\\s*:?\\s*\\$?\\s*([\\d,]+(?:\\.\\d{1,2})?)/im,\n);\nconst montoPdf = montoMatch\n  ? Number(String(montoMatch[1]).replace(/,/g, ''))\n  : null;\nconst montoEsperado = Number(original.monto_esperado);\n\nconst criterio = normalizar(original.criterio_busqueda).replace(/[^A-Z0-9]/g, '');\nconst bancoEmisor = normalizar(original.banco_emisor);\nconst bancoReceptor = normalizar(original.banco_receptor);\nconst fechaEsperada = String(original.fecha_banxico ?? '').replace(/-/g, '/');\n\nconst paginaConfirmaCuenta = Boolean(cuenta && soloDigitos.includes(cuenta));\nconst paginaConfirmaMonto = Boolean(\n  Number.isFinite(montoPdf) &&\n  Number.isFinite(montoEsperado) &&\n  Math.abs(montoPdf - montoEsperado) < 0.01\n);\nconst paginaConfirmaCriterio = Boolean(criterio && compacto.includes(criterio));\nconst paginaConfirmaFecha = Boolean(fechaEsperada && textoResultado.includes(fechaEsperada));\nconst paginaConfirmaBancoEmisor = Boolean(bancoEmisor && plano.includes(bancoEmisor));\nconst paginaConfirmaBancoReceptor = Boolean(bancoReceptor && plano.includes(bancoReceptor));\nconst liquidado = estadoBanxico === 'liquidado';\nconst esReporteEstado = /ESTA CONSULTA NO ES UN COMPROBANTE ELECTRONICO DE PAGO/.test(plano);\n\n// Confirmación estricta usando el contenido devuelto por valida.do de Banxico.\nconst pagoVerificado = Boolean(\n  liquidado &&\n  original.cuenta_coincide === true &&\n  original.monto_coincide === true &&\n  paginaConfirmaCuenta &&\n  paginaConfirmaMonto &&\n  paginaConfirmaCriterio &&\n  paginaConfirmaFecha &&\n  paginaConfirmaBancoEmisor &&\n  paginaConfirmaBancoReceptor\n);\n\nconst motivos = [];\nif (!textoResultado) motivos.push('Banxico no devolvió texto interpretable');\nif (!liquidado) motivos.push('estado Banxico: ' + estadoBanxico);\nif (!original.cuenta_coincide) motivos.push('la cuenta del comprobante no coincide');\nif (!original.monto_coincide) motivos.push('el monto no coincide con el depósito esperado');\nif (!paginaConfirmaCuenta) motivos.push('la respuesta no corroboró la cuenta completa');\nif (!paginaConfirmaMonto) motivos.push('la respuesta no corroboró el monto');\nif (!paginaConfirmaCriterio) motivos.push('la respuesta no corroboró la clave de rastreo o referencia');\nif (!paginaConfirmaFecha) motivos.push('la respuesta no corroboró la fecha del pago');\nif (!paginaConfirmaBancoEmisor) motivos.push('la respuesta no corroboró el banco emisor');\nif (!paginaConfirmaBancoReceptor) motivos.push('la respuesta no corroboró el banco receptor');\nif (resultado.error) motivos.push(String(resultado.error));\n\nreturn [{\n  json: {\n    ...original,\n    ...resultado,\n    intentos_validacion: 1,\n    estado_banxico: estadoBanxico,\n    tipo_documento_banxico: esReporteEstado ? 'reporte_estado_pago' : 'respuesta_banxico',\n    texto_resultado: textoResultado.slice(0, 20000),\n    monto_detectado_pdf: montoPdf,\n    pago_liquidado_banxico: liquidado,\n    pagina_confirma_cuenta: paginaConfirmaCuenta,\n    pagina_confirma_monto: paginaConfirmaMonto,\n    pagina_confirma_criterio: paginaConfirmaCriterio,\n    pagina_confirma_fecha: paginaConfirmaFecha,\n    pagina_confirma_banco_emisor: paginaConfirmaBancoEmisor,\n    pagina_confirma_banco_receptor: paginaConfirmaBancoReceptor,\n    pago_verificado: pagoVerificado,\n    requiere_asesor: !pagoVerificado,\n    motivo_revision: motivos.join(' | ') || null,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -11824,
+        4464
+      ],
+      "id": "586e85ef-e1f5-45b1-8916-70d4a379e4e2",
+      "name": "Interpretar respuesta de Banxico"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-verificado",
+              "leftValue": "={{ $json.pago_verificado }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -8688,
+        4464
+      ],
+      "id": "f2dd3b50-d633-45ba-a6a9-11c33307a68b",
+      "name": "IF pago verificado"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json ?? {};\nconst reservaDraftId = String(d.reserva_draft_id ?? d.draft_id ?? '').trim();\nconst subscriberId = String(d.subscriber_id ?? '').trim();\n\nreturn [{\n  json: {\n    ...d,\n    reserva_draft_id: reservaDraftId,\n    puede_actualizar_supabase:\n      /^\\d+$/.test(reservaDraftId) && /^\\d+$/.test(subscriberId),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -8464,
+        4400
+      ],
+      "id": "15dfea90-1a4d-4fb6-aef6-3acf1113562a",
+      "name": "Validar ID de reserva para actualizar"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-actualizar-draft",
+              "leftValue": "={{ $json.puede_actualizar_supabase }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -8240,
+        4400
+      ],
+      "id": "ececc151-8105-4147-9ec2-3c9fade3d36a",
+      "name": "IF puede actualizar Supabase"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "reservas_draft",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.reserva_draft_id }}"
+            },
+            {
+              "keyName": "subscriber_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.subscriber_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "pago_recibido",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "fecha_pago",
+              "fieldValue": "={{ $json.fecha_pago || $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -8016,
+        4320
+      ],
+      "id": "28f471e1-bc49-4f48-860e-3750ce64c225",
+      "name": "Marcar pago validado en Supabase",
+      "retryOnFail": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "Zu9malXYojiqVIBv",
+          "name": "New Supabase"
+        }
+      },
+      "notes": "Actualización idempotente por reservas_draft.id y subscriber_id. No cambia estado_reserva ni confirma la cita."
+    },
+    {
+      "parameters": {
+        "jsCode": "const actualizado = $input.first().json ?? {};\nconst validacion = $('Resultado bancario definitivo').first().json ?? {};\nconst reservaDraftId = String(validacion.reserva_draft_id ?? '').trim();\n\nconst pagoRecibido =\n  actualizado.pago_recibido === true ||\n  ['true', '1', 'si', 'sí', 'yes'].includes(\n    String(actualizado.pago_recibido ?? '').trim().toLowerCase()\n  );\n\nconst idCoincide =\n  reservaDraftId !== '' &&\n  String(actualizado.id ?? '').trim() === reservaDraftId;\n\nconst supabaseActualizado = Boolean(idCoincide && pagoRecibido);\n\nreturn [{\n  json: {\n    ...validacion,\n    ...actualizado,\n    reserva_draft_id: reservaDraftId,\n    supabase_actualizado: supabaseActualizado,\n    pago_verificado: validacion.pago_verificado === true && supabaseActualizado,\n    requiere_asesor: !supabaseActualizado,\n    motivo_revision: supabaseActualizado\n      ? null\n      : 'Banxico confirmó el pago, pero Supabase no devolvió el borrador actualizado.',\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -7792,
+        4320
+      ],
+      "id": "3ded24f4-46bc-46e3-9dab-1afa1a7254b1",
+      "name": "Validar actualización de pago"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-supabase-actualizado",
+              "leftValue": "={{ $json.supabase_actualizado }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -7568,
+        4320
+      ],
+      "id": "c2f148e6-798d-419c-a4f4-8650714151b7",
+      "name": "IF Supabase actualizado"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nreturn [{\n  json: {\n    ...d,\n    resultado: 'PAGO_VERIFICADO',\n    mensaje: 'Banxico confirmó el pago y los datos coinciden con la reserva.',\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -7344,
+        4272
+      ],
+      "id": "3b1d0a67-04e3-4b8b-bd5a-bc5ba0b89875",
+      "name": "Salida pago verificado"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d={...$input.first().json};\ndelete d.browserless_token; delete d.browserless_payload;\nconst faltantes=Array.isArray(d.faltantes)?d.faltantes:[];\nconst confirmado=d.pago_liquidado_banxico===true && d.pagina_confirma_cuenta===true && d.pagina_confirma_monto===true && d.pagina_confirma_criterio===true && d.pagina_confirma_fecha===true && d.pagina_confirma_banco_emisor===true && d.pagina_confirma_banco_receptor===true;\nconst tieneIdentificador=Boolean(String(d.clave_rastreo ?? '').trim() || String(d.numero_referencia ?? '').trim());\nconst datosFaltantes=faltantes.length ? faltantes : [\n  !tieneIdentificador ? 'clave_rastreo o numero_referencia' : '',\n  !String(d.banco_emisor ?? '').trim() ? 'banco_emisor' : '',\n  !String(d.fecha_pago ?? '').trim() ? 'fecha_pago' : '',\n  !(Number(d.monto_pago)>0) ? 'monto_pago' : '',\n].filter(Boolean);\nreturn [{json:{...d,\n  pago_verificado:false,\n  resultado:confirmado?'PAGO_CONFIRMADO_REGISTRO_PENDIENTE':(datosFaltantes.length?'SOLICITAR_DATOS_PAGO':'PAGO_PENDIENTE_RECONSULTA'),\n  intentos_validacion:Number(d.intentos_validacion??0),\n  requiere_asesor:false,\n  transferencia_manychat_enviada:false,\n  solicitar_datos_pago:datosFaltantes.length>0,\n  datos_a_solicitar:datosFaltantes,\n  motivo_revision:d.motivo_revision || (datosFaltantes.length?'Faltan datos para la consulta de Banxico':'Banxico aún no confirmó el pago; conservar la pre-reserva protegida y reconsultar'),\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -7056,
+        5040
+      ],
+      "id": "be7bd131-44d5-42bb-8bcd-4ed6689e3dee",
+      "name": "Preparar revisión para asesor"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json;\nconst terminales=['devuelto','cancelado','rechazado','retornado','en_proceso_de_devolucion'];\nconst error=JSON.stringify(d.error??'');\nconst acceso=d.captcha_requerido===true || /captcha|codigo.seguridad|unauthorized|forbidden|\\b401\\b|\\b403\\b/i.test(String(d.estado??'')+' '+error);\nreturn [{json:{...d,reintentar_validacion:d.pago_verificado!==true && !acceso && !terminales.includes(d.estado_banxico)}}];"
+      },
+      "id": "36fd14d4-a398-4953-af6b-5f1d69116f49",
+      "name": "Evaluar reintento 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -11600,
+        4464
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-verificado",
+              "leftValue": "={{ $json.reintentar_validacion }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -11376,
+        4464
+      ],
+      "id": "d48b9160-7e63-4031-acc1-f836cc2daf11",
+      "name": "IF reintentar 1"
+    },
+    {
+      "parameters": {
+        "amount": 90
+      },
+      "id": "f58f3ea6-1abe-4be6-81b6-a09c5384565d",
+      "name": "Esperar antes de intento 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -11152,
+        4400
+      ],
+      "webhookId": "0fbdb661-ddae-4bf6-bea4-027240107716"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$('Preparar consulta Browserless').first().json}}];"
+      },
+      "id": "a0d1b3c7-2ecf-46ca-a2b8-a15d98bb0365",
+      "name": "Reutilizar consulta 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -10928,
+        4400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const respuesta = $input.first().json ?? {};\nconst original = $('Preparar consulta Browserless').first().json;\n\nlet resultado = respuesta;\nif (resultado.data && typeof resultado.data === 'object') resultado = resultado.data;\nif (resultado.data && typeof resultado.data === 'object') resultado = resultado.data;\n\nconst textoResultado = String(\n  resultado.texto_resultado ??\n  resultado.text ??\n  resultado.content ??\n  ''\n).trim();\n\nconst normalizar = (v) => String(v ?? '')\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .toUpperCase();\n\nconst plano = normalizar(textoResultado);\nconst compacto = plano.replace(/[^A-Z0-9]/g, '');\nconst soloDigitos = textoResultado.replace(/\\D/g, '');\nconst cuenta = String(original.cuenta_destino_esperada ?? '');\n\nconst estadoMatch = plano.match(\n  /ESTADO DEL PAGO EN BANXICO\\s*:?\\s*(EN PROCESO DE DEVOLUCION|NO LIQUIDADO|NO ENCONTRADO|EN PROCESO|LIQUIDADO|DEVUELTO|CANCELADO|RECHAZADO|RETORNADO)/,\n);\nconst estadosBanxico = {\n  'LIQUIDADO': 'liquidado',\n  'EN PROCESO': 'pendiente',\n  'EN PROCESO DE DEVOLUCION': 'en_proceso_de_devolucion',\n  'DEVUELTO': 'devuelto',\n  'CANCELADO': 'cancelado',\n  'RECHAZADO': 'rechazado',\n  'NO LIQUIDADO': 'no_liquidado',\n  'NO ENCONTRADO': 'no_encontrado',\n  'RETORNADO': 'retornado',\n};\nconst estadoBanxico = estadosBanxico[estadoMatch?.[1]] || 'respuesta_no_reconocida';\n\nconst montoMatch = textoResultado.match(\n  /(?:^|\\n)\\s*Monto\\s*:?\\s*\\$?\\s*([\\d,]+(?:\\.\\d{1,2})?)/im,\n);\nconst montoPdf = montoMatch\n  ? Number(String(montoMatch[1]).replace(/,/g, ''))\n  : null;\nconst montoEsperado = Number(original.monto_esperado);\n\nconst criterio = normalizar(original.criterio_busqueda).replace(/[^A-Z0-9]/g, '');\nconst bancoEmisor = normalizar(original.banco_emisor);\nconst bancoReceptor = normalizar(original.banco_receptor);\nconst fechaEsperada = String(original.fecha_banxico ?? '').replace(/-/g, '/');\n\nconst paginaConfirmaCuenta = Boolean(cuenta && soloDigitos.includes(cuenta));\nconst paginaConfirmaMonto = Boolean(\n  Number.isFinite(montoPdf) &&\n  Number.isFinite(montoEsperado) &&\n  Math.abs(montoPdf - montoEsperado) < 0.01\n);\nconst paginaConfirmaCriterio = Boolean(criterio && compacto.includes(criterio));\nconst paginaConfirmaFecha = Boolean(fechaEsperada && textoResultado.includes(fechaEsperada));\nconst paginaConfirmaBancoEmisor = Boolean(bancoEmisor && plano.includes(bancoEmisor));\nconst paginaConfirmaBancoReceptor = Boolean(bancoReceptor && plano.includes(bancoReceptor));\nconst liquidado = estadoBanxico === 'liquidado';\nconst esReporteEstado = /ESTA CONSULTA NO ES UN COMPROBANTE ELECTRONICO DE PAGO/.test(plano);\n\n// Confirmación estricta usando el contenido devuelto por valida.do de Banxico.\nconst pagoVerificado = Boolean(\n  liquidado &&\n  original.cuenta_coincide === true &&\n  original.monto_coincide === true &&\n  paginaConfirmaCuenta &&\n  paginaConfirmaMonto &&\n  paginaConfirmaCriterio &&\n  paginaConfirmaFecha &&\n  paginaConfirmaBancoEmisor &&\n  paginaConfirmaBancoReceptor\n);\n\nconst motivos = [];\nif (!textoResultado) motivos.push('Banxico no devolvió texto interpretable');\nif (!liquidado) motivos.push('estado Banxico: ' + estadoBanxico);\nif (!original.cuenta_coincide) motivos.push('la cuenta del comprobante no coincide');\nif (!original.monto_coincide) motivos.push('el monto no coincide con el depósito esperado');\nif (!paginaConfirmaCuenta) motivos.push('la respuesta no corroboró la cuenta completa');\nif (!paginaConfirmaMonto) motivos.push('la respuesta no corroboró el monto');\nif (!paginaConfirmaCriterio) motivos.push('la respuesta no corroboró la clave de rastreo o referencia');\nif (!paginaConfirmaFecha) motivos.push('la respuesta no corroboró la fecha del pago');\nif (!paginaConfirmaBancoEmisor) motivos.push('la respuesta no corroboró el banco emisor');\nif (!paginaConfirmaBancoReceptor) motivos.push('la respuesta no corroboró el banco receptor');\nif (resultado.error) motivos.push(String(resultado.error));\n\nreturn [{\n  json: {\n    ...original,\n    ...resultado,\n    intentos_validacion: 2,\n    estado_banxico: estadoBanxico,\n    tipo_documento_banxico: esReporteEstado ? 'reporte_estado_pago' : 'respuesta_banxico',\n    texto_resultado: textoResultado.slice(0, 20000),\n    monto_detectado_pdf: montoPdf,\n    pago_liquidado_banxico: liquidado,\n    pagina_confirma_cuenta: paginaConfirmaCuenta,\n    pagina_confirma_monto: paginaConfirmaMonto,\n    pagina_confirma_criterio: paginaConfirmaCriterio,\n    pagina_confirma_fecha: paginaConfirmaFecha,\n    pagina_confirma_banco_emisor: paginaConfirmaBancoEmisor,\n    pagina_confirma_banco_receptor: paginaConfirmaBancoReceptor,\n    pago_verificado: pagoVerificado,\n    requiere_asesor: !pagoVerificado,\n    motivo_revision: motivos.join(' | ') || null,\n  },\n}];"
+      },
+      "id": "70348f7a-73b6-4bc3-985b-bd65210ca8b4",
+      "name": "Interpretar respuesta de Banxico 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -10480,
+        4400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.browserless_endpoint }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $json.browserless_token }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.browserless_payload }}",
+        "options": {
+          "timeout": 210000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -10704,
+        4400
+      ],
+      "id": "b2a30363-b925-4da9-afd0-bea7e635c829",
+      "name": "Consultar estado en Banxico 2",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput",
+      "notes": "Usa Browserless /function y ejecuta desde la sesión de Banxico el POST oficial a valida.do. No intenta resolver ni saltar códigos de seguridad."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json;\nconst terminales=['devuelto','cancelado','rechazado','retornado','en_proceso_de_devolucion'];\nconst error=JSON.stringify(d.error??'');\nconst acceso=d.captcha_requerido===true || /captcha|codigo.seguridad|unauthorized|forbidden|\\b401\\b|\\b403\\b/i.test(String(d.estado??'')+' '+error);\nreturn [{json:{...d,reintentar_validacion:d.pago_verificado!==true && !acceso && !terminales.includes(d.estado_banxico)}}];"
+      },
+      "id": "7829a904-1e0e-46ea-abe5-270202b85330",
+      "name": "Evaluar reintento 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -10256,
+        4400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-verificado",
+              "leftValue": "={{ $json.reintentar_validacion }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -10032,
+        4400
+      ],
+      "id": "de591689-314a-450b-a171-3ef1d3c65499",
+      "name": "IF reintentar 2"
+    },
+    {
+      "parameters": {
+        "amount": 240
+      },
+      "id": "d547acb2-4379-400b-97b1-ac9ab8d99a63",
+      "name": "Esperar antes de intento 3",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -9808,
+        4320
+      ],
+      "webhookId": "40d4ed5d-d535-45cd-bf1b-30ad617a457d"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$('Preparar consulta Browserless').first().json}}];"
+      },
+      "id": "3337cc15-6fd3-4e59-b8e7-aa5867efa2e7",
+      "name": "Reutilizar consulta 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -9584,
+        4320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const respuesta = $input.first().json ?? {};\nconst original = $('Preparar consulta Browserless').first().json;\n\nlet resultado = respuesta;\nif (resultado.data && typeof resultado.data === 'object') resultado = resultado.data;\nif (resultado.data && typeof resultado.data === 'object') resultado = resultado.data;\n\nconst textoResultado = String(\n  resultado.texto_resultado ??\n  resultado.text ??\n  resultado.content ??\n  ''\n).trim();\n\nconst normalizar = (v) => String(v ?? '')\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .toUpperCase();\n\nconst plano = normalizar(textoResultado);\nconst compacto = plano.replace(/[^A-Z0-9]/g, '');\nconst soloDigitos = textoResultado.replace(/\\D/g, '');\nconst cuenta = String(original.cuenta_destino_esperada ?? '');\n\nconst estadoMatch = plano.match(\n  /ESTADO DEL PAGO EN BANXICO\\s*:?\\s*(EN PROCESO DE DEVOLUCION|NO LIQUIDADO|NO ENCONTRADO|EN PROCESO|LIQUIDADO|DEVUELTO|CANCELADO|RECHAZADO|RETORNADO)/,\n);\nconst estadosBanxico = {\n  'LIQUIDADO': 'liquidado',\n  'EN PROCESO': 'pendiente',\n  'EN PROCESO DE DEVOLUCION': 'en_proceso_de_devolucion',\n  'DEVUELTO': 'devuelto',\n  'CANCELADO': 'cancelado',\n  'RECHAZADO': 'rechazado',\n  'NO LIQUIDADO': 'no_liquidado',\n  'NO ENCONTRADO': 'no_encontrado',\n  'RETORNADO': 'retornado',\n};\nconst estadoBanxico = estadosBanxico[estadoMatch?.[1]] || 'respuesta_no_reconocida';\n\nconst montoMatch = textoResultado.match(\n  /(?:^|\\n)\\s*Monto\\s*:?\\s*\\$?\\s*([\\d,]+(?:\\.\\d{1,2})?)/im,\n);\nconst montoPdf = montoMatch\n  ? Number(String(montoMatch[1]).replace(/,/g, ''))\n  : null;\nconst montoEsperado = Number(original.monto_esperado);\n\nconst criterio = normalizar(original.criterio_busqueda).replace(/[^A-Z0-9]/g, '');\nconst bancoEmisor = normalizar(original.banco_emisor);\nconst bancoReceptor = normalizar(original.banco_receptor);\nconst fechaEsperada = String(original.fecha_banxico ?? '').replace(/-/g, '/');\n\nconst paginaConfirmaCuenta = Boolean(cuenta && soloDigitos.includes(cuenta));\nconst paginaConfirmaMonto = Boolean(\n  Number.isFinite(montoPdf) &&\n  Number.isFinite(montoEsperado) &&\n  Math.abs(montoPdf - montoEsperado) < 0.01\n);\nconst paginaConfirmaCriterio = Boolean(criterio && compacto.includes(criterio));\nconst paginaConfirmaFecha = Boolean(fechaEsperada && textoResultado.includes(fechaEsperada));\nconst paginaConfirmaBancoEmisor = Boolean(bancoEmisor && plano.includes(bancoEmisor));\nconst paginaConfirmaBancoReceptor = Boolean(bancoReceptor && plano.includes(bancoReceptor));\nconst liquidado = estadoBanxico === 'liquidado';\nconst esReporteEstado = /ESTA CONSULTA NO ES UN COMPROBANTE ELECTRONICO DE PAGO/.test(plano);\n\n// Confirmación estricta usando el contenido devuelto por valida.do de Banxico.\nconst pagoVerificado = Boolean(\n  liquidado &&\n  original.cuenta_coincide === true &&\n  original.monto_coincide === true &&\n  paginaConfirmaCuenta &&\n  paginaConfirmaMonto &&\n  paginaConfirmaCriterio &&\n  paginaConfirmaFecha &&\n  paginaConfirmaBancoEmisor &&\n  paginaConfirmaBancoReceptor\n);\n\nconst motivos = [];\nif (!textoResultado) motivos.push('Banxico no devolvió texto interpretable');\nif (!liquidado) motivos.push('estado Banxico: ' + estadoBanxico);\nif (!original.cuenta_coincide) motivos.push('la cuenta del comprobante no coincide');\nif (!original.monto_coincide) motivos.push('el monto no coincide con el depósito esperado');\nif (!paginaConfirmaCuenta) motivos.push('la respuesta no corroboró la cuenta completa');\nif (!paginaConfirmaMonto) motivos.push('la respuesta no corroboró el monto');\nif (!paginaConfirmaCriterio) motivos.push('la respuesta no corroboró la clave de rastreo o referencia');\nif (!paginaConfirmaFecha) motivos.push('la respuesta no corroboró la fecha del pago');\nif (!paginaConfirmaBancoEmisor) motivos.push('la respuesta no corroboró el banco emisor');\nif (!paginaConfirmaBancoReceptor) motivos.push('la respuesta no corroboró el banco receptor');\nif (resultado.error) motivos.push(String(resultado.error));\n\nreturn [{\n  json: {\n    ...original,\n    ...resultado,\n    intentos_validacion: 3,\n    estado_banxico: estadoBanxico,\n    tipo_documento_banxico: esReporteEstado ? 'reporte_estado_pago' : 'respuesta_banxico',\n    texto_resultado: textoResultado.slice(0, 20000),\n    monto_detectado_pdf: montoPdf,\n    pago_liquidado_banxico: liquidado,\n    pagina_confirma_cuenta: paginaConfirmaCuenta,\n    pagina_confirma_monto: paginaConfirmaMonto,\n    pagina_confirma_criterio: paginaConfirmaCriterio,\n    pagina_confirma_fecha: paginaConfirmaFecha,\n    pagina_confirma_banco_emisor: paginaConfirmaBancoEmisor,\n    pagina_confirma_banco_receptor: paginaConfirmaBancoReceptor,\n    pago_verificado: pagoVerificado,\n    requiere_asesor: !pagoVerificado,\n    motivo_revision: motivos.join(' | ') || null,\n  },\n}];"
+      },
+      "id": "d87ce641-c31e-466b-8176-87c88516a061",
+      "name": "Interpretar respuesta de Banxico 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -9136,
+        4320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.browserless_endpoint }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $json.browserless_token }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.browserless_payload }}",
+        "options": {
+          "timeout": 210000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -9360,
+        4320
+      ],
+      "id": "41f7a4f4-6c1e-44d5-94b1-5eac0fe4ea7c",
+      "name": "Consultar estado en Banxico 3",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput",
+      "notes": "Usa Browserless /function y ejecuta desde la sesión de Banxico el POST oficial a valida.do. No intenta resolver ni saltar códigos de seguridad."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d={...$input.first().json};\ndelete d.browserless_token;delete d.browserless_payload;\nreturn [{json:d}];"
+      },
+      "id": "c2731685-648f-4a84-adeb-be997511f3c9",
+      "name": "Resultado bancario definitivo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -8912,
+        4464
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Entrada desde flujo de comprobantes": {
+      "main": [
+        [
+          {
+            "node": "Normalizar datos para CEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prueba manual": {
+      "main": [
+        [
+          {
+            "node": "Datos para prueba - CAMBIAR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos para prueba - CAMBIAR": {
+      "main": [
+        [
+          {
+            "node": "Normalizar datos para CEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar datos para CEP": {
+      "main": [
+        [
+          {
+            "node": "IF datos completos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF datos completos": {
+      "main": [
+        [
+          {
+            "node": "CONFIGURAR Browserless",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar revisión para asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CONFIGURAR Browserless": {
+      "main": [
+        [
+          {
+            "node": "Preparar consulta Browserless",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar consulta Browserless": {
+      "main": [
+        [
+          {
+            "node": "Consultar estado en Banxico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar estado en Banxico": {
+      "main": [
+        [
+          {
+            "node": "Interpretar respuesta de Banxico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar respuesta de Banxico": {
+      "main": [
+        [
+          {
+            "node": "Evaluar reintento 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF pago verificado": {
+      "main": [
+        [
+          {
+            "node": "Validar ID de reserva para actualizar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar revisión para asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar ID de reserva para actualizar": {
+      "main": [
+        [
+          {
+            "node": "IF puede actualizar Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF puede actualizar Supabase": {
+      "main": [
+        [
+          {
+            "node": "Marcar pago validado en Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar revisión para asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar pago validado en Supabase": {
+      "main": [
+        [
+          {
+            "node": "Validar actualización de pago",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar actualización de pago": {
+      "main": [
+        [
+          {
+            "node": "IF Supabase actualizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Supabase actualizado": {
+      "main": [
+        [
+          {
+            "node": "Salida pago verificado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar revisión para asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar reintento 1": {
+      "main": [
+        [
+          {
+            "node": "IF reintentar 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF reintentar 1": {
+      "main": [
+        [
+          {
+            "node": "Esperar antes de intento 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resultado bancario definitivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar antes de intento 2": {
+      "main": [
+        [
+          {
+            "node": "Reutilizar consulta 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reutilizar consulta 2": {
+      "main": [
+        [
+          {
+            "node": "Consultar estado en Banxico 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar estado en Banxico 2": {
+      "main": [
+        [
+          {
+            "node": "Interpretar respuesta de Banxico 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar respuesta de Banxico 2": {
+      "main": [
+        [
+          {
+            "node": "Evaluar reintento 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar reintento 2": {
+      "main": [
+        [
+          {
+            "node": "IF reintentar 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF reintentar 2": {
+      "main": [
+        [
+          {
+            "node": "Esperar antes de intento 3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resultado bancario definitivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar antes de intento 3": {
+      "main": [
+        [
+          {
+            "node": "Reutilizar consulta 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reutilizar consulta 3": {
+      "main": [
+        [
+          {
+            "node": "Consultar estado en Banxico 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar estado en Banxico 3": {
+      "main": [
+        [
+          {
+            "node": "Interpretar respuesta de Banxico 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar respuesta de Banxico 3": {
+      "main": [
+        [
+          {
+            "node": "Resultado bancario definitivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado bancario definitivo": {
+      "main": [
+        [
+          {
+            "node": "IF pago verificado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "coFiQ7L6lHV0PXji",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "498f5799-36fd-460e-a556-cb7ab0f6e287",
+  "meta": {
+    "instanceId": "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
+  },
+  "nodeGroups": [],
+  "id": "7pYbssxvCNatEjkg",
+  "tags": []
+}

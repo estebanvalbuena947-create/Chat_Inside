@@ -1,0 +1,988 @@
+{
+  "name": "4.6 Cambiar servicio de una pre-reserva",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "subscriber_id"
+            },
+            {
+              "name": "reserva_draft_id_anterior"
+            },
+            {
+              "name": "servicio"
+            },
+            {
+              "name": "servicio_confirmado"
+            },
+            {
+              "name": "servicio_busqueda"
+            },
+            {
+              "name": "sucursal"
+            },
+            {
+              "name": "fecha"
+            },
+            {
+              "name": "horario"
+            },
+            {
+              "name": "numero_personas",
+              "type": "number"
+            },
+            {
+              "name": "es_feriado",
+              "type": "boolean"
+            },
+            {
+              "name": "solicitud_id"
+            },
+            {
+              "name": "first_name"
+            },
+            {
+              "name": "last_name"
+            },
+            {
+              "name": "email"
+            },
+            {
+              "name": "phone"
+            },
+            {
+              "name": "canal_origen"
+            },
+            {
+              "name": "live_chat_url"
+            },
+            {
+              "name": "motivo_cambio"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -3840,
+        1104
+      ],
+      "id": "9c9c6b15-3ead-4513-8f57-eaff21b3a601",
+      "name": "Cambio de servicio solicitado",
+      "notes": "Lo llama el bot cuando el cliente quiere cambiar su pre-reserva a otro servicio (o fecha, sucursal o personas) antes de pagar."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(jsonb_agg(to_jsonb(d) ORDER BY d.id DESC), '[]'::jsonb) AS borradores\nFROM public.reservas_draft d\nWHERE d.subscriber_id::text = $1::text;",
+        "options": {
+          "queryReplacement": "={{ [String($json.subscriber_id)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -3616,
+        1104
+      ],
+      "id": "21a44ce2-01df-47cc-9c90-95e7527da1ba",
+      "name": "Buscar pre-reservas del cliente",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      },
+      "notes": "Trae todas las pre-reservas del contacto para elegir exactamente una activa y sin pagar."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Solo se cambia una pre-reserva ACTIVA y SIN PAGAR. Si ya pagó o está en revisión de pago,\n// el cambio lo hace una asesora (política vigente).\nconst entrada = $('Cambio de servicio solicitado').first().json || {};\nconst pago = $input.first().json || {};\nconst filas = Array.isArray(pago.borradores) ? pago.borradores : [];\n\nconst texto = v => String(v ?? '').trim();\nconst activas = new Set(['esperando_pago','pendiente_pago','creando_retencion']);\nconst sinPagar = d => d.pago_recibido !== true && d.reserva_confirmada !== true && !texto(d.fecha_pago) && !texto(d.evento_stripe_id) && Number(d.monto_pagado || 0) === 0;\nconst activa = d => activas.has(String(d.estado_reserva ?? '').toLowerCase()) && sinPagar(d);\n\nconst pedida = texto(entrada.reserva_draft_id_anterior);\nconst candidatas = filas.filter(activa).filter(d => !pedida || String(d.id) === pedida);\n\nlet motivo = '';\nlet anterior = null;\nif (!filas.length) motivo = 'SIN_PRERESERVA';\nelse if (pedida && !candidatas.length) motivo = 'LA_PRERESERVA_INDICADA_NO_ES_CAMBIABLE';\nelse if (!candidatas.length) motivo = filas.some(d => d.pago_recibido === true || d.reserva_confirmada === true) ? 'YA_PAGADA_O_CONFIRMADA' : 'SIN_PRERESERVA_ACTIVA';\nelse if (candidatas.length > 1) motivo = 'VARIAS_PRERESERVAS_ACTIVAS';\nelse anterior = candidatas[0];\n\nconst nuevaSolicitud = texto(entrada.solicitud_id) && texto(entrada.solicitud_id) !== texto(anterior?.solicitud_id)\n  ? texto(entrada.solicitud_id)\n  : 'cambio_' + texto(anterior?.id) + '_' + Date.now();\n\nreturn [{ json: {\n  ...entrada,\n  puede_cambiar: Boolean(anterior),\n  motivo_no_cambiable: motivo || null,\n  reserva_draft_id_anterior: anterior ? String(anterior.id) : '',\n  estado_anterior: anterior ? String(anterior.estado_reserva ?? '') : '',\n  servicio_anterior: anterior ? String(anterior.servicio ?? anterior.nombre_servicio ?? '') : '',\n  sucursal_anterior: anterior ? String(anterior.sucursal ?? '') : '',\n  pabau_anterior_reservado: anterior ? anterior.pabau_reservado === true : false,\n  pabau_citas_agua_ids: anterior ? (anterior.pabau_citas_agua_ids ?? []) : [],\n  pabau_citas_masaje_ids: anterior ? (anterior.pabau_citas_masaje_ids ?? []) : [],\n  solicitud_id_nueva: nuevaSolicitud,\n  sucursal_solicitada: texto(entrada.sucursal),\n  motivo_cambio: texto(entrada.motivo_cambio) || 'EL_CLIENTE_PIDE_OTRO_SERVICIO',\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3392,
+        1104
+      ],
+      "id": "f3599564-ec8c-4d31-b04b-16bba8ca0b22",
+      "name": "Elegir la pre-reserva a cambiar",
+      "notes": "Regla del negocio: solo se cambia una pre-reserva activa y sin pagar. Si ya pagó o hay varias, se manda a una asesora."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7976f3a3-dd9d-42d4-ad19-96aa439ea131",
+              "leftValue": "={{ $json.puede_cambiar === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3168,
+        1104
+      ],
+      "id": "6586825b-20bf-429e-8de7-7819a4609d67",
+      "name": "IF hay una sola pre-reserva cambiable"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "yt53oVXlUwXxmuoA",
+          "mode": "list",
+          "cachedResultName": "4_V3_SUB_Guardar_borrador_5_sucursales_FUNCIONAL"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "subscriber_id": "={{ $json.subscriber_id }}",
+            "servicio": "={{ $json.servicio_confirmado || $json.servicio }}",
+            "servicio_confirmado": "={{ $json.servicio_confirmado || $json.servicio }}",
+            "servicio_busqueda": "={{ $json.servicio_busqueda || $json.servicio_confirmado || $json.servicio }}",
+            "sucursal": "={{ $json.sucursal }}",
+            "sucursal_solicitada": "={{ $json.sucursal_solicitada || $json.sucursal }}",
+            "fecha": "={{ $json.fecha }}",
+            "horario": "={{ $json.horario }}",
+            "numero_personas": "={{ $json.numero_personas }}",
+            "es_feriado": "={{ $json.es_feriado === true }}",
+            "solicitud_id": "={{ $json.solicitud_id_nueva }}",
+            "reserva_draft_id": "={{ '' }}",
+            "first_name": "={{ $json.first_name ?? '' }}",
+            "last_name": "={{ $json.last_name ?? '' }}",
+            "email": "={{ $json.email ?? '' }}",
+            "phone": "={{ $json.phone ?? '' }}",
+            "canal_origen": "={{ $json.canal_origen ?? '' }}",
+            "live_chat_url": "={{ $json.live_chat_url ?? '' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "subscriber_id",
+              "displayName": "subscriber_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "servicio",
+              "displayName": "servicio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "servicio_confirmado",
+              "displayName": "servicio_confirmado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "servicio_busqueda",
+              "displayName": "servicio_busqueda",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sucursal",
+              "displayName": "sucursal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "horario",
+              "displayName": "horario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "numero_personas",
+              "displayName": "numero_personas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "es_feriado",
+              "displayName": "es_feriado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "boolean",
+              "removed": false
+            },
+            {
+              "id": "solicitud_id",
+              "displayName": "solicitud_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "last_name",
+              "displayName": "last_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "canal_origen",
+              "displayName": "canal_origen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "live_chat_url",
+              "displayName": "live_chat_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -2944,
+        912
+      ],
+      "id": "42eb6e6a-fac1-41e1-8dfa-6017440f55fa",
+      "name": "Guardar la nueva pre-reserva",
+      "notes": "Reutiliza el flujo que ya guarda la pre-reserva y crea la retención en Pabau. Se manda una solicitud NUEVA para que no reescriba el borrador anterior."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json || {};\nconst mensajes = {\n  SIN_PRERESERVA: 'No encontré una pre-reserva activa de este contacto.',\n  SIN_PRERESERVA_ACTIVA: 'No hay una pre-reserva activa que se pueda cambiar.',\n  YA_PAGADA_O_CONFIRMADA: 'La pre-reserva ya tiene pago registrado: el cambio lo realiza una asesora.',\n  LA_PRERESERVA_INDICADA_NO_ES_CAMBIABLE: 'La pre-reserva indicada no se puede cambiar (ya está pagada, cancelada o no existe).',\n  VARIAS_PRERESERVAS_ACTIVAS: 'Hay más de una pre-reserva activa: hay que aclarar cuál se cambia.',\n};\nreturn [{ json: {\n  cambio_ok: false,\n  motivo: d.motivo_no_cambiable || 'NO_SE_PUEDE_CAMBIAR',\n  mensaje: mensajes[d.motivo_no_cambiable] || 'No se pudo cambiar la pre-reserva.',\n  reserva_draft_id_anterior: d.reserva_draft_id_anterior || null,\n  servicio_anterior: d.servicio_anterior || null,\n  requiere_asesora: d.motivo_no_cambiable === 'YA_PAGADA_O_CONFIRMADA' || d.motivo_no_cambiable === 'VARIAS_PRERESERVAS_ACTIVAS',\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2944,
+        1312
+      ],
+      "id": "5a57a847-2f74-4dd2-a40c-22221d1953d1",
+      "name": "Responder que no se puede cambiar"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2720,
+        1312
+      ],
+      "id": "d180c64e-7fae-4221-937e-536caad154ab",
+      "name": "Fin sin cambio"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT to_jsonb(d) AS nueva\nFROM public.reservas_draft d\nWHERE d.subscriber_id::text = $1::text AND d.solicitud_id = $2::text\nORDER BY d.id DESC LIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [String($('Elegir la pre-reserva a cambiar').first().json.subscriber_id), String($('Elegir la pre-reserva a cambiar').first().json.solicitud_id_nueva)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -2720,
+        864
+      ],
+      "id": "f8015dcf-528e-4ea5-bb81-99e5d19cf475",
+      "name": "Leer la nueva pre-reserva guardada",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      },
+      "notes": "Comprueba que la pre-reserva nueva quedó guardada antes de tocar la anterior."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e422d852-9999-488f-a2e7-c9cd499b0aba",
+              "leftValue": "={{ Boolean($json.nueva && $json.nueva.id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2496,
+        864
+      ],
+      "id": "719489ff-8f55-4bbe-83a7-b87d96feb06f",
+      "name": "IF la nueva pre-reserva quedó guardada"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ncutewymydclypuqlbfk.supabase.co/rest/v1/rpc/validar_integridad_citas_pabau",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {p_draft_id:$('Elegir la pre-reserva a cambiar').first().json.reserva_draft_id_anterior, p_subscriber_id:String($('Elegir la pre-reserva a cambiar').first().json.subscriber_id)} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2272,
+        784
+      ],
+      "id": "c1ca692d-b040-4580-8d20-43198cd841c3",
+      "name": "Revisar integridad de la anterior",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Zu9malXYojiqVIBv",
+          "name": "New Supabase"
+        }
+      },
+      "notes": "Comprueba que las citas de la pre-reserva anterior no estén compartidas con otro borrador antes de cancelarlas."
+    },
+    {
+      "parameters": {
+        "jsCode": "// La pre-reserva anterior solo se cancela si sus citas en Pabau no están compartidas con\n// otro borrador. Las citas se cancelan una por una con la API de la sucursal.\nconst BASE = {\n  \"24077\": \"https://api.oauth.pabau.com/cg50463j391eb4i6hb9b315idc8id5ga90g493jf29734a4e9aj3ha5a5gb52a65\",\n  \"24079\": \"https://api.oauth.pabau.com/28006aa905jfdg1jd39cbbh878bajb72h4be3ba3a339314cchdife73i3e80g1f\",\n  \"24080\": \"https://api.oauth.pabau.com/a4dj4ebj49g2b15bf841hd0bafi3hb7icccdf9494gf1cc22id9606j79d29ig91\",\n  \"24082\": \"https://api.oauth.pabau.com/i15b16i0cah9aif6263d82h7a7h72b0hcef5ac1698d2f2ih62ebia7f0j5e571d\",\n  \"24221\": \"https://api.oauth.pabau.com/F9jYXMXcdM98vl9kvo1JsRglq2YHuIB2N7FSLPWFyRg\"\n};\nconst contexto = $('Elegir la pre-reserva a cambiar').first().json || {};\nconst nueva = $('Leer la nueva pre-reserva guardada').first().json?.nueva || {};\nconst r = $input.first().json || {};\n\nfunction lista(valor) {\n  if (valor === undefined || valor === null || valor === '') return [];\n  if (Array.isArray(valor)) return valor.flatMap(lista);\n  if (typeof valor === 'string') {\n    const t = valor.trim();\n    if (!t) return [];\n    try { const c = JSON.parse(t); if (Array.isArray(c)) return c.flatMap(lista); } catch {}\n    return t.split(',').map(x => x.trim()).filter(Boolean);\n  }\n  return [valor];\n}\n\nconst integridad = r || {};\nconst ids = [...new Set([\n  ...lista(contexto.pabau_citas_agua_ids),\n  ...lista(contexto.pabau_citas_masaje_ids),\n].map(String).filter(Boolean))];\nconst base = BASE[String(contexto.sucursal_anterior || '')] || null;\nconst puede = integridad.puede_usar_citas === true && ids.length > 0 && Boolean(base) && contexto.puede_cambiar === true;\n\nif (!puede) {\n  const motivo = !contexto.puede_cambiar ? 'SIN_PRERESERVA_ANTERIOR'\n    : integridad.puede_usar_citas !== true ? 'CITAS_COMPARTIDAS_CON_OTRO_BORRADOR'\n    : !ids.length ? 'LA_PRERESERVA_ANTERIOR_NO_TIENE_CITAS'\n    : 'SIN_API_PABAU_PARA_LA_SUCURSAL';\n  return [{ json: {\n    ...contexto, ...integridad, nueva,\n    omitir_cancelacion: true,\n    motivo_cancelacion_pendiente: motivo,\n    citas_anterior: 0,\n    cancelacion_completa: false,\n  } }];\n}\n\nreturn ids.map(appointment_id => ({ json: {\n  ...contexto, ...integridad, nueva,\n  omitir_cancelacion: false,\n  appointment_id,\n  pabau_base: base,\n  citas_anterior: ids.length,\n  cancelacion_completa: false,\n} }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2048,
+        784
+      ],
+      "id": "0c5d7d48-7207-4903-9b45-0ca364ad250a",
+      "name": "Preparar la cancelación de la anterior"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0dcf060d-c6b5-41bd-82a2-b1581ee207e3",
+              "leftValue": "={{ $json.omitir_cancelacion !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1824,
+        784
+      ],
+      "id": "8089281e-28a1-440a-9ea2-252567e5cf6d",
+      "name": "IF hay citas de la anterior por cancelar"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.pabau_base + '/appointments/' + $json.appointment_id + '/cancel' }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1600,
+        704
+      ],
+      "id": "eb7aeab8-3810-46be-b2ad-da176a62334e",
+      "name": "Cancelar cita de la anterior en Pabau",
+      "onError": "continueRegularOutput",
+      "notes": "Cancela una por una las citas de la pre-reserva anterior. No lleva reintentos para no duplicar la cancelación."
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto = $('Preparar la cancelación de la anterior').first().json || {};\nconst preparadas = $('Preparar la cancelación de la anterior').all().map(i => i.json || {});\nconst respuestas = $input.all();\nconst ok = r => {\n  const j = r.json || {};\n  const codigo = Number(j.statusCode ?? (j.error ? 0 : 200));\n  let cuerpo = j.body ?? j;\n  if (typeof cuerpo === 'string') { try { cuerpo = JSON.parse(cuerpo); } catch { cuerpo = {}; } }\n  return codigo >= 200 && codigo < 300 && !j.error && cuerpo?.success !== false;\n};\n// La respuesta de Pabau no repite el ID: se toma de la cita que se envió, por orden.\nconst detalle = respuestas.map((r, i) => ({ appointment_id: String(preparadas[i]?.appointment_id ?? '') || null, cancelada: ok(r) }));\nconst fallidas = detalle.filter(x => !x.cancelada).map(x => x.appointment_id);\nreturn [{ json: {\n  ...contexto,\n  detalle_cancelacion: detalle,\n  citas_canceladas: detalle.filter(x => x.cancelada).length,\n  citas_fallidas: fallidas,\n  cancelacion_completa: respuestas.length > 0 && fallidas.length === 0,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1376,
+        704
+      ],
+      "id": "1c46e705-27a4-4598-ac0c-1cf9427fe1f9",
+      "name": "Validar cancelación de la anterior"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "reservas_draft",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.reserva_draft_id_anterior }}"
+            },
+            {
+              "keyName": "subscriber_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.subscriber_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "estado_reserva",
+              "fieldValue": "expirado_sin_pago"
+            },
+            {
+              "fieldId": "pabau_reservado",
+              "fieldValue": "=false"
+            },
+            {
+              "fieldId": "pabau_citas_agua_ids",
+              "fieldValue": "=[]"
+            },
+            {
+              "fieldId": "pabau_citas_masaje_ids",
+              "fieldValue": "=[]"
+            },
+            {
+              "fieldId": "retencion_cancelada_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            },
+            {
+              "fieldId": "retencion_expira_at",
+              "fieldValue": "={{ null }}"
+            },
+            {
+              "fieldId": "motivo_revision",
+              "fieldValue": "CAMBIO_DE_SERVICIO"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1152,
+        704
+      ],
+      "id": "567188f9-2152-437d-9cb3-5071cef9fa54",
+      "name": "Marcar la anterior como cancelada",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "Zu9malXYojiqVIBv",
+          "name": "New Supabase"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Deja la pre-reserva anterior cancelada y fuera de juego, con su motivo."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "reservas_draft",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.reserva_draft_id_anterior }}"
+            },
+            {
+              "keyName": "subscriber_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.subscriber_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "estado_reserva",
+              "fieldValue": "requiere_revision"
+            },
+            {
+              "fieldId": "motivo_revision",
+              "fieldValue": "CAMBIO_DE_SERVICIO_CANCELACION_PENDIENTE"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1600,
+        944
+      ],
+      "id": "689d9955-1418-44e2-860e-c88c8d9033ee",
+      "name": "Marcar la anterior para revisión",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "Zu9malXYojiqVIBv",
+          "name": "New Supabase"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Si no se pudieron cancelar las citas de la anterior, se deja cancelada y marcada para que el equipo cierre la retención en Pabau."
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep = $('Preparar la cancelación de la anterior').first().json || {};\nconst guardada = $('Leer la nueva pre-reserva guardada').first().json || {};\nconst nueva = guardada.nueva || {};\nconst salida = (nombre) => { try { const n = $(nombre); return n && n.isExecuted ? (n.first().json || {}) : null; } catch { return null; } };\nconst validacion = salida('Validar cancelación de la anterior');\n// La base es la que manda: se relee la pre-reserva anterior antes de declararla cerrada.\nconst verificado = salida('Verificar estado de la anterior');\nconst borradorAnterior = verificado?.borrador && typeof verificado.borrador === 'object' ? verificado.borrador : {};\nconst estadoAnteriorEnBase = String(borradorAnterior.estado_reserva ?? '');\nconst cierreRegistrado = ['expirado_sin_pago', 'requiere_revision'].includes(estadoAnteriorEnBase)\n  && borradorAnterior.pabau_reservado === false;\nconst cancelada = prep.omitir_cancelacion !== true && validacion?.cancelacion_completa === true && cierreRegistrado;\nconst pendiente = !cierreRegistrado || prep.omitir_cancelacion === true || (validacion && validacion.cancelacion_completa !== true);\n\nreturn [{ json: {\n  cambio_ok: true,\n  reserva_draft_id_nuevo: String(nueva.id ?? ''),\n  reserva_draft_id_anterior: String(prep.reserva_draft_id_anterior ?? ''),\n  servicio_nuevo: String(nueva.servicio ?? prep.servicio ?? ''),\n  sucursal: String(nueva.sucursal ?? prep.sucursal ?? ''),\n  fecha: String(nueva.jacuzzi_inicio || nueva.masaje_inicio || '').slice(0, 10),\n  horario: String(nueva.jacuzzi_inicio || nueva.masaje_inicio || '').slice(11, 16),\n  numero_personas: Number(nueva.numero_personas ?? prep.numero_personas ?? 0) || null,\n  solicitud_id_nueva: String(nueva.solicitud_id ?? prep.solicitud_id_nueva ?? ''),\n  pre_reserva_anterior_cancelada: cancelada,\n  cierre_anterior_registrado: cierreRegistrado,\n  estado_anterior_en_base: estadoAnteriorEnBase || null,\n  aviso: pendiente ? 'LA_PRERESERVA_ANTERIOR_QUEDO_PENDIENTE_DE_CANCELAR_EN_PABAU' : null,\n  motivo_cancelacion_pendiente: pendiente ? (prep.motivo_cancelacion_pendiente || 'CANCELACION_INCOMPLETA') : null,\n  citas_canceladas: Number(validacion?.citas_canceladas ?? 0),\n  necesita_enlace_nuevo: true,\n  mensaje: 'La pre-reserva se actualizó al servicio nuevo y quedó retenida en Pabau. Genera el enlace de pago de la pre-reserva nueva y compártelo.',\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        784
+      ],
+      "id": "f72f31dc-e80a-4fb3-ab14-a11a955aa313",
+      "name": "Resultado del cambio"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        784
+      ],
+      "id": "1d7ce0d3-c10c-487f-8bd5-624f26232094",
+      "name": "Fin del cambio de servicio"
+    },
+    {
+      "parameters": {
+        "jsCode": "const guardada = $input.first().json || {};\nconst prep = $('Elegir la pre-reserva a cambiar').first().json || {};\nreturn [{ json: {\n  cambio_ok: false,\n  motivo: 'NO_SE_PUDO_GUARDAR_LA_NUEVA_PRERESERVA',\n  mensaje: 'No se pudo guardar la pre-reserva del servicio nuevo. La pre-reserva anterior NO se tocó.',\n  detalle_guardado: guardada,\n  reserva_draft_id_anterior: prep.reserva_draft_id_anterior || null,\n  pre_reserva_anterior_intacta: true,\n  requiere_asesora: false,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2272,
+        1024
+      ],
+      "id": "437d5d67-d441-4d5e-bd3f-1ac333660cbb",
+      "name": "Responder que la anterior sigue intacta"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT to_jsonb(d) AS borrador\nFROM public.reservas_draft d\nWHERE d.id::text = $1::text AND d.subscriber_id::text = $2::text\nORDER BY d.id DESC\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [String($('Preparar la cancelación de la anterior').first().json.reserva_draft_id_anterior), String($('Preparar la cancelación de la anterior').first().json.subscriber_id)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1152,
+        944
+      ],
+      "id": "82230612-d0a2-4873-8ecb-6556235d8dee",
+      "name": "Verificar estado de la anterior",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      },
+      "notes": "Relee la pre-reserva anterior para confirmar en la base que quedó cerrada. Un error del guardado no tumba el cambio: se avisa al equipo."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cambio de servicio solicitado": {
+      "main": [
+        [
+          {
+            "node": "Buscar pre-reservas del cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pre-reservas del cliente": {
+      "main": [
+        [
+          {
+            "node": "Elegir la pre-reserva a cambiar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Elegir la pre-reserva a cambiar": {
+      "main": [
+        [
+          {
+            "node": "IF hay una sola pre-reserva cambiable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF hay una sola pre-reserva cambiable": {
+      "main": [
+        [
+          {
+            "node": "Guardar la nueva pre-reserva",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder que no se puede cambiar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder que no se puede cambiar": {
+      "main": [
+        [
+          {
+            "node": "Fin sin cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar la nueva pre-reserva": {
+      "main": [
+        [
+          {
+            "node": "Leer la nueva pre-reserva guardada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer la nueva pre-reserva guardada": {
+      "main": [
+        [
+          {
+            "node": "IF la nueva pre-reserva quedó guardada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF la nueva pre-reserva quedó guardada": {
+      "main": [
+        [
+          {
+            "node": "Revisar integridad de la anterior",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder que la anterior sigue intacta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder que la anterior sigue intacta": {
+      "main": [
+        [
+          {
+            "node": "Fin sin cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisar integridad de la anterior": {
+      "main": [
+        [
+          {
+            "node": "Preparar la cancelación de la anterior",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar la cancelación de la anterior": {
+      "main": [
+        [
+          {
+            "node": "IF hay citas de la anterior por cancelar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF hay citas de la anterior por cancelar": {
+      "main": [
+        [
+          {
+            "node": "Cancelar cita de la anterior en Pabau",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar la anterior para revisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelar cita de la anterior en Pabau": {
+      "main": [
+        [
+          {
+            "node": "Validar cancelación de la anterior",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar cancelación de la anterior": {
+      "main": [
+        [
+          {
+            "node": "Marcar la anterior como cancelada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar la anterior como cancelada": {
+      "main": [
+        [
+          {
+            "node": "Verificar estado de la anterior",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verificar estado de la anterior",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar la anterior para revisión": {
+      "main": [
+        [
+          {
+            "node": "Verificar estado de la anterior",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verificar estado de la anterior",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado del cambio": {
+      "main": [
+        [
+          {
+            "node": "Fin del cambio de servicio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar estado de la anterior": {
+      "main": [
+        [
+          {
+            "node": "Resultado del cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1ec282c8-c557-47df-b931-13f0eb65939b",
+  "meta": {
+    "instanceId": "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
+  },
+  "nodeGroups": [],
+  "id": "ONuzPb7O83Rsc0Ry",
+  "tags": []
+}

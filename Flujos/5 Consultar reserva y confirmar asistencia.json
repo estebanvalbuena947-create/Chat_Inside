@@ -1,0 +1,762 @@
+{
+  "name": "5 Consultar reserva y confirmar asistencia",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "subscriber_id"
+            },
+            {
+              "name": "fecha"
+            },
+            {
+              "name": "horario"
+            },
+            {
+              "name": "sucursal"
+            },
+            {
+              "name": "reserva_id"
+            },
+            {
+              "name": "accion"
+            },
+            {
+              "name": "mensaje_cliente"
+            }
+          ]
+        }
+      },
+      "name": "Entrada consulta",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "id": "dc38a233-986d-47c9-97f1-8f79358c73a6",
+      "position": [
+        688,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT inside_seguimiento.buscar($1::jsonb) AS resultado;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($('Normalizar entrada').first().json)] }}"
+        }
+      },
+      "name": "Buscar reserva propia",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "id": "7798be03-8589-4ad5-9224-f775cad273c2",
+      "position": [
+        1136,
+        288
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ZONA = 'America/Mexico_City';\nconst SEDES = {\n '24077':{nombre:'Del Valle',direccion:'Gabriel Mancera #877, Ciudad de México.',mapa:'https://maps.app.goo.gl/mCP4nozD3snzqWh66'},\n '24079':{nombre:'Polanco',direccion:'Lafontaine #42, Polanco, Ciudad de México.',mapa:'https://maps.app.goo.gl/eAz5Fi2rztc68BHaA'},\n '24080':{nombre:'Juárez',direccion:'Nápoles #60, Ciudad de México.',mapa:'https://maps.app.goo.gl/cqrJAfjgsEdEJcKH9'},\n '24082':{nombre:'Lomas de Chapultepec',direccion:'Monte Chimborazo #507, Ciudad de México.',mapa:'https://maps.app.goo.gl/4NtrJdUgFEefwiSE6'},\n '24221':{nombre:'Roma',direccion:'Sonora 84A, colonia Roma Norte, Ciudad de México.',mapa:'https://maps.app.goo.gl/XovrriJva8fHv41c9?g_st=ic'},\n};\nconst norm=s=>String(s??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();\nconst field=(o,keys)=>{\n if(!o||typeof o!=='object'||Array.isArray(o))return undefined;\n for(const k of keys){const actual=Object.keys(o).find(x=>norm(x).replace(/[^a-z0-9]/g,'')===norm(k).replace(/[^a-z0-9]/g,''));if(actual!==undefined)return o[actual];}\n};\nfunction parse(v){for(let n=0;n<4&&typeof v==='string';n++){try{v=JSON.parse(v);}catch{return null;}}return v&&typeof v==='object'?v:null;}\nfunction ids(v){\n if(v==null||v==='')return [];\n if(typeof v==='string'){const p=parse(v);return p?ids(p):v.split(/[,;+|]/).map(x=>x.trim()).filter(Boolean);}\n if(Array.isArray(v))return v.flatMap(ids);return [String(v)];\n}\nfunction local(v){\n if(v==null)return '';\n const s=String(v).trim();\n if(/^\\d{14}$/.test(s))return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(8,10)}:${s.slice(10,12)}`;\n if(/^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(s)&&!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(s))return s.replace(' ','T').slice(0,16);\n const d=/^\\d{10}(?:\\d{3})?$/.test(s)?new Date(Number(s)*(s.length===10?1000:1)):new Date(s);\n if(!Number.isFinite(d.getTime()))return '';\n const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:ZONA,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(x=>[x.type,x.value]));\n return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;\n}\nfunction nombre(r){\n const raw=String(r.nombre_servicio||r.servicio||'tu experiencia').trim();\n const families={premium_day_spa:'Premium Day Spa',full_day_spa:'Full Day Spa',budha_70:'Budha 70',temazcal_bliss:'Temazcal Bliss',elephant_glow:'Elephant Glow'};\n for(const [key,title] of Object.entries(families)){if(raw.startsWith(key+'_'))return title+' '+raw.slice(key.length+1).replace(/_/g,' ');}\n return raw.replace(/_/g,' ');\n}\nfunction resumen(r){const i=String(r.inicio_local||local(r.jacuzzi_inicio||r.masaje_inicio));return {reserva_id:String(r.id),fecha:i.slice(0,10),horario:i.slice(11,16),sucursal:SEDES[String(r.sucursal)]?.nombre||String(r.sucursal),experiencia:nombre(r)};}\nfunction horarioHumano(r){const x=resumen(r);const [y,m,d]=x.fecha.split('-');return `${d}/${m}/${y} a las ${x.horario}`;}\nfunction explicita(texto){\n const s=norm(texto);\n if(/\\b(no|cancelar|cancelo|cambiar|reprogramar|tal vez|quizas|si puedo)\\b/.test(s))return false;\n return /\\b(confirmo|confirmamos)\\b/.test(s)\n  || /\\b(quiero|quisiera|deseo|me gustaria)\\s+confirmar\\b/.test(s)\n  || /^para confirmar (?:mi|nuestra) (?:cita|reserva)[.!]*$/.test(s)\n  || /\\b(si (voy|iremos|asistire)|ahi estaremos|ahi estare)\\b/.test(s);\n}\nfunction candidatas(result,entrada){\n const data=parse(result.resultado??result)||{};\n if(data.ok!==true)return {ok:false,estado:data.estado||'ERROR_CONSULTA',mensaje:'Disculpa, no pude consultar tu reserva en este momento. Una asesora debe revisar la solicitud. 🌿',requiere_asesor:true};\n const rows=data.candidatos||[];\n if(rows.length===0)return {ok:true,estado:'SIN_RESERVA_PAGADA',mensaje:Number(data.borradores_pendientes)>0?'Encontré una solicitud de pre-reserva pendiente de revisión o validación. Todavía no puedo confirmarla como una reserva agendada. 🌿':'No encontré una reserva pagada y vigente para esos datos. ¿Me confirmas la fecha y sucursal de tu cita? 🌿',requiere_asesor:Number(data.borradores_pendientes)>0};\n if(rows.length!==1){const rs=rows.slice(0,8).map(resumen);return {ok:true,estado:'VARIAS_RESERVAS',opciones:rs,mensaje:'Encontré varias reservas asociadas a tu conversación:\\n'+rs.map(x=>`${x.experiencia}, ${x.sucursal}, ${x.fecha} a las ${x.horario}`).join('\\n')+'\\n¿Cuál deseas consultar o confirmar? 😊'};}\n const r=rows[0];\n if(entrada.reserva_id&&String(r.id)!==String(entrada.reserva_id))throw new Error('RESERVA_NO_COINCIDE');\n return {ok:true,estado:'CANDIDATA_UNICA',reserva:r,config_pabau:data.config_pabau||{},modo_prueba:data.modo_prueba!==false,confirmacion_explicita:entrada.accion==='confirmar_asistencia'&&explicita(entrada.mensaje_cliente)};\n}\nfunction prepararCitas(r,base,config){\n if(!SEDES[String(r.sucursal)]||!base[String(r.sucursal)])throw new Error('SUCURSAL_NO_CONFIGURADA');\n if(r.pago_recibido!==true||r.reserva_confirmada!==true||r.pabau_reservado!==true)throw new Error('RESERVA_NO_PAGADA');\n const result=[];const seen=new Set();\n for(const tipo of ['agua','masaje']){\n  const list=ids(r[tipo==='agua'?'pabau_citas_agua_ids':'pabau_citas_masaje_ids']);\n  for(const id of list){\n   if(!/^[1-9]\\d*$/.test(id))throw new Error('ID_CITA_INVALIDO');\n   const scope=String(r.sucursal)+':'+tipo;\n   const key=base[String(r.sucursal)][tipo]+'|'+id;\n   if(seen.has(key))throw new Error('ID_CITA_DUPLICADO');seen.add(key);\n   result.push({appointment_id:id,tipo,scope,pabau_base:base[String(r.sucursal)][tipo],esperado_inicio:local(r[tipo==='agua'?'jacuzzi_inicio':'masaje_inicio']),esperado_servicio:String(r[tipo==='agua'?'service_agua_id':'service_terapeuta_id']||''),esperado_cliente:String(r.contact_id||''),esperado_sucursal:String(r.sucursal),config:config[scope]||{}});\n  }\n }\n if(!result.length||!result.some(x=>x.tipo==='masaje'))throw new Error('FALTAN_IDS_PABAU');\n if(r.service_agua_id&&Number(r.service_agua_id)!==0&&!result.some(x=>x.tipo==='agua'))throw new Error('FALTA_CITA_TERMICA');\n if(result.some(x=>!x.esperado_inicio||!x.esperado_cliente||!x.esperado_servicio))throw new Error('FALTAN_DATOS_VERIFICACION');\n return result;\n}\nfunction encontrar(raw,id,level=0){\n const o=parse(raw);if(!o||level>8)return null;\n if(Array.isArray(o)){for(const x of o){const r=encontrar(x,id,level+1);if(r)return r;}return null;}\n const d=parse(o.details);\n if(d&&String(field(d,['appointment_id','booking_id','id']))===id){\n  const clients=parse(o.client??o.clients); const client=Array.isArray(clients)&&clients.length===1?clients[0]:null;\n  const services=parse(o.service); const service=Array.isArray(services)&&services.length===1?services[0]:null;\n  const dates=parse(o.dates)||{};\n  const start=dates.start_date&&dates.start_time?String(dates.start_date)+'T'+String(dates.start_time):undefined;\n  return {...o,...d,\n   status:field(d,['appointment_status','booking_status','status'])??field(o,['appointment_status','booking_status','status']),\n   contact_id:field(d,['contact_id','client_id'])??field(o,['contact_id','client_id'])??client?.id,\n   location_id:field(d,['location_id','branch_id'])??d.location?.id??field(o,['location_id','branch_id']),\n   service_id:field(d,['service_id'])??field(o,['service_id'])??service?.service_id,\n   start_date:field(d,['start_date','start_datetime','start','start_time'])??start??field(o,['start_date','start_datetime','start','start_time']),\n   _cantidad_clientes:Array.isArray(clients)?clients.length:null,\n   _cantidad_servicios:Array.isArray(services)?services.length:null};\n }\n if(String(field(o,['appointment_id','booking_id','id']))===id)return o;\n for(const k of ['body','data','appointments','appointment','bookings','booking','result','results','response','items','rows','records']){\n  const r=encontrar(o[k],id,level+1);if(r)return r;\n }return null;\n}\nfunction pathValue(o,path){return String(path||'').split('.').reduce((v,k)=>v&&Object.hasOwn(v,k)?v[k]:undefined,o);}\nfunction contrato(c){return c?.contrato_verificado===true && c.ruta_lectura==='confirmations.confirmed'&&String(c.valor_lectura)==='1';}\nfunction confirmacionAceptada(raw){\n const body=parse(raw?.body);const status=Number(raw?.statusCode||0);\n return !raw?.error&&status>=200&&status<300&&body?.success===true&&!body.error;\n}\nfunction verificar(raw,expected,after=false){\n const code=Number(raw?.statusCode||0);const body=parse(raw?.body??raw);const c=encontrar(body,expected.appointment_id);const errors=[];let estadoObservado=null;\n if(raw?.error||code<200||code>=300||!body||body.status===false||body.success===false||body.error||['error','failed'].includes(norm(body.status)))errors.push('ERROR_PABAU');\n if(!c)errors.push('CITA_NO_ENCONTRADA');\n else{\n  const st=field(c,['status','appointment_status','booking_status']);const status=norm(typeof st==='object'?st?.name:st);\n  estadoObservado=typeof st==='object'?(st?.name??null):(st??null);\n  if(!status)errors.push('ESTADO_NO_INFORMADO');\n  if(c._cantidad_clientes!=null&&c._cantidad_clientes!==1)errors.push('CLIENTE_AMBIGUO');\n  if(c._cantidad_servicios!=null&&c._cantidad_servicios!==1)errors.push('SERVICIO_AMBIGUO');\n  if(/cancel|deleted|eliminad|expired|expirad|no.?show|complete|completad|arrived|running/.test(status)||[true,1,'1'].includes(c.deleted)||[true,1,'1'].includes(c.cancelled))errors.push('CITA_NO_VIGENTE');\n  const client=String(field(c,['contact_id','client_id'])??'');if(client!==expected.esperado_cliente)errors.push('CLIENTE_NO_COINCIDE');\n  const branch=String(field(c,['location_id','branch_id'])??c.location?.id??'');if(branch!==expected.esperado_sucursal)errors.push('SUCURSAL_NO_COINCIDE');\n  const start=local(field(c,['start_date','start_datetime','start','start_time','StartDate','appointment_date']));if(start!==expected.esperado_inicio)errors.push('HORARIO_NO_COINCIDE');\n  const svc=String(field(c,['service_id','service'])??'');if(svc!==expected.esperado_servicio)errors.push('SERVICIO_NO_COINCIDE');\n  if(after&&(!contrato(expected.config)||String(pathValue(c,expected.config.ruta_lectura))!==String(expected.config.valor_lectura)))errors.push('ESTADO_CONFIRMADO_NO_VERIFICADO');\n }\n return {appointment_id:expected.appointment_id,scope:expected.scope,estado_pabau:estadoObservado,ok:errors.length===0,errores:errors,\n confirmada:!!c&&errors.length===0&&contrato(expected.config)&&String(pathValue(c,expected.config.ruta_lectura))===String(expected.config.valor_lectura)};\n}\nfunction revisarTodas(responses,expected,after=false){\n if(responses.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_INCOMPLETAS']}]};\n const detail=expected.map((e,i)=>verificar(responses[i]?.json??responses[i],e,after));\n return {ok:detail.length>0&&detail.every(x=>x.ok),detalle:detail};\n}\nfunction verificarConfirmacionFinal(responses,expected,mutations){\n const result=revisarTodas(responses,expected,true);\n if(mutations.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_CONFIRMACION_INCOMPLETAS']}]};\n for(let i=0;i<result.detalle.length;i++){\n  if(!expected[i]?.confirmacion_previa&&!confirmacionAceptada(mutations[i]?.json??mutations[i])){\n   result.detalle[i].ok=false;result.detalle[i].confirmada=false;result.detalle[i].errores.push('CONFIRMACION_POST_NO_ACEPTADA');\n  }\n }\n result.ok=result.ok&&result.detalle.every(x=>x.ok);return result;\n}\nfunction mensajeAgendada(r,confirmada=false){\n const sede=SEDES[String(r.sucursal)];\n return `Sí, tu reserva de ${nombre(r)} está agendada para el ${horarioHumano(r)} en ${sede.nombre}. ${confirmada?'Tu asistencia quedó confirmada. ':''}Te esperamos. 🌿\\n${sede.direccion}\\n${sede.mapa}`;\n}\nfunction recordatorio(r){\n const sede=SEDES[String(r.sucursal)];\n return `Hola${r.nombre?', '+String(r.nombre).trim():''}. Te recordamos tu reserva de ${nombre(r)} para el ${horarioHumano(r)} en ${sede.nombre}. 🌿\\n\\n${sede.direccion}\\n${sede.mapa}\\n\\n¿Confirmas tu asistencia? Escríbenos por el mismo chat donde agendaste: “Confirmo mi asistencia para el ${horarioHumano(r)} en ${sede.nombre}”.\\n\\nSi necesitas un cambio, contáctanos con al menos 48 horas de anticipación. Política: https://www.insidedelvalle.com.mx/politicadecancelacion\\n\\nTambién puedes comunicarte por WhatsApp al 55 7960 3596 o al 55 7193 9291. 😊`;\n}\nconst escapeHTML=s=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n\nconst entrada=$('Normalizar entrada').first().json;\nif(entrada.entrada_valida!==true)return [{json:{ok:false,estado:'SIN_IDENTIDAD_CONVERSACION',requiere_asesor:true,mensaje:'Disculpa, no pude vincular esta consulta con tu reserva. Una asesora debe revisarla. 🌿'}}];\ntry{return [{json:candidatas($input.first().json,entrada)}];}catch(e){return [{json:{ok:false,estado:String(e&&e.message||'ERROR_CONSULTA'),requiere_asesor:true,mensaje:'Disculpa, no pude comprobar esa reserva en este momento. Una asesora debe revisarla. 🌿'}}];}"
+      },
+      "name": "Elegir reserva",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "b4c2ecdf-4326-43a5-bc27-5d450c27be59",
+      "position": [
+        1360,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dac049fd-a623-4695-baa9-ac7c79095b99",
+              "leftValue": "={{ $json.estado === 'CANDIDATA_UNICA' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Hay una reserva",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "id": "8103fead-183b-4bec-b2c7-1611a0748634",
+      "position": [
+        1584,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "name": "Resultado sin cita unica",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "c3176071-76ed-4d94-86a4-91e491742c6e",
+      "position": [
+        1808,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ZONA = 'America/Mexico_City';\nconst SEDES = {\n '24077':{nombre:'Del Valle',direccion:'Gabriel Mancera #877, Ciudad de México.',mapa:'https://maps.app.goo.gl/mCP4nozD3snzqWh66'},\n '24079':{nombre:'Polanco',direccion:'Lafontaine #42, Polanco, Ciudad de México.',mapa:'https://maps.app.goo.gl/eAz5Fi2rztc68BHaA'},\n '24080':{nombre:'Juárez',direccion:'Nápoles #60, Ciudad de México.',mapa:'https://maps.app.goo.gl/cqrJAfjgsEdEJcKH9'},\n '24082':{nombre:'Lomas de Chapultepec',direccion:'Monte Chimborazo #507, Ciudad de México.',mapa:'https://maps.app.goo.gl/4NtrJdUgFEefwiSE6'},\n '24221':{nombre:'Roma',direccion:'Sonora 84A, colonia Roma Norte, Ciudad de México.',mapa:'https://maps.app.goo.gl/XovrriJva8fHv41c9?g_st=ic'},\n};\nconst norm=s=>String(s??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();\nconst field=(o,keys)=>{\n if(!o||typeof o!=='object'||Array.isArray(o))return undefined;\n for(const k of keys){const actual=Object.keys(o).find(x=>norm(x).replace(/[^a-z0-9]/g,'')===norm(k).replace(/[^a-z0-9]/g,''));if(actual!==undefined)return o[actual];}\n};\nfunction parse(v){for(let n=0;n<4&&typeof v==='string';n++){try{v=JSON.parse(v);}catch{return null;}}return v&&typeof v==='object'?v:null;}\nfunction ids(v){\n if(v==null||v==='')return [];\n if(typeof v==='string'){const p=parse(v);return p?ids(p):v.split(/[,;+|]/).map(x=>x.trim()).filter(Boolean);}\n if(Array.isArray(v))return v.flatMap(ids);return [String(v)];\n}\nfunction local(v){\n if(v==null)return '';\n const s=String(v).trim();\n if(/^\\d{14}$/.test(s))return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(8,10)}:${s.slice(10,12)}`;\n if(/^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(s)&&!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(s))return s.replace(' ','T').slice(0,16);\n const d=/^\\d{10}(?:\\d{3})?$/.test(s)?new Date(Number(s)*(s.length===10?1000:1)):new Date(s);\n if(!Number.isFinite(d.getTime()))return '';\n const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:ZONA,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(x=>[x.type,x.value]));\n return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;\n}\nfunction nombre(r){\n const raw=String(r.nombre_servicio||r.servicio||'tu experiencia').trim();\n const families={premium_day_spa:'Premium Day Spa',full_day_spa:'Full Day Spa',budha_70:'Budha 70',temazcal_bliss:'Temazcal Bliss',elephant_glow:'Elephant Glow'};\n for(const [key,title] of Object.entries(families)){if(raw.startsWith(key+'_'))return title+' '+raw.slice(key.length+1).replace(/_/g,' ');}\n return raw.replace(/_/g,' ');\n}\nfunction resumen(r){const i=String(r.inicio_local||local(r.jacuzzi_inicio||r.masaje_inicio));return {reserva_id:String(r.id),fecha:i.slice(0,10),horario:i.slice(11,16),sucursal:SEDES[String(r.sucursal)]?.nombre||String(r.sucursal),experiencia:nombre(r)};}\nfunction horarioHumano(r){const x=resumen(r);const [y,m,d]=x.fecha.split('-');return `${d}/${m}/${y} a las ${x.horario}`;}\nfunction explicita(texto){\n const s=norm(texto);\n if(/\\b(no|cancelar|cancelo|cambiar|reprogramar|tal vez|quizas|si puedo)\\b/.test(s))return false;\n return /\\b(confirmo|confirmamos)\\b/.test(s)\n  || /\\b(quiero|quisiera|deseo|me gustaria)\\s+confirmar\\b/.test(s)\n  || /^para confirmar (?:mi|nuestra) (?:cita|reserva)[.!]*$/.test(s)\n  || /\\b(si (voy|iremos|asistire)|ahi estaremos|ahi estare)\\b/.test(s);\n}\nfunction candidatas(result,entrada){\n const data=parse(result.resultado??result)||{};\n if(data.ok!==true)return {ok:false,estado:data.estado||'ERROR_CONSULTA',mensaje:'Disculpa, no pude consultar tu reserva en este momento. Una asesora debe revisar la solicitud. 🌿',requiere_asesor:true};\n const rows=data.candidatos||[];\n if(rows.length===0)return {ok:true,estado:'SIN_RESERVA_PAGADA',mensaje:Number(data.borradores_pendientes)>0?'Encontré una solicitud de pre-reserva pendiente de revisión o validación. Todavía no puedo confirmarla como una reserva agendada. 🌿':'No encontré una reserva pagada y vigente para esos datos. ¿Me confirmas la fecha y sucursal de tu cita? 🌿',requiere_asesor:Number(data.borradores_pendientes)>0};\n if(rows.length!==1){const rs=rows.slice(0,8).map(resumen);return {ok:true,estado:'VARIAS_RESERVAS',opciones:rs,mensaje:'Encontré varias reservas asociadas a tu conversación:\\n'+rs.map(x=>`${x.experiencia}, ${x.sucursal}, ${x.fecha} a las ${x.horario}`).join('\\n')+'\\n¿Cuál deseas consultar o confirmar? 😊'};}\n const r=rows[0];\n if(entrada.reserva_id&&String(r.id)!==String(entrada.reserva_id))throw new Error('RESERVA_NO_COINCIDE');\n return {ok:true,estado:'CANDIDATA_UNICA',reserva:r,config_pabau:data.config_pabau||{},modo_prueba:data.modo_prueba!==false,confirmacion_explicita:entrada.accion==='confirmar_asistencia'&&explicita(entrada.mensaje_cliente)};\n}\nfunction prepararCitas(r,base,config){\n if(!SEDES[String(r.sucursal)]||!base[String(r.sucursal)])throw new Error('SUCURSAL_NO_CONFIGURADA');\n if(r.pago_recibido!==true||r.reserva_confirmada!==true||r.pabau_reservado!==true)throw new Error('RESERVA_NO_PAGADA');\n const result=[];const seen=new Set();\n for(const tipo of ['agua','masaje']){\n  const list=ids(r[tipo==='agua'?'pabau_citas_agua_ids':'pabau_citas_masaje_ids']);\n  for(const id of list){\n   if(!/^[1-9]\\d*$/.test(id))throw new Error('ID_CITA_INVALIDO');\n   const scope=String(r.sucursal)+':'+tipo;\n   const key=base[String(r.sucursal)][tipo]+'|'+id;\n   if(seen.has(key))throw new Error('ID_CITA_DUPLICADO');seen.add(key);\n   result.push({appointment_id:id,tipo,scope,pabau_base:base[String(r.sucursal)][tipo],esperado_inicio:local(r[tipo==='agua'?'jacuzzi_inicio':'masaje_inicio']),esperado_servicio:String(r[tipo==='agua'?'service_agua_id':'service_terapeuta_id']||''),esperado_cliente:String(r.contact_id||''),esperado_sucursal:String(r.sucursal),config:config[scope]||{}});\n  }\n }\n if(!result.length||!result.some(x=>x.tipo==='masaje'))throw new Error('FALTAN_IDS_PABAU');\n if(r.service_agua_id&&Number(r.service_agua_id)!==0&&!result.some(x=>x.tipo==='agua'))throw new Error('FALTA_CITA_TERMICA');\n if(result.some(x=>!x.esperado_inicio||!x.esperado_cliente||!x.esperado_servicio))throw new Error('FALTAN_DATOS_VERIFICACION');\n return result;\n}\nfunction encontrar(raw,id,level=0){\n const o=parse(raw);if(!o||level>8)return null;\n if(Array.isArray(o)){for(const x of o){const r=encontrar(x,id,level+1);if(r)return r;}return null;}\n const d=parse(o.details);\n if(d&&String(field(d,['appointment_id','booking_id','id']))===id){\n  const clients=parse(o.client??o.clients); const client=Array.isArray(clients)&&clients.length===1?clients[0]:null;\n  const services=parse(o.service); const service=Array.isArray(services)&&services.length===1?services[0]:null;\n  const dates=parse(o.dates)||{};\n  const start=dates.start_date&&dates.start_time?String(dates.start_date)+'T'+String(dates.start_time):undefined;\n  return {...o,...d,\n   status:field(d,['appointment_status','booking_status','status'])??field(o,['appointment_status','booking_status','status']),\n   contact_id:field(d,['contact_id','client_id'])??field(o,['contact_id','client_id'])??client?.id,\n   location_id:field(d,['location_id','branch_id'])??d.location?.id??field(o,['location_id','branch_id']),\n   service_id:field(d,['service_id'])??field(o,['service_id'])??service?.service_id,\n   start_date:field(d,['start_date','start_datetime','start','start_time'])??start??field(o,['start_date','start_datetime','start','start_time']),\n   _cantidad_clientes:Array.isArray(clients)?clients.length:null,\n   _cantidad_servicios:Array.isArray(services)?services.length:null};\n }\n if(String(field(o,['appointment_id','booking_id','id']))===id)return o;\n for(const k of ['body','data','appointments','appointment','bookings','booking','result','results','response','items','rows','records']){\n  const r=encontrar(o[k],id,level+1);if(r)return r;\n }return null;\n}\nfunction pathValue(o,path){return String(path||'').split('.').reduce((v,k)=>v&&Object.hasOwn(v,k)?v[k]:undefined,o);}\nfunction contrato(c){return c?.contrato_verificado===true && c.ruta_lectura==='confirmations.confirmed'&&String(c.valor_lectura)==='1';}\nfunction confirmacionAceptada(raw){\n const body=parse(raw?.body);const status=Number(raw?.statusCode||0);\n return !raw?.error&&status>=200&&status<300&&body?.success===true&&!body.error;\n}\nfunction verificar(raw,expected,after=false){\n const code=Number(raw?.statusCode||0);const body=parse(raw?.body??raw);const c=encontrar(body,expected.appointment_id);const errors=[];let estadoObservado=null;\n if(raw?.error||code<200||code>=300||!body||body.status===false||body.success===false||body.error||['error','failed'].includes(norm(body.status)))errors.push('ERROR_PABAU');\n if(!c)errors.push('CITA_NO_ENCONTRADA');\n else{\n  const st=field(c,['status','appointment_status','booking_status']);const status=norm(typeof st==='object'?st?.name:st);\n  estadoObservado=typeof st==='object'?(st?.name??null):(st??null);\n  if(!status)errors.push('ESTADO_NO_INFORMADO');\n  if(c._cantidad_clientes!=null&&c._cantidad_clientes!==1)errors.push('CLIENTE_AMBIGUO');\n  if(c._cantidad_servicios!=null&&c._cantidad_servicios!==1)errors.push('SERVICIO_AMBIGUO');\n  if(/cancel|deleted|eliminad|expired|expirad|no.?show|complete|completad|arrived|running/.test(status)||[true,1,'1'].includes(c.deleted)||[true,1,'1'].includes(c.cancelled))errors.push('CITA_NO_VIGENTE');\n  const client=String(field(c,['contact_id','client_id'])??'');if(client!==expected.esperado_cliente)errors.push('CLIENTE_NO_COINCIDE');\n  const branch=String(field(c,['location_id','branch_id'])??c.location?.id??'');if(branch!==expected.esperado_sucursal)errors.push('SUCURSAL_NO_COINCIDE');\n  const start=local(field(c,['start_date','start_datetime','start','start_time','StartDate','appointment_date']));if(start!==expected.esperado_inicio)errors.push('HORARIO_NO_COINCIDE');\n  const svc=String(field(c,['service_id','service'])??'');if(svc!==expected.esperado_servicio)errors.push('SERVICIO_NO_COINCIDE');\n  if(after&&(!contrato(expected.config)||String(pathValue(c,expected.config.ruta_lectura))!==String(expected.config.valor_lectura)))errors.push('ESTADO_CONFIRMADO_NO_VERIFICADO');\n }\n return {appointment_id:expected.appointment_id,scope:expected.scope,estado_pabau:estadoObservado,ok:errors.length===0,errores:errors,\n confirmada:!!c&&errors.length===0&&contrato(expected.config)&&String(pathValue(c,expected.config.ruta_lectura))===String(expected.config.valor_lectura)};\n}\nfunction revisarTodas(responses,expected,after=false){\n if(responses.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_INCOMPLETAS']}]};\n const detail=expected.map((e,i)=>verificar(responses[i]?.json??responses[i],e,after));\n return {ok:detail.length>0&&detail.every(x=>x.ok),detalle:detail};\n}\nfunction verificarConfirmacionFinal(responses,expected,mutations){\n const result=revisarTodas(responses,expected,true);\n if(mutations.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_CONFIRMACION_INCOMPLETAS']}]};\n for(let i=0;i<result.detalle.length;i++){\n  if(!expected[i]?.confirmacion_previa&&!confirmacionAceptada(mutations[i]?.json??mutations[i])){\n   result.detalle[i].ok=false;result.detalle[i].confirmada=false;result.detalle[i].errores.push('CONFIRMACION_POST_NO_ACEPTADA');\n  }\n }\n result.ok=result.ok&&result.detalle.every(x=>x.ok);return result;\n}\nfunction mensajeAgendada(r,confirmada=false){\n const sede=SEDES[String(r.sucursal)];\n return `Sí, tu reserva de ${nombre(r)} está agendada para el ${horarioHumano(r)} en ${sede.nombre}. ${confirmada?'Tu asistencia quedó confirmada. ':''}Te esperamos. 🌿\\n${sede.direccion}\\n${sede.mapa}`;\n}\nfunction recordatorio(r){\n const sede=SEDES[String(r.sucursal)];\n return `Hola${r.nombre?', '+String(r.nombre).trim():''}. Te recordamos tu reserva de ${nombre(r)} para el ${horarioHumano(r)} en ${sede.nombre}. 🌿\\n\\n${sede.direccion}\\n${sede.mapa}\\n\\n¿Confirmas tu asistencia? Escríbenos por el mismo chat donde agendaste: “Confirmo mi asistencia para el ${horarioHumano(r)} en ${sede.nombre}”.\\n\\nSi necesitas un cambio, contáctanos con al menos 48 horas de anticipación. Política: https://www.insidedelvalle.com.mx/politicadecancelacion\\n\\nTambién puedes comunicarte por WhatsApp al 55 7960 3596 o al 55 7193 9291. 😊`;\n}\nconst escapeHTML=s=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n\nconst BASE={\n  '24077': {\n    agua: 'https://api.oauth.pabau.com/cg50463j391eb4i6hb9b315idc8id5ga90g493jf29734a4e9aj3ha5a5gb52a65',\n    masaje: 'https://api.oauth.pabau.com/cg50463j391eb4i6hb9b315idc8id5ga90g493jf29734a4e9aj3ha5a5gb52a65',\n  },\n  '24079': {\n    agua: 'https://api.oauth.pabau.com/28006aa905jfdg1jd39cbbh878bajb72h4be3ba3a339314cchdife73i3e80g1f',\n    masaje: 'https://api.oauth.pabau.com/Xvbasv8U5qwLi3SsD79GycTxjxoXTyiIeLUh6urzOQU',\n  },\n  '24080': {\n    agua: 'https://api.oauth.pabau.com/a4dj4ebj49g2b15bf841hd0bafi3hb7icccdf9494gf1cc22id9606j79d29ig91',\n    masaje: 'https://api.oauth.pabau.com/a4dj4ebj49g2b15bf841hd0bafi3hb7icccdf9494gf1cc22id9606j79d29ig91',\n  },\n  '24082': {\n    agua: 'https://api.oauth.pabau.com/i15b16i0cah9aif6263d82h7a7h72b0hcef5ac1698d2f2ih62ebia7f0j5e571d',\n    masaje: 'https://api.oauth.pabau.com/i15b16i0cah9aif6263d82h7a7h72b0hcef5ac1698d2f2ih62ebia7f0j5e571d',\n  },\n  '24221': {\n    agua: 'https://api.oauth.pabau.com/F9jYXMXcdM98vl9kvo1JsRglq2YHuIB2N7FSLPWFyRg',\n    masaje: 'https://api.oauth.pabau.com/F9jYXMXcdM98vl9kvo1JsRglq2YHuIB2N7FSLPWFyRg',\n  },\n};\nconst e=$input.first().json;\nreturn prepararCitas(e.reserva,BASE,e.config_pabau).map(c=>({json:c}));"
+      },
+      "name": "Preparar citas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "9296b166-34c8-4de1-a0c1-a7cc6da660d0",
+      "position": [
+        1808,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.pabau_base + '/appointments/' + $json.appointment_id }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "name": "Leer citas Pabau",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "id": "f5d90c9a-198d-49da-8c9c-055067af9037",
+      "position": [
+        2032,
+        192
+      ],
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ZONA = 'America/Mexico_City';\nconst SEDES = {\n '24077':{nombre:'Del Valle',direccion:'Gabriel Mancera #877, Ciudad de México.',mapa:'https://maps.app.goo.gl/mCP4nozD3snzqWh66'},\n '24079':{nombre:'Polanco',direccion:'Lafontaine #42, Polanco, Ciudad de México.',mapa:'https://maps.app.goo.gl/eAz5Fi2rztc68BHaA'},\n '24080':{nombre:'Juárez',direccion:'Nápoles #60, Ciudad de México.',mapa:'https://maps.app.goo.gl/cqrJAfjgsEdEJcKH9'},\n '24082':{nombre:'Lomas de Chapultepec',direccion:'Monte Chimborazo #507, Ciudad de México.',mapa:'https://maps.app.goo.gl/4NtrJdUgFEefwiSE6'},\n '24221':{nombre:'Roma',direccion:'Sonora 84A, colonia Roma Norte, Ciudad de México.',mapa:'https://maps.app.goo.gl/XovrriJva8fHv41c9?g_st=ic'},\n};\nconst norm=s=>String(s??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();\nconst field=(o,keys)=>{\n if(!o||typeof o!=='object'||Array.isArray(o))return undefined;\n for(const k of keys){const actual=Object.keys(o).find(x=>norm(x).replace(/[^a-z0-9]/g,'')===norm(k).replace(/[^a-z0-9]/g,''));if(actual!==undefined)return o[actual];}\n};\nfunction parse(v){for(let n=0;n<4&&typeof v==='string';n++){try{v=JSON.parse(v);}catch{return null;}}return v&&typeof v==='object'?v:null;}\nfunction ids(v){\n if(v==null||v==='')return [];\n if(typeof v==='string'){const p=parse(v);return p?ids(p):v.split(/[,;+|]/).map(x=>x.trim()).filter(Boolean);}\n if(Array.isArray(v))return v.flatMap(ids);return [String(v)];\n}\nfunction local(v){\n if(v==null)return '';\n const s=String(v).trim();\n if(/^\\d{14}$/.test(s))return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(8,10)}:${s.slice(10,12)}`;\n if(/^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(s)&&!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(s))return s.replace(' ','T').slice(0,16);\n const d=/^\\d{10}(?:\\d{3})?$/.test(s)?new Date(Number(s)*(s.length===10?1000:1)):new Date(s);\n if(!Number.isFinite(d.getTime()))return '';\n const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:ZONA,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(x=>[x.type,x.value]));\n return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;\n}\nfunction nombre(r){\n const raw=String(r.nombre_servicio||r.servicio||'tu experiencia').trim();\n const families={premium_day_spa:'Premium Day Spa',full_day_spa:'Full Day Spa',budha_70:'Budha 70',temazcal_bliss:'Temazcal Bliss',elephant_glow:'Elephant Glow'};\n for(const [key,title] of Object.entries(families)){if(raw.startsWith(key+'_'))return title+' '+raw.slice(key.length+1).replace(/_/g,' ');}\n return raw.replace(/_/g,' ');\n}\nfunction resumen(r){const i=String(r.inicio_local||local(r.jacuzzi_inicio||r.masaje_inicio));return {reserva_id:String(r.id),fecha:i.slice(0,10),horario:i.slice(11,16),sucursal:SEDES[String(r.sucursal)]?.nombre||String(r.sucursal),experiencia:nombre(r)};}\nfunction horarioHumano(r){const x=resumen(r);const [y,m,d]=x.fecha.split('-');return `${d}/${m}/${y} a las ${x.horario}`;}\nfunction explicita(texto){\n const s=norm(texto);\n if(/\\b(no|cancelar|cancelo|cambiar|reprogramar|tal vez|quizas|si puedo)\\b/.test(s))return false;\n return /\\b(confirmo|confirmamos)\\b/.test(s)\n  || /\\b(quiero|quisiera|deseo|me gustaria)\\s+confirmar\\b/.test(s)\n  || /^para confirmar (?:mi|nuestra) (?:cita|reserva)[.!]*$/.test(s)\n  || /\\b(si (voy|iremos|asistire)|ahi estaremos|ahi estare)\\b/.test(s);\n}\nfunction candidatas(result,entrada){\n const data=parse(result.resultado??result)||{};\n if(data.ok!==true)return {ok:false,estado:data.estado||'ERROR_CONSULTA',mensaje:'Disculpa, no pude consultar tu reserva en este momento. Una asesora debe revisar la solicitud. 🌿',requiere_asesor:true};\n const rows=data.candidatos||[];\n if(rows.length===0)return {ok:true,estado:'SIN_RESERVA_PAGADA',mensaje:Number(data.borradores_pendientes)>0?'Encontré una solicitud de pre-reserva pendiente de revisión o validación. Todavía no puedo confirmarla como una reserva agendada. 🌿':'No encontré una reserva pagada y vigente para esos datos. ¿Me confirmas la fecha y sucursal de tu cita? 🌿',requiere_asesor:Number(data.borradores_pendientes)>0};\n if(rows.length!==1){const rs=rows.slice(0,8).map(resumen);return {ok:true,estado:'VARIAS_RESERVAS',opciones:rs,mensaje:'Encontré varias reservas asociadas a tu conversación:\\n'+rs.map(x=>`${x.experiencia}, ${x.sucursal}, ${x.fecha} a las ${x.horario}`).join('\\n')+'\\n¿Cuál deseas consultar o confirmar? 😊'};}\n const r=rows[0];\n if(entrada.reserva_id&&String(r.id)!==String(entrada.reserva_id))throw new Error('RESERVA_NO_COINCIDE');\n return {ok:true,estado:'CANDIDATA_UNICA',reserva:r,config_pabau:data.config_pabau||{},modo_prueba:data.modo_prueba!==false,confirmacion_explicita:entrada.accion==='confirmar_asistencia'&&explicita(entrada.mensaje_cliente)};\n}\nfunction prepararCitas(r,base,config){\n if(!SEDES[String(r.sucursal)]||!base[String(r.sucursal)])throw new Error('SUCURSAL_NO_CONFIGURADA');\n if(r.pago_recibido!==true||r.reserva_confirmada!==true||r.pabau_reservado!==true)throw new Error('RESERVA_NO_PAGADA');\n const result=[];const seen=new Set();\n for(const tipo of ['agua','masaje']){\n  const list=ids(r[tipo==='agua'?'pabau_citas_agua_ids':'pabau_citas_masaje_ids']);\n  for(const id of list){\n   if(!/^[1-9]\\d*$/.test(id))throw new Error('ID_CITA_INVALIDO');\n   const scope=String(r.sucursal)+':'+tipo;\n   const key=base[String(r.sucursal)][tipo]+'|'+id;\n   if(seen.has(key))throw new Error('ID_CITA_DUPLICADO');seen.add(key);\n   result.push({appointment_id:id,tipo,scope,pabau_base:base[String(r.sucursal)][tipo],esperado_inicio:local(r[tipo==='agua'?'jacuzzi_inicio':'masaje_inicio']),esperado_servicio:String(r[tipo==='agua'?'service_agua_id':'service_terapeuta_id']||''),esperado_cliente:String(r.contact_id||''),esperado_sucursal:String(r.sucursal),config:config[scope]||{}});\n  }\n }\n if(!result.length||!result.some(x=>x.tipo==='masaje'))throw new Error('FALTAN_IDS_PABAU');\n if(r.service_agua_id&&Number(r.service_agua_id)!==0&&!result.some(x=>x.tipo==='agua'))throw new Error('FALTA_CITA_TERMICA');\n if(result.some(x=>!x.esperado_inicio||!x.esperado_cliente||!x.esperado_servicio))throw new Error('FALTAN_DATOS_VERIFICACION');\n return result;\n}\nfunction encontrar(raw,id,level=0){\n const o=parse(raw);if(!o||level>8)return null;\n if(Array.isArray(o)){for(const x of o){const r=encontrar(x,id,level+1);if(r)return r;}return null;}\n const d=parse(o.details);\n if(d&&String(field(d,['appointment_id','booking_id','id']))===id){\n  const clients=parse(o.client??o.clients); const client=Array.isArray(clients)&&clients.length===1?clients[0]:null;\n  const services=parse(o.service); const service=Array.isArray(services)&&services.length===1?services[0]:null;\n  const dates=parse(o.dates)||{};\n  const start=dates.start_date&&dates.start_time?String(dates.start_date)+'T'+String(dates.start_time):undefined;\n  return {...o,...d,\n   status:field(d,['appointment_status','booking_status','status'])??field(o,['appointment_status','booking_status','status']),\n   contact_id:field(d,['contact_id','client_id'])??field(o,['contact_id','client_id'])??client?.id,\n   location_id:field(d,['location_id','branch_id'])??d.location?.id??field(o,['location_id','branch_id']),\n   service_id:field(d,['service_id'])??field(o,['service_id'])??service?.service_id,\n   start_date:field(d,['start_date','start_datetime','start','start_time'])??start??field(o,['start_date','start_datetime','start','start_time']),\n   _cantidad_clientes:Array.isArray(clients)?clients.length:null,\n   _cantidad_servicios:Array.isArray(services)?services.length:null};\n }\n if(String(field(o,['appointment_id','booking_id','id']))===id)return o;\n for(const k of ['body','data','appointments','appointment','bookings','booking','result','results','response','items','rows','records']){\n  const r=encontrar(o[k],id,level+1);if(r)return r;\n }return null;\n}\nfunction pathValue(o,path){return String(path||'').split('.').reduce((v,k)=>v&&Object.hasOwn(v,k)?v[k]:undefined,o);}\nfunction contrato(c){return c?.contrato_verificado===true && c.ruta_lectura==='confirmations.confirmed'&&String(c.valor_lectura)==='1';}\nfunction confirmacionAceptada(raw){\n const body=parse(raw?.body);const status=Number(raw?.statusCode||0);\n return !raw?.error&&status>=200&&status<300&&body?.success===true&&!body.error;\n}\nfunction verificar(raw,expected,after=false){\n const code=Number(raw?.statusCode||0);const body=parse(raw?.body??raw);const c=encontrar(body,expected.appointment_id);const errors=[];let estadoObservado=null;\n if(raw?.error||code<200||code>=300||!body||body.status===false||body.success===false||body.error||['error','failed'].includes(norm(body.status)))errors.push('ERROR_PABAU');\n if(!c)errors.push('CITA_NO_ENCONTRADA');\n else{\n  const st=field(c,['status','appointment_status','booking_status']);const status=norm(typeof st==='object'?st?.name:st);\n  estadoObservado=typeof st==='object'?(st?.name??null):(st??null);\n  if(!status)errors.push('ESTADO_NO_INFORMADO');\n  if(c._cantidad_clientes!=null&&c._cantidad_clientes!==1)errors.push('CLIENTE_AMBIGUO');\n  if(c._cantidad_servicios!=null&&c._cantidad_servicios!==1)errors.push('SERVICIO_AMBIGUO');\n  if(/cancel|deleted|eliminad|expired|expirad|no.?show|complete|completad|arrived|running/.test(status)||[true,1,'1'].includes(c.deleted)||[true,1,'1'].includes(c.cancelled))errors.push('CITA_NO_VIGENTE');\n  const client=String(field(c,['contact_id','client_id'])??'');if(client!==expected.esperado_cliente)errors.push('CLIENTE_NO_COINCIDE');\n  const branch=String(field(c,['location_id','branch_id'])??c.location?.id??'');if(branch!==expected.esperado_sucursal)errors.push('SUCURSAL_NO_COINCIDE');\n  const start=local(field(c,['start_date','start_datetime','start','start_time','StartDate','appointment_date']));if(start!==expected.esperado_inicio)errors.push('HORARIO_NO_COINCIDE');\n  const svc=String(field(c,['service_id','service'])??'');if(svc!==expected.esperado_servicio)errors.push('SERVICIO_NO_COINCIDE');\n  if(after&&(!contrato(expected.config)||String(pathValue(c,expected.config.ruta_lectura))!==String(expected.config.valor_lectura)))errors.push('ESTADO_CONFIRMADO_NO_VERIFICADO');\n }\n return {appointment_id:expected.appointment_id,scope:expected.scope,estado_pabau:estadoObservado,ok:errors.length===0,errores:errors,\n confirmada:!!c&&errors.length===0&&contrato(expected.config)&&String(pathValue(c,expected.config.ruta_lectura))===String(expected.config.valor_lectura)};\n}\nfunction revisarTodas(responses,expected,after=false){\n if(responses.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_INCOMPLETAS']}]};\n const detail=expected.map((e,i)=>verificar(responses[i]?.json??responses[i],e,after));\n return {ok:detail.length>0&&detail.every(x=>x.ok),detalle:detail};\n}\nfunction verificarConfirmacionFinal(responses,expected,mutations){\n const result=revisarTodas(responses,expected,true);\n if(mutations.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_CONFIRMACION_INCOMPLETAS']}]};\n for(let i=0;i<result.detalle.length;i++){\n  if(!expected[i]?.confirmacion_previa&&!confirmacionAceptada(mutations[i]?.json??mutations[i])){\n   result.detalle[i].ok=false;result.detalle[i].confirmada=false;result.detalle[i].errores.push('CONFIRMACION_POST_NO_ACEPTADA');\n  }\n }\n result.ok=result.ok&&result.detalle.every(x=>x.ok);return result;\n}\nfunction mensajeAgendada(r,confirmada=false){\n const sede=SEDES[String(r.sucursal)];\n return `Sí, tu reserva de ${nombre(r)} está agendada para el ${horarioHumano(r)} en ${sede.nombre}. ${confirmada?'Tu asistencia quedó confirmada. ':''}Te esperamos. 🌿\\n${sede.direccion}\\n${sede.mapa}`;\n}\nfunction recordatorio(r){\n const sede=SEDES[String(r.sucursal)];\n return `Hola${r.nombre?', '+String(r.nombre).trim():''}. Te recordamos tu reserva de ${nombre(r)} para el ${horarioHumano(r)} en ${sede.nombre}. 🌿\\n\\n${sede.direccion}\\n${sede.mapa}\\n\\n¿Confirmas tu asistencia? Escríbenos por el mismo chat donde agendaste: “Confirmo mi asistencia para el ${horarioHumano(r)} en ${sede.nombre}”.\\n\\nSi necesitas un cambio, contáctanos con al menos 48 horas de anticipación. Política: https://www.insidedelvalle.com.mx/politicadecancelacion\\n\\nTambién puedes comunicarte por WhatsApp al 55 7960 3596 o al 55 7193 9291. 😊`;\n}\nconst escapeHTML=s=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n\nconst expected=$('Preparar citas').all().map(i=>i.json);const result=revisarTodas($input.all(),expected);const base=$('Elegir reserva').first().json;return [{json:{...base,pabau_verificado:result.ok,detalle:result.detalle,contrato_listo:expected.every(x=>contrato(x.config))}}];"
+      },
+      "name": "Verificar todas las citas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "10ceb302-39ed-4f92-8e39-b2d7fcaf7de5",
+      "position": [
+        2256,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6c466f11-eba8-48e5-a2f4-8a95d0d4e38e",
+              "leftValue": "={{ $json.pabau_verificado === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Citas verificadas",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "id": "447f3cf2-8fdb-4502-aae6-182774601ff5",
+      "position": [
+        2480,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{ok:false,estado:'PABAU_NO_VERIFICADO',requiere_asesor:true,detalle:$json.detalle,mensaje:'Disculpa, no pude comprobar todos los datos de tu cita en este momento. Una asesora debe revisar tu reserva. Gracias por tu paciencia. 🌿'}}];"
+      },
+      "name": "Error de verificacion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "3ce0d6c9-faea-4834-9409-a64f87b77e54",
+      "position": [
+        2704,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "56aec48d-9620-465b-b555-e93b9b8005f7",
+              "leftValue": "={{ $json.confirmacion_explicita === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Cliente confirma asistencia",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "id": "061abb0a-fa7d-4508-9391-cbacd9096403",
+      "position": [
+        2704,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ZONA = 'America/Mexico_City';\nconst SEDES = {\n '24077':{nombre:'Del Valle',direccion:'Gabriel Mancera #877, Ciudad de México.',mapa:'https://maps.app.goo.gl/mCP4nozD3snzqWh66'},\n '24079':{nombre:'Polanco',direccion:'Lafontaine #42, Polanco, Ciudad de México.',mapa:'https://maps.app.goo.gl/eAz5Fi2rztc68BHaA'},\n '24080':{nombre:'Juárez',direccion:'Nápoles #60, Ciudad de México.',mapa:'https://maps.app.goo.gl/cqrJAfjgsEdEJcKH9'},\n '24082':{nombre:'Lomas de Chapultepec',direccion:'Monte Chimborazo #507, Ciudad de México.',mapa:'https://maps.app.goo.gl/4NtrJdUgFEefwiSE6'},\n '24221':{nombre:'Roma',direccion:'Sonora 84A, colonia Roma Norte, Ciudad de México.',mapa:'https://maps.app.goo.gl/XovrriJva8fHv41c9?g_st=ic'},\n};\nconst norm=s=>String(s??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();\nconst field=(o,keys)=>{\n if(!o||typeof o!=='object'||Array.isArray(o))return undefined;\n for(const k of keys){const actual=Object.keys(o).find(x=>norm(x).replace(/[^a-z0-9]/g,'')===norm(k).replace(/[^a-z0-9]/g,''));if(actual!==undefined)return o[actual];}\n};\nfunction parse(v){for(let n=0;n<4&&typeof v==='string';n++){try{v=JSON.parse(v);}catch{return null;}}return v&&typeof v==='object'?v:null;}\nfunction ids(v){\n if(v==null||v==='')return [];\n if(typeof v==='string'){const p=parse(v);return p?ids(p):v.split(/[,;+|]/).map(x=>x.trim()).filter(Boolean);}\n if(Array.isArray(v))return v.flatMap(ids);return [String(v)];\n}\nfunction local(v){\n if(v==null)return '';\n const s=String(v).trim();\n if(/^\\d{14}$/.test(s))return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(8,10)}:${s.slice(10,12)}`;\n if(/^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(s)&&!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(s))return s.replace(' ','T').slice(0,16);\n const d=/^\\d{10}(?:\\d{3})?$/.test(s)?new Date(Number(s)*(s.length===10?1000:1)):new Date(s);\n if(!Number.isFinite(d.getTime()))return '';\n const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:ZONA,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(x=>[x.type,x.value]));\n return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;\n}\nfunction nombre(r){\n const raw=String(r.nombre_servicio||r.servicio||'tu experiencia').trim();\n const families={premium_day_spa:'Premium Day Spa',full_day_spa:'Full Day Spa',budha_70:'Budha 70',temazcal_bliss:'Temazcal Bliss',elephant_glow:'Elephant Glow'};\n for(const [key,title] of Object.entries(families)){if(raw.startsWith(key+'_'))return title+' '+raw.slice(key.length+1).replace(/_/g,' ');}\n return raw.replace(/_/g,' ');\n}\nfunction resumen(r){const i=String(r.inicio_local||local(r.jacuzzi_inicio||r.masaje_inicio));return {reserva_id:String(r.id),fecha:i.slice(0,10),horario:i.slice(11,16),sucursal:SEDES[String(r.sucursal)]?.nombre||String(r.sucursal),experiencia:nombre(r)};}\nfunction horarioHumano(r){const x=resumen(r);const [y,m,d]=x.fecha.split('-');return `${d}/${m}/${y} a las ${x.horario}`;}\nfunction explicita(texto){\n const s=norm(texto);\n if(/\\b(no|cancelar|cancelo|cambiar|reprogramar|tal vez|quizas|si puedo)\\b/.test(s))return false;\n return /\\b(confirmo|confirmamos)\\b/.test(s)\n  || /\\b(quiero|quisiera|deseo|me gustaria)\\s+confirmar\\b/.test(s)\n  || /^para confirmar (?:mi|nuestra) (?:cita|reserva)[.!]*$/.test(s)\n  || /\\b(si (voy|iremos|asistire)|ahi estaremos|ahi estare)\\b/.test(s);\n}\nfunction candidatas(result,entrada){\n const data=parse(result.resultado??result)||{};\n if(data.ok!==true)return {ok:false,estado:data.estado||'ERROR_CONSULTA',mensaje:'Disculpa, no pude consultar tu reserva en este momento. Una asesora debe revisar la solicitud. 🌿',requiere_asesor:true};\n const rows=data.candidatos||[];\n if(rows.length===0)return {ok:true,estado:'SIN_RESERVA_PAGADA',mensaje:Number(data.borradores_pendientes)>0?'Encontré una solicitud de pre-reserva pendiente de revisión o validación. Todavía no puedo confirmarla como una reserva agendada. 🌿':'No encontré una reserva pagada y vigente para esos datos. ¿Me confirmas la fecha y sucursal de tu cita? 🌿',requiere_asesor:Number(data.borradores_pendientes)>0};\n if(rows.length!==1){const rs=rows.slice(0,8).map(resumen);return {ok:true,estado:'VARIAS_RESERVAS',opciones:rs,mensaje:'Encontré varias reservas asociadas a tu conversación:\\n'+rs.map(x=>`${x.experiencia}, ${x.sucursal}, ${x.fecha} a las ${x.horario}`).join('\\n')+'\\n¿Cuál deseas consultar o confirmar? 😊'};}\n const r=rows[0];\n if(entrada.reserva_id&&String(r.id)!==String(entrada.reserva_id))throw new Error('RESERVA_NO_COINCIDE');\n return {ok:true,estado:'CANDIDATA_UNICA',reserva:r,config_pabau:data.config_pabau||{},modo_prueba:data.modo_prueba!==false,confirmacion_explicita:entrada.accion==='confirmar_asistencia'&&explicita(entrada.mensaje_cliente)};\n}\nfunction prepararCitas(r,base,config){\n if(!SEDES[String(r.sucursal)]||!base[String(r.sucursal)])throw new Error('SUCURSAL_NO_CONFIGURADA');\n if(r.pago_recibido!==true||r.reserva_confirmada!==true||r.pabau_reservado!==true)throw new Error('RESERVA_NO_PAGADA');\n const result=[];const seen=new Set();\n for(const tipo of ['agua','masaje']){\n  const list=ids(r[tipo==='agua'?'pabau_citas_agua_ids':'pabau_citas_masaje_ids']);\n  for(const id of list){\n   if(!/^[1-9]\\d*$/.test(id))throw new Error('ID_CITA_INVALIDO');\n   const scope=String(r.sucursal)+':'+tipo;\n   const key=base[String(r.sucursal)][tipo]+'|'+id;\n   if(seen.has(key))throw new Error('ID_CITA_DUPLICADO');seen.add(key);\n   result.push({appointment_id:id,tipo,scope,pabau_base:base[String(r.sucursal)][tipo],esperado_inicio:local(r[tipo==='agua'?'jacuzzi_inicio':'masaje_inicio']),esperado_servicio:String(r[tipo==='agua'?'service_agua_id':'service_terapeuta_id']||''),esperado_cliente:String(r.contact_id||''),esperado_sucursal:String(r.sucursal),config:config[scope]||{}});\n  }\n }\n if(!result.length||!result.some(x=>x.tipo==='masaje'))throw new Error('FALTAN_IDS_PABAU');\n if(r.service_agua_id&&Number(r.service_agua_id)!==0&&!result.some(x=>x.tipo==='agua'))throw new Error('FALTA_CITA_TERMICA');\n if(result.some(x=>!x.esperado_inicio||!x.esperado_cliente||!x.esperado_servicio))throw new Error('FALTAN_DATOS_VERIFICACION');\n return result;\n}\nfunction encontrar(raw,id,level=0){\n const o=parse(raw);if(!o||level>8)return null;\n if(Array.isArray(o)){for(const x of o){const r=encontrar(x,id,level+1);if(r)return r;}return null;}\n const d=parse(o.details);\n if(d&&String(field(d,['appointment_id','booking_id','id']))===id){\n  const clients=parse(o.client??o.clients); const client=Array.isArray(clients)&&clients.length===1?clients[0]:null;\n  const services=parse(o.service); const service=Array.isArray(services)&&services.length===1?services[0]:null;\n  const dates=parse(o.dates)||{};\n  const start=dates.start_date&&dates.start_time?String(dates.start_date)+'T'+String(dates.start_time):undefined;\n  return {...o,...d,\n   status:field(d,['appointment_status','booking_status','status'])??field(o,['appointment_status','booking_status','status']),\n   contact_id:field(d,['contact_id','client_id'])??field(o,['contact_id','client_id'])??client?.id,\n   location_id:field(d,['location_id','branch_id'])??d.location?.id??field(o,['location_id','branch_id']),\n   service_id:field(d,['service_id'])??field(o,['service_id'])??service?.service_id,\n   start_date:field(d,['start_date','start_datetime','start','start_time'])??start??field(o,['start_date','start_datetime','start','start_time']),\n   _cantidad_clientes:Array.isArray(clients)?clients.length:null,\n   _cantidad_servicios:Array.isArray(services)?services.length:null};\n }\n if(String(field(o,['appointment_id','booking_id','id']))===id)return o;\n for(const k of ['body','data','appointments','appointment','bookings','booking','result','results','response','items','rows','records']){\n  const r=encontrar(o[k],id,level+1);if(r)return r;\n }return null;\n}\nfunction pathValue(o,path){return String(path||'').split('.').reduce((v,k)=>v&&Object.hasOwn(v,k)?v[k]:undefined,o);}\nfunction contrato(c){return c?.contrato_verificado===true && c.ruta_lectura==='confirmations.confirmed'&&String(c.valor_lectura)==='1';}\nfunction confirmacionAceptada(raw){\n const body=parse(raw?.body);const status=Number(raw?.statusCode||0);\n return !raw?.error&&status>=200&&status<300&&body?.success===true&&!body.error;\n}\nfunction verificar(raw,expected,after=false){\n const code=Number(raw?.statusCode||0);const body=parse(raw?.body??raw);const c=encontrar(body,expected.appointment_id);const errors=[];let estadoObservado=null;\n if(raw?.error||code<200||code>=300||!body||body.status===false||body.success===false||body.error||['error','failed'].includes(norm(body.status)))errors.push('ERROR_PABAU');\n if(!c)errors.push('CITA_NO_ENCONTRADA');\n else{\n  const st=field(c,['status','appointment_status','booking_status']);const status=norm(typeof st==='object'?st?.name:st);\n  estadoObservado=typeof st==='object'?(st?.name??null):(st??null);\n  if(!status)errors.push('ESTADO_NO_INFORMADO');\n  if(c._cantidad_clientes!=null&&c._cantidad_clientes!==1)errors.push('CLIENTE_AMBIGUO');\n  if(c._cantidad_servicios!=null&&c._cantidad_servicios!==1)errors.push('SERVICIO_AMBIGUO');\n  if(/cancel|deleted|eliminad|expired|expirad|no.?show|complete|completad|arrived|running/.test(status)||[true,1,'1'].includes(c.deleted)||[true,1,'1'].includes(c.cancelled))errors.push('CITA_NO_VIGENTE');\n  const client=String(field(c,['contact_id','client_id'])??'');if(client!==expected.esperado_cliente)errors.push('CLIENTE_NO_COINCIDE');\n  const branch=String(field(c,['location_id','branch_id'])??c.location?.id??'');if(branch!==expected.esperado_sucursal)errors.push('SUCURSAL_NO_COINCIDE');\n  const start=local(field(c,['start_date','start_datetime','start','start_time','StartDate','appointment_date']));if(start!==expected.esperado_inicio)errors.push('HORARIO_NO_COINCIDE');\n  const svc=String(field(c,['service_id','service'])??'');if(svc!==expected.esperado_servicio)errors.push('SERVICIO_NO_COINCIDE');\n  if(after&&(!contrato(expected.config)||String(pathValue(c,expected.config.ruta_lectura))!==String(expected.config.valor_lectura)))errors.push('ESTADO_CONFIRMADO_NO_VERIFICADO');\n }\n return {appointment_id:expected.appointment_id,scope:expected.scope,estado_pabau:estadoObservado,ok:errors.length===0,errores:errors,\n confirmada:!!c&&errors.length===0&&contrato(expected.config)&&String(pathValue(c,expected.config.ruta_lectura))===String(expected.config.valor_lectura)};\n}\nfunction revisarTodas(responses,expected,after=false){\n if(responses.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_INCOMPLETAS']}]};\n const detail=expected.map((e,i)=>verificar(responses[i]?.json??responses[i],e,after));\n return {ok:detail.length>0&&detail.every(x=>x.ok),detalle:detail};\n}\nfunction verificarConfirmacionFinal(responses,expected,mutations){\n const result=revisarTodas(responses,expected,true);\n if(mutations.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_CONFIRMACION_INCOMPLETAS']}]};\n for(let i=0;i<result.detalle.length;i++){\n  if(!expected[i]?.confirmacion_previa&&!confirmacionAceptada(mutations[i]?.json??mutations[i])){\n   result.detalle[i].ok=false;result.detalle[i].confirmada=false;result.detalle[i].errores.push('CONFIRMACION_POST_NO_ACEPTADA');\n  }\n }\n result.ok=result.ok&&result.detalle.every(x=>x.ok);return result;\n}\nfunction mensajeAgendada(r,confirmada=false){\n const sede=SEDES[String(r.sucursal)];\n return `Sí, tu reserva de ${nombre(r)} está agendada para el ${horarioHumano(r)} en ${sede.nombre}. ${confirmada?'Tu asistencia quedó confirmada. ':''}Te esperamos. 🌿\\n${sede.direccion}\\n${sede.mapa}`;\n}\nfunction recordatorio(r){\n const sede=SEDES[String(r.sucursal)];\n return `Hola${r.nombre?', '+String(r.nombre).trim():''}. Te recordamos tu reserva de ${nombre(r)} para el ${horarioHumano(r)} en ${sede.nombre}. 🌿\\n\\n${sede.direccion}\\n${sede.mapa}\\n\\n¿Confirmas tu asistencia? Escríbenos por el mismo chat donde agendaste: “Confirmo mi asistencia para el ${horarioHumano(r)} en ${sede.nombre}”.\\n\\nSi necesitas un cambio, contáctanos con al menos 48 horas de anticipación. Política: https://www.insidedelvalle.com.mx/politicadecancelacion\\n\\nTambién puedes comunicarte por WhatsApp al 55 7960 3596 o al 55 7193 9291. 😊`;\n}\nconst escapeHTML=s=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n\nconst r=$json.reserva;return [{json:{ok:true,estado:'RESERVA_AGENDADA',pabau_verificado:true,reserva_id:String(r.id),subscriber_id:String(r.subscriber_id),huella:r.huella,detalle:$json.detalle,resumen:resumen(r),mensaje:mensajeAgendada(r),reserva:r}}];"
+      },
+      "name": "Responder consulta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "2c1c1cdf-5043-4147-b35d-c255b2f91b1e",
+      "position": [
+        2928,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$json.reserva;return [{json:{...$json,reserva_id:String(r.id),subscriber_id:String(r.subscriber_id),huella:r.huella,ejecucion:String($execution.id),mensaje_cliente:String($('Normalizar entrada').first().json.mensaje_cliente||'')}}];"
+      },
+      "name": "Preparar confirmacion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "292d3c42-e1cb-4a36-8d6c-0a12fc28ce3b",
+      "position": [
+        2928,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT inside_seguimiento.tomar_asistencia($1::jsonb) AS resultado;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($('Preparar confirmacion').first().json)] }}"
+        }
+      },
+      "name": "Tomar confirmacion",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "id": "7abfc1df-5df3-4862-8f45-bcbe91136e10",
+      "position": [
+        3152,
+        384
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "345b4192-18f0-41f4-84f8-9c1288ff7d22",
+              "leftValue": "={{ $json.resultado.tomada === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Confirmacion adquirida",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "id": "224515e8-6d35-4201-a482-52dc93293efb",
+      "position": [
+        3376,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ZONA = 'America/Mexico_City';\nconst SEDES = {\n '24077':{nombre:'Del Valle',direccion:'Gabriel Mancera #877, Ciudad de México.',mapa:'https://maps.app.goo.gl/mCP4nozD3snzqWh66'},\n '24079':{nombre:'Polanco',direccion:'Lafontaine #42, Polanco, Ciudad de México.',mapa:'https://maps.app.goo.gl/eAz5Fi2rztc68BHaA'},\n '24080':{nombre:'Juárez',direccion:'Nápoles #60, Ciudad de México.',mapa:'https://maps.app.goo.gl/cqrJAfjgsEdEJcKH9'},\n '24082':{nombre:'Lomas de Chapultepec',direccion:'Monte Chimborazo #507, Ciudad de México.',mapa:'https://maps.app.goo.gl/4NtrJdUgFEefwiSE6'},\n '24221':{nombre:'Roma',direccion:'Sonora 84A, colonia Roma Norte, Ciudad de México.',mapa:'https://maps.app.goo.gl/XovrriJva8fHv41c9?g_st=ic'},\n};\nconst norm=s=>String(s??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();\nconst field=(o,keys)=>{\n if(!o||typeof o!=='object'||Array.isArray(o))return undefined;\n for(const k of keys){const actual=Object.keys(o).find(x=>norm(x).replace(/[^a-z0-9]/g,'')===norm(k).replace(/[^a-z0-9]/g,''));if(actual!==undefined)return o[actual];}\n};\nfunction parse(v){for(let n=0;n<4&&typeof v==='string';n++){try{v=JSON.parse(v);}catch{return null;}}return v&&typeof v==='object'?v:null;}\nfunction ids(v){\n if(v==null||v==='')return [];\n if(typeof v==='string'){const p=parse(v);return p?ids(p):v.split(/[,;+|]/).map(x=>x.trim()).filter(Boolean);}\n if(Array.isArray(v))return v.flatMap(ids);return [String(v)];\n}\nfunction local(v){\n if(v==null)return '';\n const s=String(v).trim();\n if(/^\\d{14}$/.test(s))return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(8,10)}:${s.slice(10,12)}`;\n if(/^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(s)&&!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(s))return s.replace(' ','T').slice(0,16);\n const d=/^\\d{10}(?:\\d{3})?$/.test(s)?new Date(Number(s)*(s.length===10?1000:1)):new Date(s);\n if(!Number.isFinite(d.getTime()))return '';\n const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:ZONA,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(x=>[x.type,x.value]));\n return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;\n}\nfunction nombre(r){\n const raw=String(r.nombre_servicio||r.servicio||'tu experiencia').trim();\n const families={premium_day_spa:'Premium Day Spa',full_day_spa:'Full Day Spa',budha_70:'Budha 70',temazcal_bliss:'Temazcal Bliss',elephant_glow:'Elephant Glow'};\n for(const [key,title] of Object.entries(families)){if(raw.startsWith(key+'_'))return title+' '+raw.slice(key.length+1).replace(/_/g,' ');}\n return raw.replace(/_/g,' ');\n}\nfunction resumen(r){const i=String(r.inicio_local||local(r.jacuzzi_inicio||r.masaje_inicio));return {reserva_id:String(r.id),fecha:i.slice(0,10),horario:i.slice(11,16),sucursal:SEDES[String(r.sucursal)]?.nombre||String(r.sucursal),experiencia:nombre(r)};}\nfunction horarioHumano(r){const x=resumen(r);const [y,m,d]=x.fecha.split('-');return `${d}/${m}/${y} a las ${x.horario}`;}\nfunction explicita(texto){\n const s=norm(texto);\n if(/\\b(no|cancelar|cancelo|cambiar|reprogramar|tal vez|quizas|si puedo)\\b/.test(s))return false;\n return /\\b(confirmo|confirmamos)\\b/.test(s)\n  || /\\b(quiero|quisiera|deseo|me gustaria)\\s+confirmar\\b/.test(s)\n  || /^para confirmar (?:mi|nuestra) (?:cita|reserva)[.!]*$/.test(s)\n  || /\\b(si (voy|iremos|asistire)|ahi estaremos|ahi estare)\\b/.test(s);\n}\nfunction candidatas(result,entrada){\n const data=parse(result.resultado??result)||{};\n if(data.ok!==true)return {ok:false,estado:data.estado||'ERROR_CONSULTA',mensaje:'Disculpa, no pude consultar tu reserva en este momento. Una asesora debe revisar la solicitud. 🌿',requiere_asesor:true};\n const rows=data.candidatos||[];\n if(rows.length===0)return {ok:true,estado:'SIN_RESERVA_PAGADA',mensaje:Number(data.borradores_pendientes)>0?'Encontré una solicitud de pre-reserva pendiente de revisión o validación. Todavía no puedo confirmarla como una reserva agendada. 🌿':'No encontré una reserva pagada y vigente para esos datos. ¿Me confirmas la fecha y sucursal de tu cita? 🌿',requiere_asesor:Number(data.borradores_pendientes)>0};\n if(rows.length!==1){const rs=rows.slice(0,8).map(resumen);return {ok:true,estado:'VARIAS_RESERVAS',opciones:rs,mensaje:'Encontré varias reservas asociadas a tu conversación:\\n'+rs.map(x=>`${x.experiencia}, ${x.sucursal}, ${x.fecha} a las ${x.horario}`).join('\\n')+'\\n¿Cuál deseas consultar o confirmar? 😊'};}\n const r=rows[0];\n if(entrada.reserva_id&&String(r.id)!==String(entrada.reserva_id))throw new Error('RESERVA_NO_COINCIDE');\n return {ok:true,estado:'CANDIDATA_UNICA',reserva:r,config_pabau:data.config_pabau||{},modo_prueba:data.modo_prueba!==false,confirmacion_explicita:entrada.accion==='confirmar_asistencia'&&explicita(entrada.mensaje_cliente)};\n}\nfunction prepararCitas(r,base,config){\n if(!SEDES[String(r.sucursal)]||!base[String(r.sucursal)])throw new Error('SUCURSAL_NO_CONFIGURADA');\n if(r.pago_recibido!==true||r.reserva_confirmada!==true||r.pabau_reservado!==true)throw new Error('RESERVA_NO_PAGADA');\n const result=[];const seen=new Set();\n for(const tipo of ['agua','masaje']){\n  const list=ids(r[tipo==='agua'?'pabau_citas_agua_ids':'pabau_citas_masaje_ids']);\n  for(const id of list){\n   if(!/^[1-9]\\d*$/.test(id))throw new Error('ID_CITA_INVALIDO');\n   const scope=String(r.sucursal)+':'+tipo;\n   const key=base[String(r.sucursal)][tipo]+'|'+id;\n   if(seen.has(key))throw new Error('ID_CITA_DUPLICADO');seen.add(key);\n   result.push({appointment_id:id,tipo,scope,pabau_base:base[String(r.sucursal)][tipo],esperado_inicio:local(r[tipo==='agua'?'jacuzzi_inicio':'masaje_inicio']),esperado_servicio:String(r[tipo==='agua'?'service_agua_id':'service_terapeuta_id']||''),esperado_cliente:String(r.contact_id||''),esperado_sucursal:String(r.sucursal),config:config[scope]||{}});\n  }\n }\n if(!result.length||!result.some(x=>x.tipo==='masaje'))throw new Error('FALTAN_IDS_PABAU');\n if(r.service_agua_id&&Number(r.service_agua_id)!==0&&!result.some(x=>x.tipo==='agua'))throw new Error('FALTA_CITA_TERMICA');\n if(result.some(x=>!x.esperado_inicio||!x.esperado_cliente||!x.esperado_servicio))throw new Error('FALTAN_DATOS_VERIFICACION');\n return result;\n}\nfunction encontrar(raw,id,level=0){\n const o=parse(raw);if(!o||level>8)return null;\n if(Array.isArray(o)){for(const x of o){const r=encontrar(x,id,level+1);if(r)return r;}return null;}\n const d=parse(o.details);\n if(d&&String(field(d,['appointment_id','booking_id','id']))===id){\n  const clients=parse(o.client??o.clients); const client=Array.isArray(clients)&&clients.length===1?clients[0]:null;\n  const services=parse(o.service); const service=Array.isArray(services)&&services.length===1?services[0]:null;\n  const dates=parse(o.dates)||{};\n  const start=dates.start_date&&dates.start_time?String(dates.start_date)+'T'+String(dates.start_time):undefined;\n  return {...o,...d,\n   status:field(d,['appointment_status','booking_status','status'])??field(o,['appointment_status','booking_status','status']),\n   contact_id:field(d,['contact_id','client_id'])??field(o,['contact_id','client_id'])??client?.id,\n   location_id:field(d,['location_id','branch_id'])??d.location?.id??field(o,['location_id','branch_id']),\n   service_id:field(d,['service_id'])??field(o,['service_id'])??service?.service_id,\n   start_date:field(d,['start_date','start_datetime','start','start_time'])??start??field(o,['start_date','start_datetime','start','start_time']),\n   _cantidad_clientes:Array.isArray(clients)?clients.length:null,\n   _cantidad_servicios:Array.isArray(services)?services.length:null};\n }\n if(String(field(o,['appointment_id','booking_id','id']))===id)return o;\n for(const k of ['body','data','appointments','appointment','bookings','booking','result','results','response','items','rows','records']){\n  const r=encontrar(o[k],id,level+1);if(r)return r;\n }return null;\n}\nfunction pathValue(o,path){return String(path||'').split('.').reduce((v,k)=>v&&Object.hasOwn(v,k)?v[k]:undefined,o);}\nfunction contrato(c){return c?.contrato_verificado===true && c.ruta_lectura==='confirmations.confirmed'&&String(c.valor_lectura)==='1';}\nfunction confirmacionAceptada(raw){\n const body=parse(raw?.body);const status=Number(raw?.statusCode||0);\n return !raw?.error&&status>=200&&status<300&&body?.success===true&&!body.error;\n}\nfunction verificar(raw,expected,after=false){\n const code=Number(raw?.statusCode||0);const body=parse(raw?.body??raw);const c=encontrar(body,expected.appointment_id);const errors=[];let estadoObservado=null;\n if(raw?.error||code<200||code>=300||!body||body.status===false||body.success===false||body.error||['error','failed'].includes(norm(body.status)))errors.push('ERROR_PABAU');\n if(!c)errors.push('CITA_NO_ENCONTRADA');\n else{\n  const st=field(c,['status','appointment_status','booking_status']);const status=norm(typeof st==='object'?st?.name:st);\n  estadoObservado=typeof st==='object'?(st?.name??null):(st??null);\n  if(!status)errors.push('ESTADO_NO_INFORMADO');\n  if(c._cantidad_clientes!=null&&c._cantidad_clientes!==1)errors.push('CLIENTE_AMBIGUO');\n  if(c._cantidad_servicios!=null&&c._cantidad_servicios!==1)errors.push('SERVICIO_AMBIGUO');\n  if(/cancel|deleted|eliminad|expired|expirad|no.?show|complete|completad|arrived|running/.test(status)||[true,1,'1'].includes(c.deleted)||[true,1,'1'].includes(c.cancelled))errors.push('CITA_NO_VIGENTE');\n  const client=String(field(c,['contact_id','client_id'])??'');if(client!==expected.esperado_cliente)errors.push('CLIENTE_NO_COINCIDE');\n  const branch=String(field(c,['location_id','branch_id'])??c.location?.id??'');if(branch!==expected.esperado_sucursal)errors.push('SUCURSAL_NO_COINCIDE');\n  const start=local(field(c,['start_date','start_datetime','start','start_time','StartDate','appointment_date']));if(start!==expected.esperado_inicio)errors.push('HORARIO_NO_COINCIDE');\n  const svc=String(field(c,['service_id','service'])??'');if(svc!==expected.esperado_servicio)errors.push('SERVICIO_NO_COINCIDE');\n  if(after&&(!contrato(expected.config)||String(pathValue(c,expected.config.ruta_lectura))!==String(expected.config.valor_lectura)))errors.push('ESTADO_CONFIRMADO_NO_VERIFICADO');\n }\n return {appointment_id:expected.appointment_id,scope:expected.scope,estado_pabau:estadoObservado,ok:errors.length===0,errores:errors,\n confirmada:!!c&&errors.length===0&&contrato(expected.config)&&String(pathValue(c,expected.config.ruta_lectura))===String(expected.config.valor_lectura)};\n}\nfunction revisarTodas(responses,expected,after=false){\n if(responses.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_INCOMPLETAS']}]};\n const detail=expected.map((e,i)=>verificar(responses[i]?.json??responses[i],e,after));\n return {ok:detail.length>0&&detail.every(x=>x.ok),detalle:detail};\n}\nfunction verificarConfirmacionFinal(responses,expected,mutations){\n const result=revisarTodas(responses,expected,true);\n if(mutations.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_CONFIRMACION_INCOMPLETAS']}]};\n for(let i=0;i<result.detalle.length;i++){\n  if(!expected[i]?.confirmacion_previa&&!confirmacionAceptada(mutations[i]?.json??mutations[i])){\n   result.detalle[i].ok=false;result.detalle[i].confirmada=false;result.detalle[i].errores.push('CONFIRMACION_POST_NO_ACEPTADA');\n  }\n }\n result.ok=result.ok&&result.detalle.every(x=>x.ok);return result;\n}\nfunction mensajeAgendada(r,confirmada=false){\n const sede=SEDES[String(r.sucursal)];\n return `Sí, tu reserva de ${nombre(r)} está agendada para el ${horarioHumano(r)} en ${sede.nombre}. ${confirmada?'Tu asistencia quedó confirmada. ':''}Te esperamos. 🌿\\n${sede.direccion}\\n${sede.mapa}`;\n}\nfunction recordatorio(r){\n const sede=SEDES[String(r.sucursal)];\n return `Hola${r.nombre?', '+String(r.nombre).trim():''}. Te recordamos tu reserva de ${nombre(r)} para el ${horarioHumano(r)} en ${sede.nombre}. 🌿\\n\\n${sede.direccion}\\n${sede.mapa}\\n\\n¿Confirmas tu asistencia? Escríbenos por el mismo chat donde agendaste: “Confirmo mi asistencia para el ${horarioHumano(r)} en ${sede.nombre}”.\\n\\nSi necesitas un cambio, contáctanos con al menos 48 horas de anticipación. Política: https://www.insidedelvalle.com.mx/politicadecancelacion\\n\\nTambién puedes comunicarte por WhatsApp al 55 7960 3596 o al 55 7193 9291. 😊`;\n}\nconst escapeHTML=s=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n\nconst b=$('Preparar confirmacion').first().json;const status=$json.resultado?.estado;const ok=status==='CONFIRMADA'&&b.detalle.every(x=>x.confirmada===true);return [{json:{ok:true,estado:status,reserva_id:b.reserva_id,asistencia_confirmada:ok,requiere_asesor:!ok&&status!=='MODO_PRUEBA',mensaje:mensajeAgendada(b.reserva,ok)+(ok?'':status==='MODO_PRUEBA'?'\\nLa confirmación está en modo de prueba: no se modificó Pabau.':'\\nUna asesora debe completar el registro de tu confirmación de asistencia.')}}];"
+      },
+      "name": "Respuesta confirmacion pendiente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "027a5c3b-b344-43ad-a674-163efaff8ef9",
+      "position": [
+        3600,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ZONA = 'America/Mexico_City';\nconst SEDES = {\n '24077':{nombre:'Del Valle',direccion:'Gabriel Mancera #877, Ciudad de México.',mapa:'https://maps.app.goo.gl/mCP4nozD3snzqWh66'},\n '24079':{nombre:'Polanco',direccion:'Lafontaine #42, Polanco, Ciudad de México.',mapa:'https://maps.app.goo.gl/eAz5Fi2rztc68BHaA'},\n '24080':{nombre:'Juárez',direccion:'Nápoles #60, Ciudad de México.',mapa:'https://maps.app.goo.gl/cqrJAfjgsEdEJcKH9'},\n '24082':{nombre:'Lomas de Chapultepec',direccion:'Monte Chimborazo #507, Ciudad de México.',mapa:'https://maps.app.goo.gl/4NtrJdUgFEefwiSE6'},\n '24221':{nombre:'Roma',direccion:'Sonora 84A, colonia Roma Norte, Ciudad de México.',mapa:'https://maps.app.goo.gl/XovrriJva8fHv41c9?g_st=ic'},\n};\nconst norm=s=>String(s??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();\nconst field=(o,keys)=>{\n if(!o||typeof o!=='object'||Array.isArray(o))return undefined;\n for(const k of keys){const actual=Object.keys(o).find(x=>norm(x).replace(/[^a-z0-9]/g,'')===norm(k).replace(/[^a-z0-9]/g,''));if(actual!==undefined)return o[actual];}\n};\nfunction parse(v){for(let n=0;n<4&&typeof v==='string';n++){try{v=JSON.parse(v);}catch{return null;}}return v&&typeof v==='object'?v:null;}\nfunction ids(v){\n if(v==null||v==='')return [];\n if(typeof v==='string'){const p=parse(v);return p?ids(p):v.split(/[,;+|]/).map(x=>x.trim()).filter(Boolean);}\n if(Array.isArray(v))return v.flatMap(ids);return [String(v)];\n}\nfunction local(v){\n if(v==null)return '';\n const s=String(v).trim();\n if(/^\\d{14}$/.test(s))return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(8,10)}:${s.slice(10,12)}`;\n if(/^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(s)&&!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(s))return s.replace(' ','T').slice(0,16);\n const d=/^\\d{10}(?:\\d{3})?$/.test(s)?new Date(Number(s)*(s.length===10?1000:1)):new Date(s);\n if(!Number.isFinite(d.getTime()))return '';\n const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:ZONA,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(x=>[x.type,x.value]));\n return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;\n}\nfunction nombre(r){\n const raw=String(r.nombre_servicio||r.servicio||'tu experiencia').trim();\n const families={premium_day_spa:'Premium Day Spa',full_day_spa:'Full Day Spa',budha_70:'Budha 70',temazcal_bliss:'Temazcal Bliss',elephant_glow:'Elephant Glow'};\n for(const [key,title] of Object.entries(families)){if(raw.startsWith(key+'_'))return title+' '+raw.slice(key.length+1).replace(/_/g,' ');}\n return raw.replace(/_/g,' ');\n}\nfunction resumen(r){const i=String(r.inicio_local||local(r.jacuzzi_inicio||r.masaje_inicio));return {reserva_id:String(r.id),fecha:i.slice(0,10),horario:i.slice(11,16),sucursal:SEDES[String(r.sucursal)]?.nombre||String(r.sucursal),experiencia:nombre(r)};}\nfunction horarioHumano(r){const x=resumen(r);const [y,m,d]=x.fecha.split('-');return `${d}/${m}/${y} a las ${x.horario}`;}\nfunction explicita(texto){\n const s=norm(texto);\n if(/\\b(no|cancelar|cancelo|cambiar|reprogramar|tal vez|quizas|si puedo)\\b/.test(s))return false;\n return /\\b(confirmo|confirmamos)\\b/.test(s)\n  || /\\b(quiero|quisiera|deseo|me gustaria)\\s+confirmar\\b/.test(s)\n  || /^para confirmar (?:mi|nuestra) (?:cita|reserva)[.!]*$/.test(s)\n  || /\\b(si (voy|iremos|asistire)|ahi estaremos|ahi estare)\\b/.test(s);\n}\nfunction candidatas(result,entrada){\n const data=parse(result.resultado??result)||{};\n if(data.ok!==true)return {ok:false,estado:data.estado||'ERROR_CONSULTA',mensaje:'Disculpa, no pude consultar tu reserva en este momento. Una asesora debe revisar la solicitud. 🌿',requiere_asesor:true};\n const rows=data.candidatos||[];\n if(rows.length===0)return {ok:true,estado:'SIN_RESERVA_PAGADA',mensaje:Number(data.borradores_pendientes)>0?'Encontré una solicitud de pre-reserva pendiente de revisión o validación. Todavía no puedo confirmarla como una reserva agendada. 🌿':'No encontré una reserva pagada y vigente para esos datos. ¿Me confirmas la fecha y sucursal de tu cita? 🌿',requiere_asesor:Number(data.borradores_pendientes)>0};\n if(rows.length!==1){const rs=rows.slice(0,8).map(resumen);return {ok:true,estado:'VARIAS_RESERVAS',opciones:rs,mensaje:'Encontré varias reservas asociadas a tu conversación:\\n'+rs.map(x=>`${x.experiencia}, ${x.sucursal}, ${x.fecha} a las ${x.horario}`).join('\\n')+'\\n¿Cuál deseas consultar o confirmar? 😊'};}\n const r=rows[0];\n if(entrada.reserva_id&&String(r.id)!==String(entrada.reserva_id))throw new Error('RESERVA_NO_COINCIDE');\n return {ok:true,estado:'CANDIDATA_UNICA',reserva:r,config_pabau:data.config_pabau||{},modo_prueba:data.modo_prueba!==false,confirmacion_explicita:entrada.accion==='confirmar_asistencia'&&explicita(entrada.mensaje_cliente)};\n}\nfunction prepararCitas(r,base,config){\n if(!SEDES[String(r.sucursal)]||!base[String(r.sucursal)])throw new Error('SUCURSAL_NO_CONFIGURADA');\n if(r.pago_recibido!==true||r.reserva_confirmada!==true||r.pabau_reservado!==true)throw new Error('RESERVA_NO_PAGADA');\n const result=[];const seen=new Set();\n for(const tipo of ['agua','masaje']){\n  const list=ids(r[tipo==='agua'?'pabau_citas_agua_ids':'pabau_citas_masaje_ids']);\n  for(const id of list){\n   if(!/^[1-9]\\d*$/.test(id))throw new Error('ID_CITA_INVALIDO');\n   const scope=String(r.sucursal)+':'+tipo;\n   const key=base[String(r.sucursal)][tipo]+'|'+id;\n   if(seen.has(key))throw new Error('ID_CITA_DUPLICADO');seen.add(key);\n   result.push({appointment_id:id,tipo,scope,pabau_base:base[String(r.sucursal)][tipo],esperado_inicio:local(r[tipo==='agua'?'jacuzzi_inicio':'masaje_inicio']),esperado_servicio:String(r[tipo==='agua'?'service_agua_id':'service_terapeuta_id']||''),esperado_cliente:String(r.contact_id||''),esperado_sucursal:String(r.sucursal),config:config[scope]||{}});\n  }\n }\n if(!result.length||!result.some(x=>x.tipo==='masaje'))throw new Error('FALTAN_IDS_PABAU');\n if(r.service_agua_id&&Number(r.service_agua_id)!==0&&!result.some(x=>x.tipo==='agua'))throw new Error('FALTA_CITA_TERMICA');\n if(result.some(x=>!x.esperado_inicio||!x.esperado_cliente||!x.esperado_servicio))throw new Error('FALTAN_DATOS_VERIFICACION');\n return result;\n}\nfunction encontrar(raw,id,level=0){\n const o=parse(raw);if(!o||level>8)return null;\n if(Array.isArray(o)){for(const x of o){const r=encontrar(x,id,level+1);if(r)return r;}return null;}\n const d=parse(o.details);\n if(d&&String(field(d,['appointment_id','booking_id','id']))===id){\n  const clients=parse(o.client??o.clients); const client=Array.isArray(clients)&&clients.length===1?clients[0]:null;\n  const services=parse(o.service); const service=Array.isArray(services)&&services.length===1?services[0]:null;\n  const dates=parse(o.dates)||{};\n  const start=dates.start_date&&dates.start_time?String(dates.start_date)+'T'+String(dates.start_time):undefined;\n  return {...o,...d,\n   status:field(d,['appointment_status','booking_status','status'])??field(o,['appointment_status','booking_status','status']),\n   contact_id:field(d,['contact_id','client_id'])??field(o,['contact_id','client_id'])??client?.id,\n   location_id:field(d,['location_id','branch_id'])??d.location?.id??field(o,['location_id','branch_id']),\n   service_id:field(d,['service_id'])??field(o,['service_id'])??service?.service_id,\n   start_date:field(d,['start_date','start_datetime','start','start_time'])??start??field(o,['start_date','start_datetime','start','start_time']),\n   _cantidad_clientes:Array.isArray(clients)?clients.length:null,\n   _cantidad_servicios:Array.isArray(services)?services.length:null};\n }\n if(String(field(o,['appointment_id','booking_id','id']))===id)return o;\n for(const k of ['body','data','appointments','appointment','bookings','booking','result','results','response','items','rows','records']){\n  const r=encontrar(o[k],id,level+1);if(r)return r;\n }return null;\n}\nfunction pathValue(o,path){return String(path||'').split('.').reduce((v,k)=>v&&Object.hasOwn(v,k)?v[k]:undefined,o);}\nfunction contrato(c){return c?.contrato_verificado===true && c.ruta_lectura==='confirmations.confirmed'&&String(c.valor_lectura)==='1';}\nfunction confirmacionAceptada(raw){\n const body=parse(raw?.body);const status=Number(raw?.statusCode||0);\n return !raw?.error&&status>=200&&status<300&&body?.success===true&&!body.error;\n}\nfunction verificar(raw,expected,after=false){\n const code=Number(raw?.statusCode||0);const body=parse(raw?.body??raw);const c=encontrar(body,expected.appointment_id);const errors=[];let estadoObservado=null;\n if(raw?.error||code<200||code>=300||!body||body.status===false||body.success===false||body.error||['error','failed'].includes(norm(body.status)))errors.push('ERROR_PABAU');\n if(!c)errors.push('CITA_NO_ENCONTRADA');\n else{\n  const st=field(c,['status','appointment_status','booking_status']);const status=norm(typeof st==='object'?st?.name:st);\n  estadoObservado=typeof st==='object'?(st?.name??null):(st??null);\n  if(!status)errors.push('ESTADO_NO_INFORMADO');\n  if(c._cantidad_clientes!=null&&c._cantidad_clientes!==1)errors.push('CLIENTE_AMBIGUO');\n  if(c._cantidad_servicios!=null&&c._cantidad_servicios!==1)errors.push('SERVICIO_AMBIGUO');\n  if(/cancel|deleted|eliminad|expired|expirad|no.?show|complete|completad|arrived|running/.test(status)||[true,1,'1'].includes(c.deleted)||[true,1,'1'].includes(c.cancelled))errors.push('CITA_NO_VIGENTE');\n  const client=String(field(c,['contact_id','client_id'])??'');if(client!==expected.esperado_cliente)errors.push('CLIENTE_NO_COINCIDE');\n  const branch=String(field(c,['location_id','branch_id'])??c.location?.id??'');if(branch!==expected.esperado_sucursal)errors.push('SUCURSAL_NO_COINCIDE');\n  const start=local(field(c,['start_date','start_datetime','start','start_time','StartDate','appointment_date']));if(start!==expected.esperado_inicio)errors.push('HORARIO_NO_COINCIDE');\n  const svc=String(field(c,['service_id','service'])??'');if(svc!==expected.esperado_servicio)errors.push('SERVICIO_NO_COINCIDE');\n  if(after&&(!contrato(expected.config)||String(pathValue(c,expected.config.ruta_lectura))!==String(expected.config.valor_lectura)))errors.push('ESTADO_CONFIRMADO_NO_VERIFICADO');\n }\n return {appointment_id:expected.appointment_id,scope:expected.scope,estado_pabau:estadoObservado,ok:errors.length===0,errores:errors,\n confirmada:!!c&&errors.length===0&&contrato(expected.config)&&String(pathValue(c,expected.config.ruta_lectura))===String(expected.config.valor_lectura)};\n}\nfunction revisarTodas(responses,expected,after=false){\n if(responses.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_INCOMPLETAS']}]};\n const detail=expected.map((e,i)=>verificar(responses[i]?.json??responses[i],e,after));\n return {ok:detail.length>0&&detail.every(x=>x.ok),detalle:detail};\n}\nfunction verificarConfirmacionFinal(responses,expected,mutations){\n const result=revisarTodas(responses,expected,true);\n if(mutations.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_CONFIRMACION_INCOMPLETAS']}]};\n for(let i=0;i<result.detalle.length;i++){\n  if(!expected[i]?.confirmacion_previa&&!confirmacionAceptada(mutations[i]?.json??mutations[i])){\n   result.detalle[i].ok=false;result.detalle[i].confirmada=false;result.detalle[i].errores.push('CONFIRMACION_POST_NO_ACEPTADA');\n  }\n }\n result.ok=result.ok&&result.detalle.every(x=>x.ok);return result;\n}\nfunction mensajeAgendada(r,confirmada=false){\n const sede=SEDES[String(r.sucursal)];\n return `Sí, tu reserva de ${nombre(r)} está agendada para el ${horarioHumano(r)} en ${sede.nombre}. ${confirmada?'Tu asistencia quedó confirmada. ':''}Te esperamos. 🌿\\n${sede.direccion}\\n${sede.mapa}`;\n}\nfunction recordatorio(r){\n const sede=SEDES[String(r.sucursal)];\n return `Hola${r.nombre?', '+String(r.nombre).trim():''}. Te recordamos tu reserva de ${nombre(r)} para el ${horarioHumano(r)} en ${sede.nombre}. 🌿\\n\\n${sede.direccion}\\n${sede.mapa}\\n\\n¿Confirmas tu asistencia? Escríbenos por el mismo chat donde agendaste: “Confirmo mi asistencia para el ${horarioHumano(r)} en ${sede.nombre}”.\\n\\nSi necesitas un cambio, contáctanos con al menos 48 horas de anticipación. Política: https://www.insidedelvalle.com.mx/politicadecancelacion\\n\\nTambién puedes comunicarte por WhatsApp al 55 7960 3596 o al 55 7193 9291. 😊`;\n}\nconst escapeHTML=s=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n\nconst all=$('Preparar citas').all().map(i=>i.json);const detail=$('Verificar todas las citas').first().json.detalle;if(!all.every(x=>contrato(x.config)))throw new Error('CONTRATO_PABAU_NO_VERIFICADO');return all.map(x=>({json:{...x,confirmacion_previa:detail.some(d=>d.scope===x.scope&&d.appointment_id===x.appointment_id&&d.ok===true&&d.confirmada===true)}}));"
+      },
+      "name": "Preparar cambio de estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "b56b7db8-5b70-4477-af21-bd743a5f4936",
+      "position": [
+        3600,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.confirmacion_previa ? 'GET' : 'POST' }}",
+        "url": "={{ $json.pabau_base + '/appointments/' + $json.appointment_id + ($json.confirmacion_previa ? '' : '/confirm') }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "name": "Confirmar asistencia Pabau",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "id": "7f34966a-dd06-4c2d-b02c-1b5468edc726",
+      "position": [
+        3824,
+        480
+      ],
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const expected=$('Preparar cambio de estado').all();return expected.map((e,i)=>({json:{...e.json,actualizacion_http:Number($input.all()[i]?.json?.statusCode||0)}}));"
+      },
+      "name": "Preparar relectura",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "404699d7-0db9-4a16-a649-72399239f5b1",
+      "position": [
+        4048,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.pabau_base + '/appointments/' + $json.appointment_id }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "name": "Releer estado Pabau",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "id": "46b3c7e0-894b-4eb1-b7c9-ef9c67369982",
+      "position": [
+        4272,
+        480
+      ],
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ZONA = 'America/Mexico_City';\nconst SEDES = {\n '24077':{nombre:'Del Valle',direccion:'Gabriel Mancera #877, Ciudad de México.',mapa:'https://maps.app.goo.gl/mCP4nozD3snzqWh66'},\n '24079':{nombre:'Polanco',direccion:'Lafontaine #42, Polanco, Ciudad de México.',mapa:'https://maps.app.goo.gl/eAz5Fi2rztc68BHaA'},\n '24080':{nombre:'Juárez',direccion:'Nápoles #60, Ciudad de México.',mapa:'https://maps.app.goo.gl/cqrJAfjgsEdEJcKH9'},\n '24082':{nombre:'Lomas de Chapultepec',direccion:'Monte Chimborazo #507, Ciudad de México.',mapa:'https://maps.app.goo.gl/4NtrJdUgFEefwiSE6'},\n '24221':{nombre:'Roma',direccion:'Sonora 84A, colonia Roma Norte, Ciudad de México.',mapa:'https://maps.app.goo.gl/XovrriJva8fHv41c9?g_st=ic'},\n};\nconst norm=s=>String(s??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();\nconst field=(o,keys)=>{\n if(!o||typeof o!=='object'||Array.isArray(o))return undefined;\n for(const k of keys){const actual=Object.keys(o).find(x=>norm(x).replace(/[^a-z0-9]/g,'')===norm(k).replace(/[^a-z0-9]/g,''));if(actual!==undefined)return o[actual];}\n};\nfunction parse(v){for(let n=0;n<4&&typeof v==='string';n++){try{v=JSON.parse(v);}catch{return null;}}return v&&typeof v==='object'?v:null;}\nfunction ids(v){\n if(v==null||v==='')return [];\n if(typeof v==='string'){const p=parse(v);return p?ids(p):v.split(/[,;+|]/).map(x=>x.trim()).filter(Boolean);}\n if(Array.isArray(v))return v.flatMap(ids);return [String(v)];\n}\nfunction local(v){\n if(v==null)return '';\n const s=String(v).trim();\n if(/^\\d{14}$/.test(s))return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(8,10)}:${s.slice(10,12)}`;\n if(/^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(s)&&!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(s))return s.replace(' ','T').slice(0,16);\n const d=/^\\d{10}(?:\\d{3})?$/.test(s)?new Date(Number(s)*(s.length===10?1000:1)):new Date(s);\n if(!Number.isFinite(d.getTime()))return '';\n const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:ZONA,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(x=>[x.type,x.value]));\n return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;\n}\nfunction nombre(r){\n const raw=String(r.nombre_servicio||r.servicio||'tu experiencia').trim();\n const families={premium_day_spa:'Premium Day Spa',full_day_spa:'Full Day Spa',budha_70:'Budha 70',temazcal_bliss:'Temazcal Bliss',elephant_glow:'Elephant Glow'};\n for(const [key,title] of Object.entries(families)){if(raw.startsWith(key+'_'))return title+' '+raw.slice(key.length+1).replace(/_/g,' ');}\n return raw.replace(/_/g,' ');\n}\nfunction resumen(r){const i=String(r.inicio_local||local(r.jacuzzi_inicio||r.masaje_inicio));return {reserva_id:String(r.id),fecha:i.slice(0,10),horario:i.slice(11,16),sucursal:SEDES[String(r.sucursal)]?.nombre||String(r.sucursal),experiencia:nombre(r)};}\nfunction horarioHumano(r){const x=resumen(r);const [y,m,d]=x.fecha.split('-');return `${d}/${m}/${y} a las ${x.horario}`;}\nfunction explicita(texto){\n const s=norm(texto);\n if(/\\b(no|cancelar|cancelo|cambiar|reprogramar|tal vez|quizas|si puedo)\\b/.test(s))return false;\n return /\\b(confirmo|confirmamos)\\b/.test(s)\n  || /\\b(quiero|quisiera|deseo|me gustaria)\\s+confirmar\\b/.test(s)\n  || /^para confirmar (?:mi|nuestra) (?:cita|reserva)[.!]*$/.test(s)\n  || /\\b(si (voy|iremos|asistire)|ahi estaremos|ahi estare)\\b/.test(s);\n}\nfunction candidatas(result,entrada){\n const data=parse(result.resultado??result)||{};\n if(data.ok!==true)return {ok:false,estado:data.estado||'ERROR_CONSULTA',mensaje:'Disculpa, no pude consultar tu reserva en este momento. Una asesora debe revisar la solicitud. 🌿',requiere_asesor:true};\n const rows=data.candidatos||[];\n if(rows.length===0)return {ok:true,estado:'SIN_RESERVA_PAGADA',mensaje:Number(data.borradores_pendientes)>0?'Encontré una solicitud de pre-reserva pendiente de revisión o validación. Todavía no puedo confirmarla como una reserva agendada. 🌿':'No encontré una reserva pagada y vigente para esos datos. ¿Me confirmas la fecha y sucursal de tu cita? 🌿',requiere_asesor:Number(data.borradores_pendientes)>0};\n if(rows.length!==1){const rs=rows.slice(0,8).map(resumen);return {ok:true,estado:'VARIAS_RESERVAS',opciones:rs,mensaje:'Encontré varias reservas asociadas a tu conversación:\\n'+rs.map(x=>`${x.experiencia}, ${x.sucursal}, ${x.fecha} a las ${x.horario}`).join('\\n')+'\\n¿Cuál deseas consultar o confirmar? 😊'};}\n const r=rows[0];\n if(entrada.reserva_id&&String(r.id)!==String(entrada.reserva_id))throw new Error('RESERVA_NO_COINCIDE');\n return {ok:true,estado:'CANDIDATA_UNICA',reserva:r,config_pabau:data.config_pabau||{},modo_prueba:data.modo_prueba!==false,confirmacion_explicita:entrada.accion==='confirmar_asistencia'&&explicita(entrada.mensaje_cliente)};\n}\nfunction prepararCitas(r,base,config){\n if(!SEDES[String(r.sucursal)]||!base[String(r.sucursal)])throw new Error('SUCURSAL_NO_CONFIGURADA');\n if(r.pago_recibido!==true||r.reserva_confirmada!==true||r.pabau_reservado!==true)throw new Error('RESERVA_NO_PAGADA');\n const result=[];const seen=new Set();\n for(const tipo of ['agua','masaje']){\n  const list=ids(r[tipo==='agua'?'pabau_citas_agua_ids':'pabau_citas_masaje_ids']);\n  for(const id of list){\n   if(!/^[1-9]\\d*$/.test(id))throw new Error('ID_CITA_INVALIDO');\n   const scope=String(r.sucursal)+':'+tipo;\n   const key=base[String(r.sucursal)][tipo]+'|'+id;\n   if(seen.has(key))throw new Error('ID_CITA_DUPLICADO');seen.add(key);\n   result.push({appointment_id:id,tipo,scope,pabau_base:base[String(r.sucursal)][tipo],esperado_inicio:local(r[tipo==='agua'?'jacuzzi_inicio':'masaje_inicio']),esperado_servicio:String(r[tipo==='agua'?'service_agua_id':'service_terapeuta_id']||''),esperado_cliente:String(r.contact_id||''),esperado_sucursal:String(r.sucursal),config:config[scope]||{}});\n  }\n }\n if(!result.length||!result.some(x=>x.tipo==='masaje'))throw new Error('FALTAN_IDS_PABAU');\n if(r.service_agua_id&&Number(r.service_agua_id)!==0&&!result.some(x=>x.tipo==='agua'))throw new Error('FALTA_CITA_TERMICA');\n if(result.some(x=>!x.esperado_inicio||!x.esperado_cliente||!x.esperado_servicio))throw new Error('FALTAN_DATOS_VERIFICACION');\n return result;\n}\nfunction encontrar(raw,id,level=0){\n const o=parse(raw);if(!o||level>8)return null;\n if(Array.isArray(o)){for(const x of o){const r=encontrar(x,id,level+1);if(r)return r;}return null;}\n const d=parse(o.details);\n if(d&&String(field(d,['appointment_id','booking_id','id']))===id){\n  const clients=parse(o.client??o.clients); const client=Array.isArray(clients)&&clients.length===1?clients[0]:null;\n  const services=parse(o.service); const service=Array.isArray(services)&&services.length===1?services[0]:null;\n  const dates=parse(o.dates)||{};\n  const start=dates.start_date&&dates.start_time?String(dates.start_date)+'T'+String(dates.start_time):undefined;\n  return {...o,...d,\n   status:field(d,['appointment_status','booking_status','status'])??field(o,['appointment_status','booking_status','status']),\n   contact_id:field(d,['contact_id','client_id'])??field(o,['contact_id','client_id'])??client?.id,\n   location_id:field(d,['location_id','branch_id'])??d.location?.id??field(o,['location_id','branch_id']),\n   service_id:field(d,['service_id'])??field(o,['service_id'])??service?.service_id,\n   start_date:field(d,['start_date','start_datetime','start','start_time'])??start??field(o,['start_date','start_datetime','start','start_time']),\n   _cantidad_clientes:Array.isArray(clients)?clients.length:null,\n   _cantidad_servicios:Array.isArray(services)?services.length:null};\n }\n if(String(field(o,['appointment_id','booking_id','id']))===id)return o;\n for(const k of ['body','data','appointments','appointment','bookings','booking','result','results','response','items','rows','records']){\n  const r=encontrar(o[k],id,level+1);if(r)return r;\n }return null;\n}\nfunction pathValue(o,path){return String(path||'').split('.').reduce((v,k)=>v&&Object.hasOwn(v,k)?v[k]:undefined,o);}\nfunction contrato(c){return c?.contrato_verificado===true && c.ruta_lectura==='confirmations.confirmed'&&String(c.valor_lectura)==='1';}\nfunction confirmacionAceptada(raw){\n const body=parse(raw?.body);const status=Number(raw?.statusCode||0);\n return !raw?.error&&status>=200&&status<300&&body?.success===true&&!body.error;\n}\nfunction verificar(raw,expected,after=false){\n const code=Number(raw?.statusCode||0);const body=parse(raw?.body??raw);const c=encontrar(body,expected.appointment_id);const errors=[];let estadoObservado=null;\n if(raw?.error||code<200||code>=300||!body||body.status===false||body.success===false||body.error||['error','failed'].includes(norm(body.status)))errors.push('ERROR_PABAU');\n if(!c)errors.push('CITA_NO_ENCONTRADA');\n else{\n  const st=field(c,['status','appointment_status','booking_status']);const status=norm(typeof st==='object'?st?.name:st);\n  estadoObservado=typeof st==='object'?(st?.name??null):(st??null);\n  if(!status)errors.push('ESTADO_NO_INFORMADO');\n  if(c._cantidad_clientes!=null&&c._cantidad_clientes!==1)errors.push('CLIENTE_AMBIGUO');\n  if(c._cantidad_servicios!=null&&c._cantidad_servicios!==1)errors.push('SERVICIO_AMBIGUO');\n  if(/cancel|deleted|eliminad|expired|expirad|no.?show|complete|completad|arrived|running/.test(status)||[true,1,'1'].includes(c.deleted)||[true,1,'1'].includes(c.cancelled))errors.push('CITA_NO_VIGENTE');\n  const client=String(field(c,['contact_id','client_id'])??'');if(client!==expected.esperado_cliente)errors.push('CLIENTE_NO_COINCIDE');\n  const branch=String(field(c,['location_id','branch_id'])??c.location?.id??'');if(branch!==expected.esperado_sucursal)errors.push('SUCURSAL_NO_COINCIDE');\n  const start=local(field(c,['start_date','start_datetime','start','start_time','StartDate','appointment_date']));if(start!==expected.esperado_inicio)errors.push('HORARIO_NO_COINCIDE');\n  const svc=String(field(c,['service_id','service'])??'');if(svc!==expected.esperado_servicio)errors.push('SERVICIO_NO_COINCIDE');\n  if(after&&(!contrato(expected.config)||String(pathValue(c,expected.config.ruta_lectura))!==String(expected.config.valor_lectura)))errors.push('ESTADO_CONFIRMADO_NO_VERIFICADO');\n }\n return {appointment_id:expected.appointment_id,scope:expected.scope,estado_pabau:estadoObservado,ok:errors.length===0,errores:errors,\n confirmada:!!c&&errors.length===0&&contrato(expected.config)&&String(pathValue(c,expected.config.ruta_lectura))===String(expected.config.valor_lectura)};\n}\nfunction revisarTodas(responses,expected,after=false){\n if(responses.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_INCOMPLETAS']}]};\n const detail=expected.map((e,i)=>verificar(responses[i]?.json??responses[i],e,after));\n return {ok:detail.length>0&&detail.every(x=>x.ok),detalle:detail};\n}\nfunction verificarConfirmacionFinal(responses,expected,mutations){\n const result=revisarTodas(responses,expected,true);\n if(mutations.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_CONFIRMACION_INCOMPLETAS']}]};\n for(let i=0;i<result.detalle.length;i++){\n  if(!expected[i]?.confirmacion_previa&&!confirmacionAceptada(mutations[i]?.json??mutations[i])){\n   result.detalle[i].ok=false;result.detalle[i].confirmada=false;result.detalle[i].errores.push('CONFIRMACION_POST_NO_ACEPTADA');\n  }\n }\n result.ok=result.ok&&result.detalle.every(x=>x.ok);return result;\n}\nfunction mensajeAgendada(r,confirmada=false){\n const sede=SEDES[String(r.sucursal)];\n return `Sí, tu reserva de ${nombre(r)} está agendada para el ${horarioHumano(r)} en ${sede.nombre}. ${confirmada?'Tu asistencia quedó confirmada. ':''}Te esperamos. 🌿\\n${sede.direccion}\\n${sede.mapa}`;\n}\nfunction recordatorio(r){\n const sede=SEDES[String(r.sucursal)];\n return `Hola${r.nombre?', '+String(r.nombre).trim():''}. Te recordamos tu reserva de ${nombre(r)} para el ${horarioHumano(r)} en ${sede.nombre}. 🌿\\n\\n${sede.direccion}\\n${sede.mapa}\\n\\n¿Confirmas tu asistencia? Escríbenos por el mismo chat donde agendaste: “Confirmo mi asistencia para el ${horarioHumano(r)} en ${sede.nombre}”.\\n\\nSi necesitas un cambio, contáctanos con al menos 48 horas de anticipación. Política: https://www.insidedelvalle.com.mx/politicadecancelacion\\n\\nTambién puedes comunicarte por WhatsApp al 55 7960 3596 o al 55 7193 9291. 😊`;\n}\nconst escapeHTML=s=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n\nconst b=$('Preparar confirmacion').first().json;const expected=$('Preparar cambio de estado').all().map(i=>i.json);const result=verificarConfirmacionFinal($input.all(),expected,$('Confirmar asistencia Pabau').all());return [{json:{...b,todas_confirmadas:result.ok,detalle:result.detalle}}];"
+      },
+      "name": "Verificar confirmacion completa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "f65c81e9-5835-42b6-9479-3bebd06b8f2c",
+      "position": [
+        4496,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT inside_seguimiento.cerrar_asistencia($1::jsonb) AS resultado;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($('Verificar confirmacion completa').first().json)] }}"
+        }
+      },
+      "name": "Registrar resultado asistencia",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "id": "e2cfe11d-9536-4718-9f7a-82ff7c76490e",
+      "position": [
+        4720,
+        480
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ZONA = 'America/Mexico_City';\nconst SEDES = {\n '24077':{nombre:'Del Valle',direccion:'Gabriel Mancera #877, Ciudad de México.',mapa:'https://maps.app.goo.gl/mCP4nozD3snzqWh66'},\n '24079':{nombre:'Polanco',direccion:'Lafontaine #42, Polanco, Ciudad de México.',mapa:'https://maps.app.goo.gl/eAz5Fi2rztc68BHaA'},\n '24080':{nombre:'Juárez',direccion:'Nápoles #60, Ciudad de México.',mapa:'https://maps.app.goo.gl/cqrJAfjgsEdEJcKH9'},\n '24082':{nombre:'Lomas de Chapultepec',direccion:'Monte Chimborazo #507, Ciudad de México.',mapa:'https://maps.app.goo.gl/4NtrJdUgFEefwiSE6'},\n '24221':{nombre:'Roma',direccion:'Sonora 84A, colonia Roma Norte, Ciudad de México.',mapa:'https://maps.app.goo.gl/XovrriJva8fHv41c9?g_st=ic'},\n};\nconst norm=s=>String(s??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();\nconst field=(o,keys)=>{\n if(!o||typeof o!=='object'||Array.isArray(o))return undefined;\n for(const k of keys){const actual=Object.keys(o).find(x=>norm(x).replace(/[^a-z0-9]/g,'')===norm(k).replace(/[^a-z0-9]/g,''));if(actual!==undefined)return o[actual];}\n};\nfunction parse(v){for(let n=0;n<4&&typeof v==='string';n++){try{v=JSON.parse(v);}catch{return null;}}return v&&typeof v==='object'?v:null;}\nfunction ids(v){\n if(v==null||v==='')return [];\n if(typeof v==='string'){const p=parse(v);return p?ids(p):v.split(/[,;+|]/).map(x=>x.trim()).filter(Boolean);}\n if(Array.isArray(v))return v.flatMap(ids);return [String(v)];\n}\nfunction local(v){\n if(v==null)return '';\n const s=String(v).trim();\n if(/^\\d{14}$/.test(s))return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(8,10)}:${s.slice(10,12)}`;\n if(/^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(s)&&!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(s))return s.replace(' ','T').slice(0,16);\n const d=/^\\d{10}(?:\\d{3})?$/.test(s)?new Date(Number(s)*(s.length===10?1000:1)):new Date(s);\n if(!Number.isFinite(d.getTime()))return '';\n const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:ZONA,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(x=>[x.type,x.value]));\n return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;\n}\nfunction nombre(r){\n const raw=String(r.nombre_servicio||r.servicio||'tu experiencia').trim();\n const families={premium_day_spa:'Premium Day Spa',full_day_spa:'Full Day Spa',budha_70:'Budha 70',temazcal_bliss:'Temazcal Bliss',elephant_glow:'Elephant Glow'};\n for(const [key,title] of Object.entries(families)){if(raw.startsWith(key+'_'))return title+' '+raw.slice(key.length+1).replace(/_/g,' ');}\n return raw.replace(/_/g,' ');\n}\nfunction resumen(r){const i=String(r.inicio_local||local(r.jacuzzi_inicio||r.masaje_inicio));return {reserva_id:String(r.id),fecha:i.slice(0,10),horario:i.slice(11,16),sucursal:SEDES[String(r.sucursal)]?.nombre||String(r.sucursal),experiencia:nombre(r)};}\nfunction horarioHumano(r){const x=resumen(r);const [y,m,d]=x.fecha.split('-');return `${d}/${m}/${y} a las ${x.horario}`;}\nfunction explicita(texto){\n const s=norm(texto);\n if(/\\b(no|cancelar|cancelo|cambiar|reprogramar|tal vez|quizas|si puedo)\\b/.test(s))return false;\n return /\\b(confirmo|confirmamos)\\b/.test(s)\n  || /\\b(quiero|quisiera|deseo|me gustaria)\\s+confirmar\\b/.test(s)\n  || /^para confirmar (?:mi|nuestra) (?:cita|reserva)[.!]*$/.test(s)\n  || /\\b(si (voy|iremos|asistire)|ahi estaremos|ahi estare)\\b/.test(s);\n}\nfunction candidatas(result,entrada){\n const data=parse(result.resultado??result)||{};\n if(data.ok!==true)return {ok:false,estado:data.estado||'ERROR_CONSULTA',mensaje:'Disculpa, no pude consultar tu reserva en este momento. Una asesora debe revisar la solicitud. 🌿',requiere_asesor:true};\n const rows=data.candidatos||[];\n if(rows.length===0)return {ok:true,estado:'SIN_RESERVA_PAGADA',mensaje:Number(data.borradores_pendientes)>0?'Encontré una solicitud de pre-reserva pendiente de revisión o validación. Todavía no puedo confirmarla como una reserva agendada. 🌿':'No encontré una reserva pagada y vigente para esos datos. ¿Me confirmas la fecha y sucursal de tu cita? 🌿',requiere_asesor:Number(data.borradores_pendientes)>0};\n if(rows.length!==1){const rs=rows.slice(0,8).map(resumen);return {ok:true,estado:'VARIAS_RESERVAS',opciones:rs,mensaje:'Encontré varias reservas asociadas a tu conversación:\\n'+rs.map(x=>`${x.experiencia}, ${x.sucursal}, ${x.fecha} a las ${x.horario}`).join('\\n')+'\\n¿Cuál deseas consultar o confirmar? 😊'};}\n const r=rows[0];\n if(entrada.reserva_id&&String(r.id)!==String(entrada.reserva_id))throw new Error('RESERVA_NO_COINCIDE');\n return {ok:true,estado:'CANDIDATA_UNICA',reserva:r,config_pabau:data.config_pabau||{},modo_prueba:data.modo_prueba!==false,confirmacion_explicita:entrada.accion==='confirmar_asistencia'&&explicita(entrada.mensaje_cliente)};\n}\nfunction prepararCitas(r,base,config){\n if(!SEDES[String(r.sucursal)]||!base[String(r.sucursal)])throw new Error('SUCURSAL_NO_CONFIGURADA');\n if(r.pago_recibido!==true||r.reserva_confirmada!==true||r.pabau_reservado!==true)throw new Error('RESERVA_NO_PAGADA');\n const result=[];const seen=new Set();\n for(const tipo of ['agua','masaje']){\n  const list=ids(r[tipo==='agua'?'pabau_citas_agua_ids':'pabau_citas_masaje_ids']);\n  for(const id of list){\n   if(!/^[1-9]\\d*$/.test(id))throw new Error('ID_CITA_INVALIDO');\n   const scope=String(r.sucursal)+':'+tipo;\n   const key=base[String(r.sucursal)][tipo]+'|'+id;\n   if(seen.has(key))throw new Error('ID_CITA_DUPLICADO');seen.add(key);\n   result.push({appointment_id:id,tipo,scope,pabau_base:base[String(r.sucursal)][tipo],esperado_inicio:local(r[tipo==='agua'?'jacuzzi_inicio':'masaje_inicio']),esperado_servicio:String(r[tipo==='agua'?'service_agua_id':'service_terapeuta_id']||''),esperado_cliente:String(r.contact_id||''),esperado_sucursal:String(r.sucursal),config:config[scope]||{}});\n  }\n }\n if(!result.length||!result.some(x=>x.tipo==='masaje'))throw new Error('FALTAN_IDS_PABAU');\n if(r.service_agua_id&&Number(r.service_agua_id)!==0&&!result.some(x=>x.tipo==='agua'))throw new Error('FALTA_CITA_TERMICA');\n if(result.some(x=>!x.esperado_inicio||!x.esperado_cliente||!x.esperado_servicio))throw new Error('FALTAN_DATOS_VERIFICACION');\n return result;\n}\nfunction encontrar(raw,id,level=0){\n const o=parse(raw);if(!o||level>8)return null;\n if(Array.isArray(o)){for(const x of o){const r=encontrar(x,id,level+1);if(r)return r;}return null;}\n const d=parse(o.details);\n if(d&&String(field(d,['appointment_id','booking_id','id']))===id){\n  const clients=parse(o.client??o.clients); const client=Array.isArray(clients)&&clients.length===1?clients[0]:null;\n  const services=parse(o.service); const service=Array.isArray(services)&&services.length===1?services[0]:null;\n  const dates=parse(o.dates)||{};\n  const start=dates.start_date&&dates.start_time?String(dates.start_date)+'T'+String(dates.start_time):undefined;\n  return {...o,...d,\n   status:field(d,['appointment_status','booking_status','status'])??field(o,['appointment_status','booking_status','status']),\n   contact_id:field(d,['contact_id','client_id'])??field(o,['contact_id','client_id'])??client?.id,\n   location_id:field(d,['location_id','branch_id'])??d.location?.id??field(o,['location_id','branch_id']),\n   service_id:field(d,['service_id'])??field(o,['service_id'])??service?.service_id,\n   start_date:field(d,['start_date','start_datetime','start','start_time'])??start??field(o,['start_date','start_datetime','start','start_time']),\n   _cantidad_clientes:Array.isArray(clients)?clients.length:null,\n   _cantidad_servicios:Array.isArray(services)?services.length:null};\n }\n if(String(field(o,['appointment_id','booking_id','id']))===id)return o;\n for(const k of ['body','data','appointments','appointment','bookings','booking','result','results','response','items','rows','records']){\n  const r=encontrar(o[k],id,level+1);if(r)return r;\n }return null;\n}\nfunction pathValue(o,path){return String(path||'').split('.').reduce((v,k)=>v&&Object.hasOwn(v,k)?v[k]:undefined,o);}\nfunction contrato(c){return c?.contrato_verificado===true && c.ruta_lectura==='confirmations.confirmed'&&String(c.valor_lectura)==='1';}\nfunction confirmacionAceptada(raw){\n const body=parse(raw?.body);const status=Number(raw?.statusCode||0);\n return !raw?.error&&status>=200&&status<300&&body?.success===true&&!body.error;\n}\nfunction verificar(raw,expected,after=false){\n const code=Number(raw?.statusCode||0);const body=parse(raw?.body??raw);const c=encontrar(body,expected.appointment_id);const errors=[];let estadoObservado=null;\n if(raw?.error||code<200||code>=300||!body||body.status===false||body.success===false||body.error||['error','failed'].includes(norm(body.status)))errors.push('ERROR_PABAU');\n if(!c)errors.push('CITA_NO_ENCONTRADA');\n else{\n  const st=field(c,['status','appointment_status','booking_status']);const status=norm(typeof st==='object'?st?.name:st);\n  estadoObservado=typeof st==='object'?(st?.name??null):(st??null);\n  if(!status)errors.push('ESTADO_NO_INFORMADO');\n  if(c._cantidad_clientes!=null&&c._cantidad_clientes!==1)errors.push('CLIENTE_AMBIGUO');\n  if(c._cantidad_servicios!=null&&c._cantidad_servicios!==1)errors.push('SERVICIO_AMBIGUO');\n  if(/cancel|deleted|eliminad|expired|expirad|no.?show|complete|completad|arrived|running/.test(status)||[true,1,'1'].includes(c.deleted)||[true,1,'1'].includes(c.cancelled))errors.push('CITA_NO_VIGENTE');\n  const client=String(field(c,['contact_id','client_id'])??'');if(client!==expected.esperado_cliente)errors.push('CLIENTE_NO_COINCIDE');\n  const branch=String(field(c,['location_id','branch_id'])??c.location?.id??'');if(branch!==expected.esperado_sucursal)errors.push('SUCURSAL_NO_COINCIDE');\n  const start=local(field(c,['start_date','start_datetime','start','start_time','StartDate','appointment_date']));if(start!==expected.esperado_inicio)errors.push('HORARIO_NO_COINCIDE');\n  const svc=String(field(c,['service_id','service'])??'');if(svc!==expected.esperado_servicio)errors.push('SERVICIO_NO_COINCIDE');\n  if(after&&(!contrato(expected.config)||String(pathValue(c,expected.config.ruta_lectura))!==String(expected.config.valor_lectura)))errors.push('ESTADO_CONFIRMADO_NO_VERIFICADO');\n }\n return {appointment_id:expected.appointment_id,scope:expected.scope,estado_pabau:estadoObservado,ok:errors.length===0,errores:errors,\n confirmada:!!c&&errors.length===0&&contrato(expected.config)&&String(pathValue(c,expected.config.ruta_lectura))===String(expected.config.valor_lectura)};\n}\nfunction revisarTodas(responses,expected,after=false){\n if(responses.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_INCOMPLETAS']}]};\n const detail=expected.map((e,i)=>verificar(responses[i]?.json??responses[i],e,after));\n return {ok:detail.length>0&&detail.every(x=>x.ok),detalle:detail};\n}\nfunction verificarConfirmacionFinal(responses,expected,mutations){\n const result=revisarTodas(responses,expected,true);\n if(mutations.length!==expected.length)return {ok:false,detalle:[{errores:['RESPUESTAS_CONFIRMACION_INCOMPLETAS']}]};\n for(let i=0;i<result.detalle.length;i++){\n  if(!expected[i]?.confirmacion_previa&&!confirmacionAceptada(mutations[i]?.json??mutations[i])){\n   result.detalle[i].ok=false;result.detalle[i].confirmada=false;result.detalle[i].errores.push('CONFIRMACION_POST_NO_ACEPTADA');\n  }\n }\n result.ok=result.ok&&result.detalle.every(x=>x.ok);return result;\n}\nfunction mensajeAgendada(r,confirmada=false){\n const sede=SEDES[String(r.sucursal)];\n return `Sí, tu reserva de ${nombre(r)} está agendada para el ${horarioHumano(r)} en ${sede.nombre}. ${confirmada?'Tu asistencia quedó confirmada. ':''}Te esperamos. 🌿\\n${sede.direccion}\\n${sede.mapa}`;\n}\nfunction recordatorio(r){\n const sede=SEDES[String(r.sucursal)];\n return `Hola${r.nombre?', '+String(r.nombre).trim():''}. Te recordamos tu reserva de ${nombre(r)} para el ${horarioHumano(r)} en ${sede.nombre}. 🌿\\n\\n${sede.direccion}\\n${sede.mapa}\\n\\n¿Confirmas tu asistencia? Escríbenos por el mismo chat donde agendaste: “Confirmo mi asistencia para el ${horarioHumano(r)} en ${sede.nombre}”.\\n\\nSi necesitas un cambio, contáctanos con al menos 48 horas de anticipación. Política: https://www.insidedelvalle.com.mx/politicadecancelacion\\n\\nTambién puedes comunicarte por WhatsApp al 55 7960 3596 o al 55 7193 9291. 😊`;\n}\nconst escapeHTML=s=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n\nconst b=$('Preparar confirmacion').first().json;const ok=$json.resultado?.confirmada===true;return [{json:{ok,estado:ok?'ASISTENCIA_CONFIRMADA':'CONFIRMACION_PARCIAL',asistencia_confirmada:ok,reserva_id:b.reserva_id,requiere_asesor:!ok,mensaje:ok?mensajeAgendada(b.reserva,true):'Tu reserva está localizada, pero no pude completar la confirmación de todas sus citas. Una asesora debe revisar el registro. Gracias por tu paciencia. 🌿'}}];"
+      },
+      "name": "Respuesta final asistencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "a39d8017-422b-42df-b1d4-ee6f8c32c5f2",
+      "position": [
+        4944,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const original = $input.first().json ?? {};\n\n// El subflujo puede recibir los nombres canónicos (subscriber_id, fecha, horario,\n// sucursal, reserva_id, accion, mensaje_cliente) o los nombres que usa el modelo\n// de IA en el nodo de la herramienta (fecha_consulta, hora_consulta,\n// sucursal_consulta, reserva_existente_id, accion_cita). Aquí se unifican.\nconst base = { ...original };\nif (original.body && typeof original.body === 'object' && !Array.isArray(original.body)) Object.assign(base, original.body);\nif (typeof base.query === 'string') { try { Object.assign(base, JSON.parse(base.query)); } catch {} }\nelse if (base.query && typeof base.query === 'object' && !Array.isArray(base.query)) Object.assign(base, base.query);\n\nconst limpiar = v => (v === undefined || v === null) ? '' : String(v).trim();\nconst norm = v => limpiar(v).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');\n\nfunction buscar(alias) {\n  for (const a of alias) {\n    const clave = Object.keys(base).find(k => norm(k) === norm(a));\n    if (clave !== undefined && limpiar(base[clave]) !== '') return limpiar(base[clave]);\n  }\n  return '';\n}\n\nconst subscriberId = buscar(['subscriber_id', 'subscriberId', 'subscriber', 'suscriptor', 'suscriptor_id', 'id_subscriber', 'contact_id', 'contacto', 'user_id']);\nconst accionCruda = buscar(['accion', 'accion_cita', 'action', 'accion_consulta']).toLowerCase();\nconst accion = /^confirm/.test(accionCruda) ? 'confirmar_asistencia' : 'consultar';\n\nreturn [{\n  json: {\n    ...base,\n    subscriber_id: subscriberId,\n    fecha: buscar(['fecha', 'fecha_consulta', 'fecha_cita', 'fecha_reserva', 'date']),\n    horario: buscar(['horario', 'hora_consulta', 'hora', 'hora_cita', 'horario_cita', 'time']),\n    sucursal: buscar(['sucursal', 'sucursal_consulta', 'sucursal_id', 'sede', 'branch', 'location_id']),\n    reserva_id: buscar(['reserva_id', 'reserva_existente_id', 'reservaId', 'id_reserva', 'reservation_id']),\n    accion,\n    mensaje_cliente: buscar(['mensaje_cliente', 'mensaje', 'mensaje_usuario', 'texto_cliente', 'Respuesta_definitiva', 'last_input_text', 'chatInput']),\n    entrada_valida: subscriberId !== '',\n    motivo_entrada: subscriberId === '' ? 'FALTA_SUBSCRIBER_ID' : null,\n    claves_recibidas: Object.keys(original).join(','),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        288
+      ],
+      "id": "dc2a524a-2ada-42ef-9082-9d22b38645b1",
+      "name": "Normalizar entrada",
+      "notes": "Unifica los nombres de entrada (canónicos y los del modelo de IA) y avisa cuando falta el contacto de la conversación."
+    }
+  ],
+  "pinData": {
+    "Entrada consulta": [
+      {
+        "json": {
+          "subscriber_id": "1370565961",
+          "fecha": "",
+          "horario": "",
+          "sucursal": "",
+          "reserva_id": "",
+          "accion": "confirmar_asistencia",
+          "mensaje_cliente": "Para confirmar mi cita"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Entrada consulta": {
+      "main": [
+        [
+          {
+            "node": "Normalizar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar reserva propia": {
+      "main": [
+        [
+          {
+            "node": "Elegir reserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Elegir reserva": {
+      "main": [
+        [
+          {
+            "node": "Hay una reserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay una reserva": {
+      "main": [
+        [
+          {
+            "node": "Preparar citas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resultado sin cita unica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar citas": {
+      "main": [
+        [
+          {
+            "node": "Leer citas Pabau",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer citas Pabau": {
+      "main": [
+        [
+          {
+            "node": "Verificar todas las citas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar todas las citas": {
+      "main": [
+        [
+          {
+            "node": "Citas verificadas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Citas verificadas": {
+      "main": [
+        [
+          {
+            "node": "Cliente confirma asistencia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error de verificacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cliente confirma asistencia": {
+      "main": [
+        [
+          {
+            "node": "Preparar confirmacion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder consulta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar confirmacion": {
+      "main": [
+        [
+          {
+            "node": "Tomar confirmacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tomar confirmacion": {
+      "main": [
+        [
+          {
+            "node": "Confirmacion adquirida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmacion adquirida": {
+      "main": [
+        [
+          {
+            "node": "Preparar cambio de estado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta confirmacion pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar cambio de estado": {
+      "main": [
+        [
+          {
+            "node": "Confirmar asistencia Pabau",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar asistencia Pabau": {
+      "main": [
+        [
+          {
+            "node": "Preparar relectura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar relectura": {
+      "main": [
+        [
+          {
+            "node": "Releer estado Pabau",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Releer estado Pabau": {
+      "main": [
+        [
+          {
+            "node": "Verificar confirmacion completa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar confirmacion completa": {
+      "main": [
+        [
+          {
+            "node": "Registrar resultado asistencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar resultado asistencia": {
+      "main": [
+        [
+          {
+            "node": "Respuesta final asistencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar entrada": {
+      "main": [
+        [
+          {
+            "node": "Buscar reserva propia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f9b5a493-852b-44a5-bc62-3cd25c78aec1",
+  "meta": {
+    "instanceId": "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
+  },
+  "nodeGroups": [],
+  "id": "F4QO0k9XiBn4HQnO",
+  "tags": []
+}

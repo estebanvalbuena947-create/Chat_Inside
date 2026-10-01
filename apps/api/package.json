@@ -1,0 +1,34 @@
+{
+  "name": "@chat-zernio/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "pretest": "corepack pnpm --filter @chat-zernio/config --filter @chat-zernio/contracts --filter @chat-zernio/domain build",
+    "pretypecheck": "corepack pnpm --filter @chat-zernio/config --filter @chat-zernio/contracts --filter @chat-zernio/domain build",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@chat-zernio/config": "workspace:*",
+    "@chat-zernio/contracts": "workspace:*",
+    "@chat-zernio/domain": "workspace:*",
+    "@fastify/cors": "11.3.0",
+    "@nestjs/common": "11.1.29",
+    "@nestjs/core": "11.1.29",
+    "@nestjs/platform-fastify": "11.1.29",
+    "@supabase/supabase-js": "2.112.3",
+    "dotenv": "17.4.2",
+    "fastify": "5.11.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "tsx": "4.20.5",
+    "vitest": "3.2.4"
+  }
+}

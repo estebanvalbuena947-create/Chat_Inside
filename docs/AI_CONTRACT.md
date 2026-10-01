@@ -8,7 +8,7 @@ El agente propone y ejecuta; la especificación, las reglas de dominio, la arqui
 
 ### 2.1 Resolver reglas, no ejemplos
 
-Una incidencia concreta debe traducirse a una regla general. Está prohibido hardcodear nombres, identificadores, fechas, clientes, servicios o estados para hacer pasar un caso aislado.
+Una incidencia concreta debe traducirse a una regla general. Está prohibido hardcodear nombres, identificadores, fechas, contactos, canales o estados para hacer pasar un caso aislado.
 
 ### 2.2 Propiedad clara de la lógica
 
@@ -32,7 +32,7 @@ Aplicar mínimo privilegio, validación de entradas, control de acceso, protecci
 
 ### 2.7 Efectos externos confiables
 
-Mensajes, pagos, reservas, correos, webhooks y trabajos asíncronos deben considerar duplicados, reintentos, timeouts, orden de eventos y reconciliación.
+Mensajes, archivos, webhooks, integraciones y trabajos asíncronos deben considerar duplicados, reintentos, timeouts, orden de eventos y reconciliación.
 
 ### 2.8 Pruebas contra atajos
 

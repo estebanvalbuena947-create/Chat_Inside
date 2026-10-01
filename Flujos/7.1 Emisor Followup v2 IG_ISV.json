@@ -1,0 +1,629 @@
+{
+  "name": "7.1 Emisor Followup v2 IG_ISV",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "25b69434-4943-5ee0-95b9-7ecc200622bf",
+              "leftValue": "={{ $json.resultado.ok === true && Date.parse($json.resultado.valido_hasta) > Date.now() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Enviar solo si continúa pendiente",
+      "id": "4b51374d-f60a-4bc1-b1d3-cc094b913db1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {subscriber_id:$('Entrada de un seguimiento').first().json.subscriber_id,flow_ns:'content20260727160555_940586'} }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "name": "Enviar seguimiento por el canal del bot",
+      "id": "7058d8ca-1a8a-41f8-a06f-45d8ca42274d",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        960
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1LiofL0kiOXKIH7K",
+          "name": "Manychat ISV"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const task=$('Entrada de un seguimiento').first().json;\nconst raw=$input.first().json || {};let b=raw.body ?? raw;if(typeof b==='string'){try{b=JSON.parse(b);}catch{b={};}}\nconst status=raw.statusCode==null?200:Number(raw.statusCode);\nconst ok=!raw.error && status>=200 && status<300 && b.status==='success';\nreturn [{json:{...task,ok,estado_final:ok?'enviado':'revision',detalle:{motivo:ok?'MANYCHAT_ACEPTO_SOLICITUD':'MANYCHAT_ENVIO_NO_ACEPTADO',http_status:status,aceptado_por_api:ok}}}];"
+      },
+      "name": "Comprobar envío de seguimiento",
+      "id": "0fde7530-ae4c-41b1-ad3d-3f3abd1c07f4",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "if($input.first().json.resultado?.reprogramado)return [];const task=$('Entrada de un seguimiento').first().json;return [{json:{...task,estado_final:'cancelado',detalle:{motivo:$input.first().json.resultado?.motivo || 'ESTADO_CAMBIO'}}}];"
+      },
+      "name": "Cancelar seguimiento superado",
+      "id": "f90d7ad0-c4e2-4e63-b570-152c2ad3d62b",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1152
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT inside_followup_v2.finalizar($1,$2,$3,$4::jsonb) AS resultado;",
+        "options": {
+          "queryReplacement": "={{ [$json.id,$json.worker,$json.estado_final,JSON.stringify($json.detalle || {})] }}"
+        }
+      },
+      "name": "Registrar resultado del seguimiento",
+      "id": "931f1c48-42cb-434f-9fd5-1590d6755241",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1600,
+        1456
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json.resultado;if(!r || r.ok!==true || r.estado==='revision')throw new Error('FOLLOWUP_REQUIERE_REVISION | '+JSON.stringify(r)); return [{json:r}];"
+      },
+      "name": "Mostrar resultado o error de seguimiento",
+      "id": "cf79fa52-30d7-4c85-8b8b-4e679223334f",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        1456
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT inside_followup_v2.autorizar($1,$2,true) AS resultado;",
+        "options": {
+          "queryReplacement": "={{ [$('Entrada de un seguimiento').first().json.id,$('Entrada de un seguimiento').first().json.worker] }}"
+        }
+      },
+      "name": "Revalidar justo antes de enviar",
+      "id": "fa0df573-d35a-4e21-ae1f-4b4842b0cc98",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        512,
+        1056
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f2bef04e-3da7-5844-a702-6bbd1028ff80",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Mensaje cargado",
+      "id": "098d7237-88b5-4bea-aad5-ce354764a64f",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const task=$('Entrada de un seguimiento').first().json;\nconst raw=$input.first().json || {};let b=raw.body ?? raw;if(typeof b==='string'){try{b=JSON.parse(b);}catch{b={};}}\nconst status=raw.statusCode==null?200:Number(raw.statusCode);\nconst ok=!raw.error && status>=200 && status<300 && b.status==='success';\nreturn [{json:{...task,ok,estado_final:ok?'enviado':'revision',detalle:{motivo:ok?'MANYCHAT_ACEPTO_SOLICITUD':'MANYCHAT_CAMPOS_NO_ACEPTADO',http_status:status}}}];"
+      },
+      "name": "Comprobar carga de mensaje",
+      "id": "aeb22a3c-2c9a-4a19-8586-a07a48d5e552",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/subscriber/setCustomFields",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { subscriber_id: $('Entrada de un seguimiento').first().json.subscriber_id, fields: [{field_name:'Parte 1',field_value:$('Entrada de un seguimiento').first().json.payload.mensaje}] } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "name": "Cargar mensaje de seguimiento",
+      "id": "6ede7e15-7158-4742-9b86-705e1596ba68",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        1136
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1LiofL0kiOXKIH7K",
+          "name": "Manychat ISV"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "172b9cc5-675b-5b6f-aeff-3fd5dc78de82",
+              "leftValue": "={{ $json.resultado.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Sigue pendiente",
+      "id": "bba8ec29-e215-4413-a614-66df63f552ee",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -384,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT inside_followup_v2.autorizar($1,$2) AS resultado;",
+        "options": {
+          "queryReplacement": "={{ [$('Entrada de un seguimiento').first().json.id,$('Entrada de un seguimiento').first().json.worker] }}"
+        }
+      },
+      "name": "Revalidar antes de preparar mensaje",
+      "id": "1244f940-6951-4e41-9741-131a34f68ddb",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -608,
+        1200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2IhxXPfSxCPg8MeU",
+          "name": "New Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b03d1df3-e784-5dba-9d00-3a9730e20a9f",
+              "leftValue": "={{ $json.contacto_valido === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Contacto apto",
+      "id": "4bc7e60d-8793-4ef5-b11f-d3c972839ded",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -832,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const task=$('Entrada de un seguimiento').first().json;\nconst raw=$input.first().json || {};\nlet body=raw.body ?? raw;\nif(typeof body==='string'){try{body=JSON.parse(body);}catch{body={};}}\nconst status=raw.statusCode==null?200:Number(raw.statusCode);\nconst fail=(motivo,estado='revision')=>[{json:{...task,contacto_valido:false,estado_final:estado,detalle:{motivo}}}];\nif(raw.error || status<200 || status>=300 || body.status!=='success') return fail('MANYCHAT_CONTACTO_NO_VERIFICADO');\nconst c=body.data || {};\nif(String(c.id)!==String(task.subscriber_id)) return fail('MANYCHAT_CONTACTO_NO_COINCIDE');\nif(c.status!=='active' || c.is_followup_enabled===false) return fail('CONTACTO_INACTIVO_O_SEGUIMIENTO_DESHABILITADO','cancelado');\nconst channel=task.payload?.canal;\nif(channel==='tiktok' && !c.tt_user_id) return fail('CONTACTO_SIN_TIKTOK');\nif(channel==='instagram' && !c.ig_id) return fail('CONTACTO_SIN_INSTAGRAM');\nif(!['instagram','tiktok'].includes(channel)) return fail('CANAL_NO_CONFIGURADO');\nconst clean=s=>String(s||'').replace(/\\s+/g,' ').trim();\nif(clean(c.last_input_text) && clean(task.payload?.ultimo_mensaje_cliente) && clean(c.last_input_text)!==clean(task.payload.ultimo_mensaje_cliente)) return fail('CLIENTE_YA_RESPONDIO','cancelado');\nreturn [{json:{...task,contacto_valido:true}}];\n"
+      },
+      "name": "Validar contacto actual",
+      "id": "872fe9a2-6cb6-44d5-a953-a2b4ce005e91",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.manychat.com/fb/subscriber/getInfo?subscriber_id='+encodeURIComponent($json.subscriber_id) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "name": "Leer contacto en ManyChat",
+      "id": "3296921c-3d35-4334-a5cf-b99331cb97b5",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1280,
+        1280
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1LiofL0kiOXKIH7K",
+          "name": "Manychat ISV"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json;if(d.scope!=='IG_ISV'||!d.id||!d.worker||d.simulacion===true)throw Error('FOLLOWUP_TAREA_NO_AUTORIZADA');return [{json:d}];"
+      },
+      "name": "Validar tarea de seguimiento",
+      "id": "047371b0-9af8-43e5-bca3-70797b80c837",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "name": "Entrada de un seguimiento",
+      "id": "8576d06f-c73c-474a-8b87-7d0ab47780d3",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1744,
+        1280
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Enviar seguimiento por el canal del bot": {
+      "main": [
+        [
+          {
+            "node": "Comprobar envío de seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar envío de seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Registrar resultado del seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelar seguimiento superado": {
+      "main": [
+        [
+          {
+            "node": "Registrar resultado del seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar resultado del seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Mostrar resultado o error de seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar solo si continúa pendiente": {
+      "main": [
+        [
+          {
+            "node": "Enviar seguimiento por el canal del bot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancelar seguimiento superado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revalidar justo antes de enviar": {
+      "main": [
+        [
+          {
+            "node": "Enviar solo si continúa pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje cargado": {
+      "main": [
+        [
+          {
+            "node": "Revalidar justo antes de enviar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar resultado del seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar carga de mensaje": {
+      "main": [
+        [
+          {
+            "node": "Mensaje cargado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar mensaje de seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Comprobar carga de mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sigue pendiente": {
+      "main": [
+        [
+          {
+            "node": "Cargar mensaje de seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancelar seguimiento superado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revalidar antes de preparar mensaje": {
+      "main": [
+        [
+          {
+            "node": "Sigue pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contacto apto": {
+      "main": [
+        [
+          {
+            "node": "Revalidar antes de preparar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar resultado del seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar contacto actual": {
+      "main": [
+        [
+          {
+            "node": "Contacto apto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer contacto en ManyChat": {
+      "main": [
+        [
+          {
+            "node": "Validar contacto actual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar tarea de seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Leer contacto en ManyChat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada de un seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Validar tarea de seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6896f213-9879-46e9-8d76-45b78d1088f0",
+  "meta": {
+    "instanceId": "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
+  },
+  "nodeGroups": [],
+  "id": "aHja3uyQBSid8Pib",
+  "tags": []
+}

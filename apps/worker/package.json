@@ -1,0 +1,25 @@
+{
+  "name": "@chat-zernio/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "pretest": "corepack pnpm --filter @chat-zernio/config --filter @chat-zernio/domain build",
+    "pretypecheck": "corepack pnpm --filter @chat-zernio/config --filter @chat-zernio/domain build",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@chat-zernio/config": "workspace:*",
+    "@chat-zernio/domain": "workspace:*",
+    "dotenv": "17.4.2",
+    "zod": "4.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "tsx": "4.20.5",
+    "vitest": "3.2.4"
+  }
+}
