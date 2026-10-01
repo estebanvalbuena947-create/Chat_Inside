@@ -2899,3 +2899,196 @@ h2 {
   border-color: var(--brand-dolar);
   color: var(--brand-tinta);
 }
+
+/* Correccion de paleta: la anterior usaba azules en estas reglas exactas. Se repiten con el
+   mismo selector y !important para que la marca gane en cualquier orden o especificidad. */
+.canned-response-trigger,
+.canned-response-manage-trigger {
+  color: #4f5c3d !important;
+}
+.canned-response-manage-trigger {
+  color: #4f5c3d !important;
+}
+.canned-response-manager-heading button {
+  color: #4f5c3d !important;
+}
+.canned-response-manager input,
+.canned-response-manager textarea {
+  outline-color: #4f5c3d !important;
+}
+.canned-response-save,
+.canned-response-cancel {
+  background: #65754e !important;
+}
+.canned-response-cancel {
+  color: #4f5c3d !important;
+}
+.canned-response-library-item button {
+  color: #4f5c3d !important;
+}
+.private-note-form textarea {
+  outline-color: #4f5c3d !important;
+}
+.private-note-form button {
+  background: #65754e !important;
+}
+.user-avatar {
+  background: #65754e !important;
+}
+.label-filter-clear {
+  background: #65754e !important;
+}
+.assignment-scope-tabs .tab.selected {
+  border-bottom-color: #4f5c3d !important;
+}
+.conversation-label-trigger,
+.conversation-label-manage-trigger {
+  background: #65754e !important;
+}
+.assignment-trigger {
+  background: #65754e !important;
+}
+.automation-action.is-active {
+  background: #65754e !important;
+}
+.assignment-picker button.selected {
+  border-color: #4f5c3d !important;
+}
+.assignment-picker button.selected {
+  background: #65754e !important;
+}
+.conversation-label-option.applied {
+  border-color: #4f5c3d !important;
+}
+.conversation-label-option.applied {
+  background: #65754e !important;
+}
+.internal-label-manager-heading button {
+  color: #4f5c3d !important;
+}
+.internal-label-save,
+.internal-label-cancel {
+  background: #65754e !important;
+}
+.internal-label-cancel {
+  color: #4f5c3d !important;
+}
+.internal-label-library-item button {
+  color: #4f5c3d !important;
+}
+.outgoing .bubble {
+  background: #65754e !important;
+}
+.read-mark {
+  color: #4f5c3d !important;
+}
+.send-button {
+  background: #65754e !important;
+}
+.channel-rename-form input {
+  outline-color: #4f5c3d !important;
+}
+.channel-rename-save,
+.channel-rename-cancel,
+.channel-rename-trigger {
+  background: #65754e !important;
+}
+.channel-rename-cancel,
+.channel-rename-trigger {
+  color: #4f5c3d !important;
+}
+.team-invite input {
+  outline-color: #4f5c3d !important;
+}
+.nav-item.active {
+  background: #65754e !important;
+}
+.media-preview figcaption button,
+.media-preview figcaption a {
+  color: #4f5c3d !important;
+}
+.login-form input {
+  outline-color: #4f5c3d !important;
+}
+.login-submit {
+  background: #65754e !important;
+}
+.load-more-conversations {
+  color: #4f5c3d !important;
+}
+.details-toggle {
+  color: #4f5c3d !important;
+}
+.mobile-back {
+  color: #4f5c3d !important;
+}
+/* Vista de multimedia: lista con miniatura. */
+.media-view-actions input {
+  outline-color: #4f5c3d !important;
+}
+.media-row-actions button {
+  color: #4f5c3d !important;
+}
+.conversation-item.active {
+  background: #65754e !important;
+}
+.brand-mark {
+  background: #65754e !important;
+}
+.brand-mark {
+  color: #4f5c3d !important;
+}
+.nav-item.active,
+.nav-item:hover,
+.nav-user:hover {
+  background: #65754e !important;
+}
+.nav-item.active,
+.nav-item:hover,
+.nav-user:hover {
+  color: #4f5c3d !important;
+}
+.workspace.sidebar-open .nav-item.active,
+.workspace.sidebar-open .nav-item:hover {
+  background: #65754e !important;
+}
+.workspace.sidebar-open .nav-item.active,
+.workspace.sidebar-open .nav-item:hover {
+  color: #4f5c3d !important;
+}
+.tab.selected {
+  color: #4f5c3d !important;
+}
+.tab.selected {
+  border-color: #4f5c3d !important;
+}
+.message-row.outgoing .bubble {
+  background: #65754e !important;
+}
+.settings-card:hover {
+  border-color: #4f5c3d !important;
+}
+/* Distingue la respuesta del bot de la de una persona del equipo. */
+.bubble-author {
+  background: #65754e !important;
+}
+/* Distingue la respuesta del bot de la de una persona del equipo. */
+.bubble-author {
+  color: #4f5c3d !important;
+}
+/* La burbuja saliente es clara, asi que su texto va oscuro: con blanco no se leia. */
+.message-row.outgoing .bubble {
+  background: #65754e !important;
+}
+.message-row.outgoing .bubble a {
+  color: #4f5c3d !important;
+}
+.inbox-tabs .tab.selected {
+  background: #65754e !important;
+}
+.inbox-tabs .tab.selected {
+  color: #4f5c3d !important;
+}
+.status-select:focus {
+  border-color: #4f5c3d !important;
+}
