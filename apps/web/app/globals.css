@@ -3092,3 +3092,58 @@ h2 {
 .status-select:focus {
   border-color: #4f5c3d !important;
 }
+
+/* ============================================================================================
+   Contraste sobre el verde (matcha)
+
+   Todo lo que lleva fondo matcha necesita texto claro. El color oscuro que se veia en
+   "Desactivar bot" y en "Etiquetas" venia de las reglas antiguas: aqui se corrigen todas.
+   Y dos piezas de la barra que quedaban verdes sobre verde: el cuadro del logo y el desplegable
+   de plataformas.
+   ============================================================================================ */
+
+.workspace .send-button,
+.workspace .automation-action,
+.workspace .automation-action.is-active,
+.workspace .canned-response-save,
+.workspace .canned-response-cancel,
+.workspace .private-note-form button,
+.workspace .user-avatar,
+.workspace .label-filter-clear,
+.workspace .conversation-label-trigger,
+.workspace .conversation-label-manage-trigger,
+.workspace .assignment-trigger,
+.workspace .assignment-picker button.selected,
+.workspace .conversation-label-option.applied,
+.workspace .internal-label-save,
+.workspace .internal-label-cancel,
+.workspace .channel-rename-save,
+.workspace .channel-rename-cancel,
+.workspace .channel-rename-trigger {
+  color: #ffffff !important;
+}
+
+/* La barra lateral: todo su texto en crema, y el desplegable sobre fondo claro. */
+.workspace .primary-nav,
+.workspace .primary-nav .nav-label,
+.workspace .primary-nav .nav-icon,
+.workspace .primary-nav .brand-filter > span,
+.workspace .primary-nav .nav-item .nav-label,
+.workspace .primary-nav .nav-item .nav-icon {
+  color: var(--brand-vanilla) !important;
+}
+.workspace .primary-nav .brand-filter > span {
+  color: #ffffff !important;
+  font-weight: 700;
+}
+.workspace .primary-nav .status-select,
+.workspace .primary-nav .brand-platform {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  color: var(--brand-matcha-oscuro) !important;
+}
+
+/* El cuadro del logo, en blanco: sobre el verde se perdia. */
+.workspace .primary-nav .brand-mark {
+  background: #ffffff !important;
+}

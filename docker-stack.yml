@@ -14,7 +14,7 @@
 
 services:
   api:
-    image: wepflash-api:latest
+    image: wepflash-api:${WEPFLASH_TAG:-latest}
     environment:
       APP_ENV: production
       API_PORT: '4000'
@@ -44,7 +44,7 @@ services:
         traefik.http.services.wepflash-api.loadbalancer.server.port: '4000'
 
   worker:
-    image: wepflash-api:latest
+    image: wepflash-api:${WEPFLASH_TAG:-latest}
     command: node apps/worker/dist/main.js
     environment:
       APP_ENV: production
@@ -65,7 +65,7 @@ services:
           memory: 640M
 
   web:
-    image: wepflash-api:latest
+    image: wepflash-api:${WEPFLASH_TAG:-latest}
     command: ['sh', '-c', 'cd apps/web && ./node_modules/.bin/next start -p 3000']
     environment:
       NODE_ENV: production
