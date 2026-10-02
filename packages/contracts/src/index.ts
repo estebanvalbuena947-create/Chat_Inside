@@ -567,3 +567,30 @@ export type ToolBranchMediaResponse = z.infer<typeof toolBranchMediaResponseSche
 export type ToolConversation = z.infer<typeof toolConversationSchema>;
 export type ToolSendMessage = z.infer<typeof toolSendMessageSchema>;
 export type ToolSendMessageResponse = z.infer<typeof toolSendMessageResponseSchema>;
+
+/* ------------------------------------------------------------------------------------------------
+   Acciones sobre comentarios. Ver specs/020-acciones-sobre-comentarios.md.
+
+   El cuerpo lleva solo el texto: la clave de idempotencia la genera el servidor a partir del
+   comentario y el mensaje, para que el cliente no pueda provocar publicaciones duplicadas.
+   ------------------------------------------------------------------------------------------------ */
+
+export const commentReplyBodySchema = z.object({
+  message: z.string().trim().min(1).max(2200)
+});
+
+export type CommentReplyBody = z.infer<typeof commentReplyBodySchema>;
+
+export const commentModerationResponseSchema = z.object({
+  commentState: z.enum(['visible', 'hidden', 'deleted']),
+  messageId: z.string().uuid()
+});
+
+export type CommentModerationResponse = z.infer<typeof commentModerationResponseSchema>;
+
+export const commentReplyResponseSchema = commentModerationResponseSchema.extend({
+  /** La respuesta privada es de un solo uso: la interfaz necesita saber si sigue disponible. */
+  privateReplyAvailable: z.boolean()
+});
+
+export type CommentReplyResponse = z.infer<typeof commentReplyResponseSchema>;
