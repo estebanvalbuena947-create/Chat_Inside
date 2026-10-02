@@ -145,3 +145,39 @@ describe('cliente de Zernio: acciones sobre comentarios', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 });
+
+describe('cliente de Zernio: conversiones Meta', () => {
+  const cliente = new ZernioApiClient();
+  let fetchSimulado: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    process.env.ZERNIO_API_KEY = 'clave-de-prueba';
+    fetchSimulado = vi.fn();
+    vi.stubGlobal('fetch', fetchSimulado);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.ZERNIO_API_KEY;
+  });
+
+  it('no lanza cuando Meta rechaza un evento del lote', async () => {
+    fetchSimulado.mockResolvedValue(
+      respuesta(200, {
+        eventsFailed: 1,
+        eventsReceived: 0,
+        failures: [{ code: 100, eventId: 'evt-1', eventIndex: 0, message: 'Invalid event_time' }],
+        platform: 'metaads'
+      })
+    );
+
+    const result = await cliente.sendConversions({
+      accountId: 'cuenta',
+      destinationId: 'pixel',
+      events: [{ eventId: 'evt-1', eventName: 'Purchase', eventTime: 1, user: {} }]
+    });
+
+    expect(result.eventsFailed).toBe(1);
+    expect(result.failures[0]?.message).toBe('Invalid event_time');
+  });
+});

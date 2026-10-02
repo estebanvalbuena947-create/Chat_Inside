@@ -22,6 +22,49 @@ export type ZernioAccount = {
   username: string | null;
 };
 
+export type ZernioConversionEvent = {
+  actionSource?: 'app' | 'crm' | 'offline' | 'phone_call' | 'system_generated' | 'web';
+  currency?: string;
+  eventId: string;
+  eventName: string;
+  /** En segundos Unix, no milisegundos. */
+  eventTime: number;
+  sourceUrl?: string;
+  user: {
+    city?: string;
+    clickIds?: { fbc?: string; fbp?: string };
+    country?: string;
+    dob?: string;
+    email?: string;
+    externalId?: string;
+    firstName?: string;
+    gender?: 'f' | 'm';
+    ipAddress?: string;
+    lastName?: string;
+    leadId?: string;
+    phone?: string;
+    state?: string;
+    userAgent?: string;
+    zip?: string;
+  };
+  value?: number;
+};
+
+export type ZernioConversionsResult = {
+  eventsFailed: number;
+  eventsReceived: number;
+  failures: Array<{ code?: unknown; eventId: string; eventIndex: number; message: string }>;
+  platform: string;
+  traceId: string | null;
+};
+
+export type ZernioConversionDestination = {
+  id: string;
+  name: string;
+  status: string | null;
+  type: string | null;
+};
+
 function readField(value: unknown, key: string): unknown {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)[key]
@@ -50,6 +93,17 @@ function commentErrorFrom(status: number, payload: unknown): Error {
   if (status === 400 || status === 404 || status === 422) return new BadRequestException(mensaje);
   return new ServiceUnavailableException(mensaje);
 }
+
+/** Un 403 de conversiones indica que la cuenta no tiene habilitado el add-on de anuncios. */
+function conversionsErrorFrom(status: number, payload: unknown): Error {
+  const mensaje = readText(payload, 'error') ?? 'Zernio rechazo el envio de conversiones.';
+  if (status === 403) return new ForbiddenException(mensaje);
+  if (status === 400 || status === 404 || status === 409 || status === 422) {
+    return new BadRequestException(mensaje);
+  }
+  return new ServiceUnavailableException(mensaje);
+}
+
 @Injectable()
 export class ZernioApiClient {
   async createProfile(input: { idempotencyKey: string; name: string }): Promise<string> {
@@ -230,6 +284,103 @@ export class ZernioApiClient {
         'Zernio no devolvio el identificador del mensaje privado.'
       )
     };
+  }
+
+  /** Valida el add-on y lista los Pixels/Datasets disponibles antes de una activacion. */
+  async listConversionDestinations(accountId: string): Promise<ZernioConversionDestination[]> {
+    const response = await this.request(
+      `/v1/accounts/${encodeURIComponent(accountId)}/conversion-destinations`,
+      { method: 'GET' }
+    );
+    const payload = (await response.json().catch(() => ({}))) as unknown;
+    if (!response.ok) throw conversionsErrorFrom(response.status, payload);
+    const destinations = readField(payload, 'destinations');
+    return (Array.isArray(destinations) ? destinations : []).map((item) => ({
+      id: requireString(readField(item, 'id'), 'Zernio devolvio un destino sin identificador.'),
+      name: readText(item, 'name') ?? '',
+      status: readText(item, 'status'),
+      type: readText(item, 'type')
+    }));
+  }
+
+  /** Devuelve los fallos parciales: Meta puede rechazar eventos aunque Zernio responda 200. */
+  async sendConversions(input: {
+    accountId: string;
+    consent?: { adPersonalization?: 'DENIED' | 'GRANTED'; adUserData?: 'DENIED' | 'GRANTED' };
+    destinationId: string;
+    events: ZernioConversionEvent[];
+    testCode?: string;
+  }): Promise<ZernioConversionsResult> {
+    const body: Record<string, unknown> = {
+      accountId: input.accountId,
+      destinationId: input.destinationId,
+      events: input.events
+    };
+    if (input.testCode) body.testCode = input.testCode;
+    if (input.consent) body.consent = input.consent;
+
+    const response = await this.request('/v1/ads/conversions', {
+      body: JSON.stringify(body),
+      method: 'POST'
+    });
+    const payload = (await response.json().catch(() => ({}))) as unknown;
+    if (!response.ok) throw conversionsErrorFrom(response.status, payload);
+
+    const failures = readField(payload, 'failures');
+    return {
+      eventsFailed: Number(readField(payload, 'eventsFailed') ?? 0),
+      eventsReceived: Number(readField(payload, 'eventsReceived') ?? 0),
+      failures: (Array.isArray(failures) ? failures : []).map((item) => ({
+        code: readField(item, 'code'),
+        eventId: readText(item, 'eventId') ?? '',
+        eventIndex: Number(readField(item, 'eventIndex') ?? 0),
+        message: readText(item, 'message') ?? ''
+      })),
+      platform: readText(payload, 'platform') ?? 'metaads',
+      traceId: readText(payload, 'traceId')
+    };
+  }
+
+  /** Consulta la calidad de coincidencia sin exponer identificadores de personas. */
+  async getConversionsQuality(input: { accountId: string; destinationId: string }): Promise<
+    Array<{
+      compositeScore: number | null;
+      eventCoveragePercentage: number | null;
+      eventName: string;
+      matchKeys: Array<{ coveragePercentage: number | null; identifier: string }>;
+    }>
+  > {
+    const query = new URLSearchParams({
+      accountId: input.accountId,
+      destinationId: input.destinationId
+    });
+    const response = await this.request(`/v1/ads/conversions/quality?${query.toString()}`, {
+      method: 'GET'
+    });
+    const payload = (await response.json().catch(() => ({}))) as unknown;
+    if (!response.ok) throw conversionsErrorFrom(response.status, payload);
+    const rows = readField(payload, 'rows');
+    return (Array.isArray(rows) ? rows : []).map((row) => {
+      const matchKeys = readField(row, 'matchKeys');
+      return {
+        compositeScore:
+          readField(row, 'compositeScore') === null
+            ? null
+            : Number(readField(row, 'compositeScore')),
+        eventCoveragePercentage:
+          readField(row, 'eventCoveragePercentage') === null
+            ? null
+            : Number(readField(row, 'eventCoveragePercentage')),
+        eventName: readText(row, 'eventName') ?? '',
+        matchKeys: (Array.isArray(matchKeys) ? matchKeys : []).map((matchKey) => ({
+          coveragePercentage:
+            readField(matchKey, 'coveragePercentage') === null
+              ? null
+              : Number(readField(matchKey, 'coveragePercentage')),
+          identifier: readText(matchKey, 'identifier') ?? ''
+        }))
+      };
+    });
   }
 
   private async commentAction(
