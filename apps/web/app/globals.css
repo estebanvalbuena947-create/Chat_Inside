@@ -3177,3 +3177,12 @@ h2 {
   overflow-y: auto;
   padding-bottom: 32px;
 }
+/* Reproductor de audio dentro de la conversacion: se escucha sin salir del mensaje, como en
+   WhatsApp. Ocupa el ancho de la burbuja y deja sitio a los controles nativos, que ya son
+   accesibles por teclado y por lector de pantalla. */
+.bubble-audio {
+  display: block;
+  width: 100%;
+  min-width: 220px;
+  margin-top: 4px;
+}

@@ -2344,7 +2344,15 @@ export default function HomePage(): React.ReactNode {
                       >
                         <div className="bubble">
                           {message.attachments.map((attachment) =>
-                            attachment.url && attachment.kind === 'image' ? (
+                            attachment.url && attachment.kind === 'audio' ? (
+                              <audio
+                                className="bubble-audio"
+                                controls
+                                key={attachment.id}
+                                preload="metadata"
+                                src={attachment.url}
+                              />
+                            ) : attachment.url && attachment.kind === 'image' ? (
                               <button
                                 className="bubble-media"
                                 key={attachment.id}
@@ -3096,6 +3104,8 @@ export default function HomePage(): React.ReactNode {
               <figure onClick={(event) => event.stopPropagation()}>
                 {mediaPreview.url && mediaPreview.kind === 'image' ? (
                   <img alt="" src={mediaPreview.url} />
+                ) : mediaPreview.url && mediaPreview.kind === 'audio' ? (
+                  <audio controls src={mediaPreview.url} />
                 ) : mediaPreview.url && mediaPreview.kind === 'video' ? (
                   <video controls src={mediaPreview.url} />
                 ) : (
