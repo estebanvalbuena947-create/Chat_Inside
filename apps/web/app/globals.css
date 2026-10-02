@@ -3202,3 +3202,88 @@ h2 {
   border-radius: 10px;
   background: #000;
 }
+/* Panel de actividad: mismos tonos de marca que el resto, tarjetas claras con borde apagado. */
+.metrics-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px;
+  overflow-y: auto;
+}
+.metrics-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+.metrics-card {
+  background: #fff;
+  border: 1px solid var(--brand-dolar);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.metrics-card-label {
+  color: var(--brand-tinta-suave);
+  font-size: 13px;
+  margin: 0 0 6px;
+}
+.metrics-card-value {
+  color: var(--brand-matcha-oscuro);
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+}
+.metrics-block {
+  background: #fff;
+  border: 1px solid var(--brand-dolar);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.metrics-block h3 {
+  color: var(--brand-caoba);
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+.metrics-row {
+  align-items: center;
+  border-bottom: 1px solid rgba(183, 178, 159, 0.4);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 7px 0;
+}
+.metrics-row:last-child {
+  border-bottom: 0;
+}
+.metrics-row-name {
+  color: var(--brand-tinta);
+}
+.metrics-row-values {
+  color: var(--brand-tinta-suave);
+  font-variant-numeric: tabular-nums;
+}
+.metrics-bar {
+  background: rgba(101, 117, 78, 0.18);
+  border-radius: 999px;
+  height: 8px;
+  min-width: 40px;
+}
+.metrics-bar span {
+  background: var(--brand-matcha);
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+}
+.metrics-period {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+.metrics-period select {
+  border: 1px solid var(--brand-dolar);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.metrics-note {
+  color: var(--brand-tinta-suave);
+  font-size: 13px;
+}

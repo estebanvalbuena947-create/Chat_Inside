@@ -1,0 +1,56 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '../../../lib/supabase/server';
+
+/**
+ * Resumen de actividad para el panel. El navegador no habla con la API directamente: esta ruta
+ * resuelve la sesion y el espacio, y reenvia la peticion.
+ */
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const apiUrl = process.env.INTERNAL_API_URL;
+  if (!apiUrl) {
+    return NextResponse.json(
+      { error: 'La URL interna de API no esta configurada.' },
+      { status: 500 }
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+  if (claimsError || !claimsData?.claims || !session?.access_token) {
+    return NextResponse.json({ error: 'Sesion no valida.' }, { status: 401 });
+  }
+
+  const base = apiUrl.replace(/\/$/, '');
+  const headers = { Authorization: `Bearer ${session.access_token}` };
+  const days = Number(request.nextUrl.searchParams.get('days') ?? '30');
+
+  try {
+    const tenantsResponse = await fetch(`${base}/v1/tenants`, { cache: 'no-store', headers });
+    if (!tenantsResponse.ok) {
+      return NextResponse.json({ error: 'No fue posible resolver tu espacio.' }, { status: 502 });
+    }
+    const tenantsPayload = (await tenantsResponse.json()) as { items: Array<{ id: string }> };
+    const [tenant] = tenantsPayload.items;
+    if (!tenant) {
+      return NextResponse.json({ error: 'No perteneces a ningun espacio.' }, { status: 403 });
+    }
+
+    const response = await fetch(
+      `${base}/v1/tenants/${tenant.id}/metrics/summary?days=${Number.isFinite(days) ? days : 30}`,
+      { cache: 'no-store', headers }
+    );
+    const payload = (await response.json().catch(() => ({}))) as unknown;
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: 'No fue posible leer la actividad.' },
+        { status: response.status }
+      );
+    }
+    return NextResponse.json(payload);
+  } catch {
+    return NextResponse.json({ error: 'La API no esta disponible.' }, { status: 503 });
+  }
+}

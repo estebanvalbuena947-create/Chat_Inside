@@ -249,7 +249,9 @@ function SidebarIcon({ paths }: { paths: string[] }) {
 export default function HomePage(): React.ReactNode {
   const [inbox, setInbox] = useState<InboxState>({ kind: 'loading' });
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'inbox' | 'media'>('inbox');
+  const [activeView, setActiveView] = useState<'inbox' | 'media' | 'metrics'>('inbox');
+  const [metricsDays, setMetricsDays] = useState<number>(30);
+  const [metrics, setMetrics] = useState<MetricsState>({ kind: 'loading' });
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
@@ -706,6 +708,36 @@ export default function HomePage(): React.ReactNode {
     if (activeView !== 'media') return;
     void loadMedia(true);
   }, [activeView, mediaKind, mediaSearch]);
+
+  useEffect(() => {
+    if (activeView !== 'metrics') return;
+    setMetrics({ kind: 'loading' });
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch('/api/metrics?days=' + String(metricsDays), {
+          cache: 'no-store',
+          signal: controller.signal
+        });
+        const payload = (await response.json()) as MetricsPayload;
+        if (!response.ok || typeof payload.totalMessages !== 'number') {
+          setMetrics({
+            kind: 'error',
+            message: payload.error ?? 'No fue posible leer la actividad.'
+          });
+          return;
+        }
+        setMetrics({ kind: 'ready', data: payload });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setMetrics({
+          kind: 'error',
+          message: error instanceof Error ? error.message : 'La actividad no esta disponible.'
+        });
+      }
+    })();
+    return () => controller.abort();
+  }, [activeView, metricsDays]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => setMediaSearch(mediaSearchInput.trim()), 350);
@@ -1875,6 +1907,26 @@ export default function HomePage(): React.ReactNode {
             <span className="nav-label">Contraer</span>
           </button>{' '}
           <button
+            aria-current={activeView === 'metrics' ? 'page' : undefined}
+            className={'nav-item ' + (activeView === 'metrics' ? 'active' : '')}
+            onClick={() => setActiveView('metrics')}
+            type="button"
+          >
+            <span className="nav-icon" aria-hidden="true">
+              <svg
+                fill="none"
+                height="18"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                viewBox="0 0 24 24"
+                width="18"
+              >
+                <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span className="nav-label">Dashboard</span>
+          </button>
+          <button
             aria-current={activeView === 'inbox' ? 'page' : undefined}
             aria-label="Bandeja"
             className={`nav-item ${activeView === 'inbox' ? 'active' : ''}`}
@@ -2990,6 +3042,9 @@ export default function HomePage(): React.ReactNode {
           </section>
         </div>
       )}
+      {activeView === 'metrics' && (
+        <MetricsPanel days={metricsDays} onChangeDays={setMetricsDays} state={metrics} />
+      )}
       {activeView === 'media' && (
         <section className="media-view" aria-label="Comprobantes de pago">
           <header className="media-view-header">
@@ -3437,5 +3492,122 @@ export default function HomePage(): React.ReactNode {
         </div>
       )}
     </main>
+  );
+}
+
+type MetricsPayload = {
+  closedConversations: number;
+  error?: string;
+  messagesByChannel: Array<{ platform: string; received: number; sent: number }>;
+  messagesPerDay: Array<{ date: string; received: number; sent: number }>;
+  periodDays: number;
+  totalMessages: number;
+  truncated: boolean;
+};
+
+type MetricsState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; data: MetricsPayload }
+  | { kind: 'error'; message: string };
+
+/**
+ * Panel de actividad: cuantos mensajes llegan, por donde, y cuantas conversaciones se cerraron.
+ *
+ * Las cifras llegan ya calculadas por la API; aqui solo se pintan. Si el total es un minimo porque
+ * se alcanzo el tope de lectura, se dice explicitamente en lugar de mostrar un numero falso.
+ */
+function MetricsPanel({
+  days,
+  onChangeDays,
+  state
+}: {
+  days: number;
+  onChangeDays: (days: number) => void;
+  state: MetricsState;
+}) {
+  const maximo =
+    state.kind === 'ready'
+      ? Math.max(1, ...state.data.messagesPerDay.map((dia) => dia.received + dia.sent))
+      : 1;
+
+  return (
+    <section className="metrics-panel">
+      <div className="metrics-period">
+        <span className="metrics-card-label">Periodo</span>
+        <select onChange={(event) => onChangeDays(Number(event.target.value))} value={days}>
+          <option value={7}>Ultimos 7 dias</option>
+          <option value={30}>Ultimos 30 dias</option>
+          <option value={90}>Ultimos 90 dias</option>
+        </select>
+      </div>
+
+      {state.kind === 'loading' && <p className="metrics-note">Cargando actividad...</p>}
+      {state.kind === 'error' && <p className="metrics-note">{state.message}</p>}
+
+      {state.kind === 'ready' && (
+        <>
+          <div className="metrics-cards">
+            <div className="metrics-card">
+              <p className="metrics-card-label">Mensajes en el periodo</p>
+              <p className="metrics-card-value">{state.data.totalMessages}</p>
+            </div>
+            <div className="metrics-card">
+              <p className="metrics-card-label">Conversaciones cerradas</p>
+              <p className="metrics-card-value">{state.data.closedConversations}</p>
+            </div>
+            <div className="metrics-card">
+              <p className="metrics-card-label">Canales con actividad</p>
+              <p className="metrics-card-value">{state.data.messagesByChannel.length}</p>
+            </div>
+          </div>
+
+          {state.data.truncated && (
+            <p className="metrics-note">
+              Se alcanzo el tope de lectura: las cifras son un minimo, no el total.
+            </p>
+          )}
+
+          <div className="metrics-block">
+            <h3>Mensajes por dia</h3>
+            {state.data.messagesPerDay.length === 0 ? (
+              <p className="metrics-note">Sin actividad en este periodo.</p>
+            ) : (
+              state.data.messagesPerDay.map((dia) => (
+                <div className="metrics-row" key={dia.date}>
+                  <span className="metrics-row-name">{dia.date}</span>
+                  <span
+                    className="metrics-bar"
+                    style={{
+                      width: String(Math.round(((dia.received + dia.sent) / maximo) * 100)) + '%'
+                    }}
+                  >
+                    <span />
+                  </span>
+                  <span className="metrics-row-values">
+                    {dia.received} recibidos · {dia.sent} enviados
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="metrics-block">
+            <h3>Mensajes por canal</h3>
+            {state.data.messagesByChannel.length === 0 ? (
+              <p className="metrics-note">Sin actividad en este periodo.</p>
+            ) : (
+              state.data.messagesByChannel.map((canal) => (
+                <div className="metrics-row" key={canal.platform}>
+                  <span className="metrics-row-name">{canal.platform}</span>
+                  <span className="metrics-row-values">
+                    {canal.received} recibidos · {canal.sent} enviados
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </section>
   );
 }

@@ -598,3 +598,36 @@ export const commentReplyResponseSchema = commentModerationResponseSchema.extend
 });
 
 export type CommentReplyResponse = z.infer<typeof commentReplyResponseSchema>;
+/* ------------------------------------------------------------------------------------------------
+   Resumen de actividad para el panel. Lectura pura: cuenta lo que ya esta guardado.
+   ------------------------------------------------------------------------------------------------ */
+
+export const metricsSummaryQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(90).default(30)
+});
+
+export type MetricsSummaryQuery = z.infer<typeof metricsSummaryQuerySchema>;
+
+export const metricsDaySchema = z.object({
+  date: z.string(),
+  received: z.number().int(),
+  sent: z.number().int()
+});
+
+export const metricsChannelSchema = z.object({
+  platform: z.string(),
+  received: z.number().int(),
+  sent: z.number().int()
+});
+
+export const metricsSummarySchema = z.object({
+  closedConversations: z.number().int(),
+  messagesByChannel: z.array(metricsChannelSchema),
+  messagesPerDay: z.array(metricsDaySchema),
+  periodDays: z.number().int(),
+  totalMessages: z.number().int(),
+  /** Verdadero cuando se alcanzo el tope de lectura: las cifras son un minimo, no el total. */
+  truncated: z.boolean()
+});
+
+export type MetricsSummary = z.infer<typeof metricsSummarySchema>;

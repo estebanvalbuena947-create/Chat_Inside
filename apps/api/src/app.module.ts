@@ -13,6 +13,8 @@ import { ConversationNoteService } from './conversations/conversation-note.servi
 import { TenantConversationService } from './conversations/tenant-conversation.service';
 import { TenantMessageService } from './conversations/tenant-message.service';
 import { SupabaseServerClientFactory } from './infrastructure/supabase-server-client.factory';
+import { MetricsController } from './metrics/metrics.controller';
+import { MetricsService } from './metrics/metrics.service';
 import { CannedResponsesController } from './organization/canned-responses.controller';
 import { CannedResponseService } from './organization/canned-response.service';
 import { InternalLabelsController } from './organization/internal-labels.controller';
@@ -38,6 +40,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     ConversationMediaController,
     CommentModerationController,
     ConversationNotesController,
+    MetricsController,
     MeController,
     RealtimeEventsController,
     TenantsController,
@@ -53,6 +56,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     ConversationMediaService,
     CommentModerationService,
     ConversationNoteService,
+    MetricsService,
     TenantMessageService,
     CannedResponseService,
     InternalLabelService,
