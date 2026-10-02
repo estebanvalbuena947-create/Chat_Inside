@@ -2352,6 +2352,15 @@ export default function HomePage(): React.ReactNode {
                                 preload="metadata"
                                 src={attachment.url}
                               />
+                            ) : attachment.url && attachment.kind === 'video' ? (
+                              <video
+                                className="bubble-video"
+                                controls
+                                key={attachment.id}
+                                playsInline
+                                preload="metadata"
+                                src={attachment.url}
+                              />
                             ) : attachment.url && attachment.kind === 'image' ? (
                               <button
                                 className="bubble-media"

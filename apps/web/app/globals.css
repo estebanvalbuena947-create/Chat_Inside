@@ -3186,3 +3186,19 @@ h2 {
   min-width: 220px;
   margin-top: 4px;
 }
+/* Imagen, audio y video dentro de la conversacion: se ven y se consumen sin salir del mensaje.
+   El ancho se limita al de la burbuja para que nada se salga por la derecha. */
+.bubble img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+.bubble-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 4px;
+  border-radius: 10px;
+  background: #000;
+}

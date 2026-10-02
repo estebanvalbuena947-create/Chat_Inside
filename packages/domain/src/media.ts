@@ -22,9 +22,12 @@ export function attachmentKindFromProvider(value: unknown): AttachmentKind {
   return providerKindMap[value.trim().toLowerCase()] ?? 'file';
 }
 
-/** Solo la imagen se presenta en linea dentro de la conversacion. */
+/**
+ * Tipos que se presentan en linea dentro de la conversacion: imagen, audio y video. El audio y el
+ * video traen sus propios controles, asi que se consumen sin salir del chat; el resto se abre aparte.
+ */
 export function rendersInline(kind: AttachmentKind): boolean {
-  return kind === 'image';
+  return kind === 'image' || kind === 'audio' || kind === 'video';
 }
 
 /**
