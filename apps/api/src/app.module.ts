@@ -6,7 +6,9 @@ import { ContactProfileService } from './conversations/contact-profile.service';
 import { ContactProfilesController } from './conversations/contact-profiles.controller';
 import { ConversationMediaController } from './conversations/conversation-media.controller';
 import { ConversationMediaService } from './conversations/conversation-media.service';
+import { CommentModerationController } from './conversations/comment-moderation.controller';
 import { ConversationNotesController } from './conversations/conversation-notes.controller';
+import { CommentModerationService } from './conversations/comment-moderation.service';
 import { ConversationNoteService } from './conversations/conversation-note.service';
 import { TenantConversationService } from './conversations/tenant-conversation.service';
 import { TenantMessageService } from './conversations/tenant-message.service';
@@ -34,6 +36,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     ConversationsController,
     ContactProfilesController,
     ConversationMediaController,
+    CommentModerationController,
     ConversationNotesController,
     MeController,
     RealtimeEventsController,
@@ -48,6 +51,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     TenantConversationService,
     ContactProfileService,
     ConversationMediaService,
+    CommentModerationService,
     ConversationNoteService,
     TenantMessageService,
     CannedResponseService,
