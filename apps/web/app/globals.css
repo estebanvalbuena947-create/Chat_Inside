@@ -3203,93 +3203,144 @@ h2 {
   background: #000;
 }
 /* Panel de actividad: mismos tonos de marca que el resto, tarjetas claras con borde apagado. */
+/* ============================================================================================
+   Panel de actividad
+
+   Tres columnas fijas por fila: la fecha, el carril de la barra y los numeros a la derecha. Asi
+   nada se parte en dos lineas y las cifras quedan alineadas entre filas, que es lo que las hace
+   comparables de un vistazo.
+   ============================================================================================ */
+
 .metrics-panel {
-  /* Igual que la vista de Comprobantes: pantalla completa sobre la bandeja. Sin esto el panel se
-     renderiza debajo y parece que el boton del menu no hace nada. */
+  /* Pantalla completa sobre la bandeja, igual que Comprobantes. */
   position: fixed;
   inset: 0;
   z-index: 18;
   overflow-y: auto;
-  padding: 22px 26px 40px;
+  padding: 24px 28px 48px;
   background: #fcfbf6;
   display: flex;
   flex-direction: column;
   gap: 18px;
+  align-items: center;
 }
+
+.metrics-panel > * {
+  max-width: 1040px;
+  width: 100%;
+}
+
+.metrics-period {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--brand-dolar);
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  padding: 12px 18px;
+}
+
+.metrics-period select {
+  background: #fff;
+  border: 1px solid var(--brand-dolar);
+  border-radius: 8px;
+  color: var(--brand-tinta);
+  padding: 7px 12px;
+}
+
 .metrics-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
+
 .metrics-card {
   background: #fff;
   border: 1px solid var(--brand-dolar);
-  border-radius: 12px;
-  padding: 16px 18px;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(51, 48, 42, 0.05);
+  padding: 18px 20px;
 }
+
 .metrics-card-label {
   color: var(--brand-tinta-suave);
   font-size: 13px;
-  margin: 0 0 6px;
+  letter-spacing: 0.2px;
+  margin: 0 0 8px;
+  text-transform: uppercase;
 }
+
 .metrics-card-value {
   color: var(--brand-matcha-oscuro);
-  font-size: 28px;
+  font-size: 34px;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1;
   margin: 0;
 }
+
 .metrics-block {
   background: #fff;
   border: 1px solid var(--brand-dolar);
-  border-radius: 12px;
-  padding: 16px 18px;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(51, 48, 42, 0.05);
+  padding: 18px 20px 10px;
 }
+
 .metrics-block h3 {
-  color: var(--brand-caoba);
+  color: var(--brand-matcha-oscuro);
   font-size: 15px;
-  margin: 0 0 12px;
+  letter-spacing: 0.2px;
+  margin: 0 0 14px;
+  text-transform: uppercase;
 }
+
 .metrics-row {
   align-items: center;
-  border-bottom: 1px solid rgba(183, 178, 159, 0.4);
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  padding: 7px 0;
+  border-bottom: 1px solid rgba(183, 178, 159, 0.35);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 120px 1fr 200px;
+  padding: 10px 0;
 }
+
 .metrics-row:last-child {
   border-bottom: 0;
 }
+
 .metrics-row-name {
   color: var(--brand-tinta);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
+
 .metrics-row-values {
   color: var(--brand-tinta-suave);
   font-variant-numeric: tabular-nums;
+  grid-column: 3;
+  text-align: right;
+  white-space: nowrap;
 }
+
 .metrics-bar {
-  background: rgba(101, 117, 78, 0.18);
+  background: rgba(101, 117, 78, 0.14);
   border-radius: 999px;
-  height: 8px;
-  min-width: 40px;
+  height: 10px;
+  overflow: hidden;
+  width: 100%;
 }
+
 .metrics-bar span {
-  background: var(--brand-matcha);
+  background: linear-gradient(90deg, var(--brand-matcha) 0%, var(--brand-matcha-oscuro) 100%);
   border-radius: 999px;
   display: block;
   height: 100%;
+  min-width: 4px;
 }
-.metrics-period {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-}
-.metrics-period select {
-  border: 1px solid var(--brand-dolar);
-  border-radius: 8px;
-  padding: 6px 10px;
-}
+
 .metrics-note {
   color: var(--brand-tinta-suave);
   font-size: 13px;
+  margin: 0 0 8px;
 }
