@@ -3147,3 +3147,33 @@ h2 {
 .workspace .primary-nav .brand-mark {
   background: #ffffff !important;
 }
+
+/* ============================================================================================
+   Etiquetas y Respuestas rapidas: la parte de arriba no se mueve y la lista se desplaza sola.
+
+   Asi se aprovecha toda la altura disponible para seguir creando etiquetas, sin que el formulario
+   de arriba se vaya con el scroll.
+   ============================================================================================ */
+
+.internal-label-manager,
+.canned-response-manager {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Todo lo que no es la lista conserva su altura natural. */
+.internal-label-manager > *,
+.canned-response-manager > * {
+  flex: 0 0 auto;
+}
+
+/* La lista ocupa el resto de la pantalla y es la unica que se desplaza. */
+.internal-label-library,
+.canned-response-library {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 32px;
+}

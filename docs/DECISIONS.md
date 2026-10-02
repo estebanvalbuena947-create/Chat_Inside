@@ -434,3 +434,26 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 - **Alternativas consideradas:** Filtrar en el navegador después de cargar todas las etiquetas por conversación; confiar en el UUID sin comprobar tenant; exponer la Data API; usar un join tipado no soportado por el cliente actual.
 - **Consecuencias:** El filtro es una lectura sin efectos externos y sigue siendo compatible con estado y búsqueda de la interfaz. Una etiqueta inexistente u horizontal es `404`, no una lista ambigua. No hay migración, permisos ni datos de demostración.
 - **Cómo se verifica:** Pruebas de filtro válido, ausencia de vínculos, etiqueta horizontal y lectura normal; controles completos de API/web.
+
+## CAPI de Meta Ads: el hecho de negocio es "ganado" con valor (2026-10-01)
+
+**Contexto.** Para que Meta acepte una conversion se necesita el identificador de clic (`ctwa_clid`)
+o el identificador del usuario en la plataforma, el **valor total** de la cita (no el deposito) y el
+identificador de la conversacion. Ademas hace falta un hecho de negocio explicito: nada se convierte
+por recibir un mensaje o cambiar un estado.
+
+**Decision.**
+
+- El hecho de negocio es la conversacion **ganada** con su **valor total**. Se modela como estado
+  propio (`outcome`), **en paralelo** al estado operativo: una conversacion puede estar resuelta y
+  ganada a la vez.
+- Se registra por **dos puertas con una sola regla**: el boton "Ganado" en la conversacion (persona)
+  y el endpoint de tools (bot, cuando detecta el pago). Nunca dos implementaciones.
+- Un negocio ganado trae **siempre** valor, origen (persona o bot) y fecha: lo impone la base.
+- El bot puede reintentar sin duplicar: la referencia de origen es unica por espacio.
+- **Se descarta** marcar una etiqueta concreta como "cita confirmada". Las etiquetas organizan; el
+  hecho de negocio tiene su propio estado. Evita ataduras a nombres concretos.
+- El valor se carga en **MXN** y el evento que se enviara a Meta es `Purchase`.
+
+**Consecuencias.** Ninguna migracion aplicada se ve afectada (la de este cambio aun no estaba
+aplicada). Perdido, otras monedas y otros tipos de evento quedan como extensiones del mismo corte.
