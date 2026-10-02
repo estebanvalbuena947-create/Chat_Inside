@@ -3043,7 +3043,15 @@ export default function HomePage(): React.ReactNode {
         </div>
       )}
       {activeView === 'metrics' && (
-        <MetricsPanel days={metricsDays} onChangeDays={setMetricsDays} state={metrics} />
+        <div className="metrics-view">
+          <div className="metrics-view-header">
+            <button className="metrics-back" onClick={() => setActiveView('inbox')} type="button">
+              Volver a la bandeja
+            </button>
+            <h1>Actividad</h1>
+          </div>
+          <MetricsPanel days={metricsDays} onChangeDays={setMetricsDays} state={metrics} />
+        </div>
       )}
       {activeView === 'media' && (
         <section className="media-view" aria-label="Comprobantes de pago">
