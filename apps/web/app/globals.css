@@ -3382,3 +3382,106 @@ h2 {
 .metrics-back:hover {
   background: var(--brand-vanilla);
 }
+/* ============================================================================================
+   Pulido de las piezas nuevas: el dialogo de ganado, las etiquetas del mensaje y los botones de
+   comentario.
+
+   El dialogo se estiliza con :has(#won-dialog-title) para no depender de nombres de clase que
+   pueden cambiar: se ancla en el titulo, que es lo unico estable de esa pantalla.
+   ============================================================================================ */
+
+/* --- Dialogo de marcar como ganado ----------------------------------------------------------------- */
+
+div:has(> #won-dialog-title) {
+  background: #fff;
+  border: 1px solid var(--brand-dolar);
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(51, 48, 42, 0.2);
+  padding: 26px 28px 22px;
+  width: min(430px, 92vw);
+}
+
+#won-dialog-title {
+  color: var(--brand-matcha-oscuro);
+  font-size: 20px;
+  letter-spacing: -0.2px;
+  margin: 0 0 20px;
+}
+
+div:has(> #won-dialog-title) label {
+  color: var(--brand-tinta-suave);
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+div:has(> #won-dialog-title) input,
+div:has(> #won-dialog-title) select {
+  background: #fff;
+  border: 1px solid var(--brand-dolar);
+  border-radius: 10px;
+  color: var(--brand-tinta);
+  font-size: 15px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+div:has(> #won-dialog-title) input:focus,
+div:has(> #won-dialog-title) select:focus {
+  border-color: var(--brand-matcha);
+  box-shadow: 0 0 0 3px rgba(101, 117, 78, 0.18);
+  outline: none;
+}
+
+/* Los campos de importe, sin las flechitas del navegador, que afean el formulario. */
+div:has(> #won-dialog-title) input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+div:has(> #won-dialog-title) input[type='number']::-webkit-inner-spin-button,
+div:has(> #won-dialog-title) input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+div:has(> #won-dialog-title) button[type='submit'],
+div:has(> #won-dialog-title) button:not([aria-label]) {
+  background: var(--brand-matcha);
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 18px;
+}
+
+div:has(> #won-dialog-title) button[type='submit']:hover,
+div:has(> #won-dialog-title) button:not([aria-label]):hover {
+  background: var(--brand-matcha-oscuro);
+}
+
+div:has(> #won-dialog-title) button[type='submit']:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* --- Etiquetas del mensaje: en su propia linea, justo encima de la hora ---------------------------- */
+
+.bubble-author {
+  display: block;
+  margin: 6px 0 2px;
+  width: fit-content;
+}
+
+/* --- Botones de comentario: mas discretos que los del panel de acciones --------------------------- */
+
+.bubble .status-action {
+  border-radius: 8px;
+  font-size: 12.5px;
+  margin: 0 6px 4px 0;
+  padding: 5px 11px;
+}
