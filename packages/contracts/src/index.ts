@@ -631,3 +631,24 @@ export const metricsSummarySchema = z.object({
 });
 
 export type MetricsSummary = z.infer<typeof metricsSummarySchema>;
+/* ------------------------------------------------------------------------------------------------
+   Conversacion ganada, con el valor total del servicio. Es el hecho de negocio que alimentara el
+   envio de conversiones a Meta. Ver specs/019 y plans/033.
+   ------------------------------------------------------------------------------------------------ */
+
+export const markConversationWonSchema = z.object({
+  amount: z.number().nonnegative(),
+  currency: z.string().regex(/^[A-Z]{3}$/)
+});
+
+export type MarkConversationWon = z.infer<typeof markConversationWonSchema>;
+
+export const conversationWonResponseSchema = z.object({
+  amount: z.number(),
+  conversationId: z.string(),
+  currency: z.string(),
+  outcome: z.literal('ganado'),
+  setAt: z.string()
+});
+
+export type ConversationWonResponse = z.infer<typeof conversationWonResponseSchema>;

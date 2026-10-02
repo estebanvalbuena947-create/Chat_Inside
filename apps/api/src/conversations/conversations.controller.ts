@@ -20,6 +20,7 @@ import {
   updateConversationAssignmentSchema,
   updateConversationStatusSchema,
   type ConversationListResponse,
+  type ConversationWonResponse,
   type ConversationMessageListResponse,
   type CreateOutboundMessageResponse,
   type MarkConversationReadResponse,
@@ -117,6 +118,21 @@ export class ConversationsController {
       parsedTenantId.data,
       parsedConversationId.data,
       parsedBody.data
+    );
+  }
+
+  @Post(':conversationId/won')
+  async markWon(
+    @Param('tenantId') tenantId: string,
+    @Param('conversationId') conversationId: string,
+    @Body() rawBody: unknown,
+    @Req() request: FastifyRequest
+  ): Promise<ConversationWonResponse> {
+    return this.tenantConversationService.markWon(
+      request.headers.authorization,
+      tenantId,
+      conversationId,
+      rawBody
     );
   }
 

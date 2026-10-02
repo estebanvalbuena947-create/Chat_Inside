@@ -40,6 +40,8 @@ type MessageAttachment = {
 type Message = {
   attachments: MessageAttachment[];
   body: string;
+  commentPrivateReplyAvailable?: boolean;
+  commentState?: 'visible' | 'hidden' | 'deleted';
   createdAt: string;
   direction: 'inbound' | 'outbound';
   id: string;
@@ -284,6 +286,15 @@ export default function HomePage(): React.ReactNode {
   const [sendError, setSendError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [isWonDialogOpen, setIsWonDialogOpen] = useState(false);
+  const [wonAmount, setWonAmount] = useState('');
+  const [wonCurrency, setWonCurrency] = useState('MXN');
+  const [isMarkingWon, setIsMarkingWon] = useState(false);
+  const [wonError, setWonError] = useState<string | null>(null);
+  const [commentActionMessageId, setCommentActionMessageId] = useState<string | null>(null);
+  const [commentActionError, setCommentActionError] = useState<string | null>(null);
+  const [privateReplyMessageId, setPrivateReplyMessageId] = useState<string | null>(null);
+  const [privateReplyDraft, setPrivateReplyDraft] = useState('');
   const [tenantMembers, setTenantMembers] = useState<TenantMember[]>([]);
   const [tenantMembersError, setTenantMembersError] = useState<string | null>(null);
   const [isTenantMembersLoading, setIsTenantMembersLoading] = useState(false);
@@ -1207,6 +1218,84 @@ export default function HomePage(): React.ReactNode {
       setStatusError(error instanceof Error ? error.message : 'No fue posible cambiar el estado.');
     } finally {
       setIsUpdatingStatus(false);
+    }
+  }
+
+  async function markConversationWon(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedConversation || isMarkingWon) return;
+    setIsMarkingWon(true);
+    setWonError(null);
+    try {
+      const response = await fetch(`/api/inbox/${selectedConversation.id}/won`, {
+        body: JSON.stringify({ amount: Number(wonAmount), currency: wonCurrency.trim() }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST'
+      });
+      const payload = response.headers.get('content-type')?.includes('application/json')
+        ? await response.json()
+        : {};
+      if (response.status === 401) {
+        window.location.assign('/login');
+        return;
+      }
+      if (!response.ok) throw new Error(payload.error ?? 'No fue posible marcarla como ganada.');
+      setIsWonDialogOpen(false);
+      setWonAmount('');
+      setWonCurrency('MXN');
+      setInboxReloadVersion((current) => current + 1);
+    } catch (error) {
+      setWonError(error instanceof Error ? error.message : 'No fue posible marcarla como ganada.');
+    } finally {
+      setIsMarkingWon(false);
+    }
+  }
+
+  async function actOnComment(
+    message: Message,
+    action: 'delete' | 'hide' | 'private-reply' | 'unhide'
+  ): Promise<void> {
+    if (!selectedConversation || commentActionMessageId) return;
+    setCommentActionMessageId(message.id);
+    setCommentActionError(null);
+    try {
+      const path = `/api/inbox/${selectedConversation.id}/messages/${message.id}/comment`;
+      const response = await fetch(
+        action === 'delete'
+          ? path
+          : action === 'hide' || action === 'unhide'
+            ? `${path}/hide`
+            : `${path}/private-reply`,
+        action === 'delete'
+          ? { method: 'DELETE' }
+          : {
+              body:
+                action === 'private-reply'
+                  ? JSON.stringify({ message: privateReplyDraft.trim() })
+                  : undefined,
+              headers:
+                action === 'private-reply' ? { 'Content-Type': 'application/json' } : undefined,
+              method: action === 'unhide' ? 'DELETE' : 'POST'
+            }
+      );
+      const payload = response.headers.get('content-type')?.includes('application/json')
+        ? await response.json()
+        : {};
+      if (response.status === 401) {
+        window.location.assign('/login');
+        return;
+      }
+      if (!response.ok)
+        throw new Error(payload.error ?? 'No fue posible actualizar el comentario.');
+      setPrivateReplyMessageId(null);
+      setPrivateReplyDraft('');
+      setHistoryReloadVersion((current) => current + 1);
+    } catch (error) {
+      setCommentActionError(
+        error instanceof Error ? error.message : 'No fue posible actualizar el comentario.'
+      );
+    } finally {
+      setCommentActionMessageId(null);
     }
   }
 
@@ -2395,8 +2484,86 @@ export default function HomePage(): React.ReactNode {
                         className={`message-row ${message.direction === 'outbound' ? 'outgoing' : ''}`}
                       >
                         <div className="bubble">
+                          {message.source === 'comment' && (
+                            <div
+                              className="conversation-actions"
+                              aria-label="Acciones de comentario"
+                            >
+                              <button
+                                className="status-action"
+                                disabled={commentActionMessageId === message.id}
+                                onClick={() =>
+                                  void actOnComment(
+                                    message,
+                                    message.commentState === 'hidden' ? 'unhide' : 'hide'
+                                  )
+                                }
+                                type="button"
+                              >
+                                {message.commentState === 'hidden' ? 'Mostrar' : 'Ocultar'}
+                              </button>
+                              <button
+                                className="status-action"
+                                disabled={commentActionMessageId === message.id}
+                                onClick={() => void actOnComment(message, 'delete')}
+                                type="button"
+                              >
+                                Eliminar
+                              </button>
+                              {message.commentPrivateReplyAvailable !== false && (
+                                <button
+                                  className="status-action"
+                                  disabled={commentActionMessageId === message.id}
+                                  onClick={() => {
+                                    setPrivateReplyMessageId(message.id);
+                                    setPrivateReplyDraft('');
+                                    setCommentActionError(null);
+                                  }}
+                                  type="button"
+                                >
+                                  Responder privado
+                                </button>
+                              )}
+                              {privateReplyMessageId === message.id && (
+                                <form
+                                  className="private-note-form"
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    void actOnComment(message, 'private-reply');
+                                  }}
+                                >
+                                  <textarea
+                                    aria-label="Respuesta privada"
+                                    disabled={commentActionMessageId === message.id}
+                                    maxLength={2200}
+                                    onChange={(event) => setPrivateReplyDraft(event.target.value)}
+                                    placeholder="Escribe una respuesta privada…"
+                                    rows={3}
+                                    value={privateReplyDraft}
+                                  />
+                                  <button
+                                    disabled={
+                                      !privateReplyDraft.trim() ||
+                                      commentActionMessageId === message.id
+                                    }
+                                    type="submit"
+                                  >
+                                    Enviar privado
+                                  </button>
+                                </form>
+                              )}
+                            </div>
+                          )}
                           {message.attachments.map((attachment) =>
-                            attachment.url && attachment.kind === 'audio' ? (
+                            attachment.kind === 'share' ? (
+                              <article className="bubble-attachment" key={attachment.id}>
+                                {attachment.url && (
+                                  <img alt="Publicación compartida" src={attachment.url} />
+                                )}
+                                <strong>Publicación compartida</strong>
+                                {attachment.title && <p>{attachment.title}</p>}
+                              </article>
+                            ) : attachment.url && attachment.kind === 'audio' ? (
                               <audio
                                 className="bubble-audio"
                                 controls
@@ -2437,9 +2604,15 @@ export default function HomePage(): React.ReactNode {
                               </span>
                             )
                           )}
-                          {message.attachments.some((attachment) => attachment.title) && (
+                          {message.attachments.some(
+                            (attachment) => attachment.title && attachment.kind !== 'share'
+                          ) && (
                             <p className="bubble-caption">
-                              {message.attachments.find((attachment) => attachment.title)?.title}
+                              {
+                                message.attachments.find(
+                                  (attachment) => attachment.title && attachment.kind !== 'share'
+                                )?.title
+                              }
                             </p>
                           )}
                           {message.body.trim() ? (
@@ -2676,7 +2849,28 @@ export default function HomePage(): React.ReactNode {
                     Resolver
                   </button>
                 )}
+                <button
+                  className="status-action"
+                  disabled={isMarkingWon}
+                  onClick={() => {
+                    setWonError(null);
+                    setIsWonDialogOpen(true);
+                  }}
+                  type="button"
+                >
+                  Ganado
+                </button>
               </div>
+              {statusError && (
+                <p className="internal-label-error" role="alert">
+                  {statusError}
+                </p>
+              )}
+              {commentActionError && (
+                <p className="internal-label-error" role="alert">
+                  {commentActionError}
+                </p>
+              )}
               <div className="conversation-management-tools">
                 <button
                   aria-expanded={isConversationLabelsOpen}
@@ -2802,6 +2996,69 @@ export default function HomePage(): React.ReactNode {
           </>
         )}
       </aside>
+      {isWonDialogOpen && selectedConversation && (
+        <div
+          className="channel-modal-backdrop"
+          onClick={() => !isMarkingWon && setIsWonDialogOpen(false)}
+          role="presentation"
+        >
+          <section
+            aria-labelledby="won-dialog-title"
+            className="channel-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <header>
+              <div>
+                <p className="eyebrow">RESULTADO</p>
+                <h2 id="won-dialog-title">Marcar como ganado</h2>
+              </div>
+              <button
+                aria-label="Cerrar diálogo de ganado"
+                className="channel-modal-close"
+                disabled={isMarkingWon}
+                onClick={() => setIsWonDialogOpen(false)}
+                type="button"
+              >
+                ×
+              </button>
+            </header>
+            <form className="private-note-form" onSubmit={markConversationWon}>
+              <label>
+                Importe total
+                <input
+                  autoFocus
+                  inputMode="decimal"
+                  min="0"
+                  onChange={(event) => setWonAmount(event.target.value)}
+                  required
+                  step="0.01"
+                  type="number"
+                  value={wonAmount}
+                />
+              </label>
+              <label>
+                Moneda
+                <input
+                  maxLength={3}
+                  onChange={(event) => setWonCurrency(event.target.value.toUpperCase())}
+                  pattern="[A-Z]{3}"
+                  required
+                  value={wonCurrency}
+                />
+              </label>
+              {wonError && (
+                <p className="channel-modal-error" role="alert">
+                  {wonError}
+                </p>
+              )}
+              <button disabled={isMarkingWon} type="submit">
+                {isMarkingWon ? 'Guardando…' : 'Confirmar ganado'}
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
       {isChannelSetupOpen && (
         <div
           className="channel-modal-backdrop"

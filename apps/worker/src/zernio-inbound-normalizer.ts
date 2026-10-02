@@ -41,6 +41,12 @@ const zernioInboundPayloadSchema = z.object({
     // adjunto con una forma inesperada nunca puede rechazar el mensaje ni perderlo.
     attachments: z.unknown().transform((value) => (Array.isArray(value) ? value : []))
   }),
+  post: z
+    .object({
+      content: z.string().max(4000).nullish(),
+      imageUrl: z.string().max(2048).nullish()
+    })
+    .nullish(),
   timestamp: z.string().datetime({ offset: true })
 });
 
@@ -92,7 +98,7 @@ export function normalizeInboundMessage(payload: unknown): NormalizedInboundMess
     throw new InboundPayloadError();
   }
 
-  const { account, conversation, message, timestamp } = parsed.data;
+  const { account, conversation, message, post, timestamp } = parsed.data;
   const contactId = message.sender.contactId ?? message.sender.id;
   const contactDisplayName =
     message.sender.name ??
@@ -104,37 +110,64 @@ export function normalizeInboundMessage(payload: unknown): NormalizedInboundMess
     accountId: account.id,
     // El usuario distingue dos cuentas de la misma plataforma mejor que el nombre comercial.
     accountName: account.username ?? account.displayName ?? null,
-    attachments: message.attachments.flatMap((attachment, ordinal) => {
-      if (!attachment || typeof attachment !== 'object') return [];
-      const entry = attachment as {
-        originalType?: unknown;
-        payload?: unknown;
-        type?: unknown;
-        url?: unknown;
-      };
-      const payload =
-        entry.payload && typeof entry.payload === 'object'
-          ? (entry.payload as { title?: unknown; url?: unknown })
-          : null;
+    attachments: message.attachments
+      .flatMap((attachment, ordinal) => {
+        if (!attachment || typeof attachment !== 'object') return [];
+        const entry = attachment as {
+          originalType?: unknown;
+          payload?: unknown;
+          type?: unknown;
+          url?: unknown;
+        };
+        const payload =
+          entry.payload && typeof entry.payload === 'object'
+            ? (entry.payload as { title?: unknown; url?: unknown })
+            : null;
 
-      return [
-        {
-          kind: attachmentKindFromProvider(entry.type),
-          ordinal,
-          sourceKind:
-            typeof entry.originalType === 'string' ? entry.originalType.slice(0, 64) : null,
-          sourceUrl: normalizeAvatarSourceUrl(
-            typeof entry.url === 'string'
-              ? entry.url
-              : typeof payload?.url === 'string'
-                ? payload.url
-                : null
-          ),
-          // El texto de la publicacion compartida es el contexto que el equipo necesita.
-          title: typeof payload?.title === 'string' ? repairMojibake(payload.title) : null
-        }
-      ];
-    }),
+        return [
+          {
+            kind: attachmentKindFromProvider(entry.type),
+            ordinal,
+            sourceKind:
+              typeof entry.originalType === 'string' ? entry.originalType.slice(0, 64) : null,
+            sourceUrl: normalizeAvatarSourceUrl(
+              typeof entry.url === 'string'
+                ? entry.url
+                : typeof payload?.url === 'string'
+                  ? payload.url
+                  : entry.type === 'share'
+                    ? (post?.imageUrl ?? null)
+                    : null
+            ),
+            // El texto de la publicacion compartida es el contexto que el equipo necesita.
+            title:
+              typeof payload?.title === 'string'
+                ? repairMojibake(payload.title)
+                : entry.type === 'share' && typeof post?.content === 'string'
+                  ? repairMojibake(post.content)
+                  : null
+          }
+        ];
+      })
+      .concat(
+        message.attachments.some(
+          (attachment) =>
+            attachment &&
+            typeof attachment === 'object' &&
+            (attachment as { type?: unknown }).type === 'share'
+        ) ||
+          (!post?.imageUrl && !post?.content)
+          ? []
+          : [
+              {
+                kind: 'share' as const,
+                ordinal: message.attachments.length,
+                sourceKind: 'post',
+                sourceUrl: normalizeAvatarSourceUrl(post.imageUrl ?? null),
+                title: typeof post.content === 'string' ? repairMojibake(post.content) : null
+              }
+            ]
+      ),
     avatarSourceUrl: normalizeAvatarSourceUrl(message.sender.picture),
     body: message.text,
     contactDisplayName,
@@ -237,6 +270,7 @@ const zernioCommentSchema = z.object({
     author: z.object({ id: identifierSchema, username: z.string().trim().max(160).nullish() }),
     createdAt: z.string().datetime({ offset: true }),
     id: identifierSchema,
+    platformPostId: z.string().trim().max(80).nullish(),
     text: z
       .string()
       .max(8000)
@@ -254,6 +288,7 @@ export type NormalizedComment = {
   contactDisplayName: string;
   contactReference: string;
   contactUsername: string | null;
+  platformPostId: string | null;
   receivedAt: string;
 };
 
@@ -279,6 +314,7 @@ export function normalizeComment(payload: unknown): NormalizedComment {
     contactDisplayName: comment.author.username ?? comment.author.id,
     contactReference: externalReference(account.id, 'contact', comment.author.id),
     contactUsername: comment.author.username ?? null,
+    platformPostId: comment.platformPostId ?? null,
     receivedAt: comment.createdAt ?? timestamp
   };
 }

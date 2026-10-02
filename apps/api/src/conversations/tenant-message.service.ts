@@ -25,6 +25,8 @@ import { signMediaUrls } from './conversation-media.service';
 type PersistedMessage = {
   attachments?: unknown;
   body: unknown;
+  comment_private_reply_at?: unknown;
+  comment_state?: unknown;
   created_at: unknown;
   direction: unknown;
   id: unknown;
@@ -96,6 +98,9 @@ function asConversationMessage(
   return conversationMessageSchema.parse({
     attachments: readAttachments(message, signedUrls),
     body: message.body,
+    commentPrivateReplyAvailable:
+      message.source === 'comment' ? message.comment_private_reply_at === null : undefined,
+    commentState: message.source === 'comment' ? (message.comment_state ?? 'visible') : undefined,
     createdAt: normalizeTimestamp(message.created_at, 'fecha de creación'),
     direction: message.direction,
     id: message.id,
@@ -147,7 +152,7 @@ export class TenantMessageService {
     const { data: messages, error: messagesError } = await supabase
       .from('messages')
       .select(
-        'id, body, direction, sender_type, status, sent_at, created_at, source, attachments:message_attachments(id, kind, content_type, storage_object_path, source_title)'
+        'id, body, direction, sender_type, status, sent_at, created_at, source, comment_state, comment_private_reply_at, attachments:message_attachments(id, kind, content_type, storage_object_path, source_title)'
       )
       .eq('tenant_id', tenantId)
       .eq('conversation_id', conversationId)
@@ -208,7 +213,7 @@ export class TenantMessageService {
         tenant_id: tenantId
       })
       .select(
-        'id, body, direction, sender_type, status, sent_at, created_at, source, attachments:message_attachments(id, kind, content_type, storage_object_path, source_title)'
+        'id, body, direction, sender_type, status, sent_at, created_at, source, comment_state, comment_private_reply_at, attachments:message_attachments(id, kind, content_type, storage_object_path, source_title)'
       )
       .maybeSingle();
     if (!createError && created) {

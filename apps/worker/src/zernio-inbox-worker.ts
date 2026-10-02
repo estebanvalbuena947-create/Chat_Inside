@@ -860,6 +860,7 @@ export async function recordComment(
     channel_account_id: channelAccount.id,
     conversation_id: targetConversation.id,
     direction: 'inbound',
+    platform_post_id: comment.platformPostId,
     provider_message_id: comment.commentReference,
     sender_type: 'contact',
     sent_at: comment.receivedAt,

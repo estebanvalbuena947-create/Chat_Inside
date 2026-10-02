@@ -174,6 +174,27 @@ describe('normalizeInboundMessage multimedia', () => {
     expect(normalized.body).toBe('');
   });
 
+  it('conserva la imagen y el texto de una publicacion compartida para copiarlos como multimedia', () => {
+    const normalized = normalizeInboundMessage({
+      ...base,
+      message: { ...base.message, attachments: [{ type: 'share' }] },
+      post: {
+        content: 'Una publicación completa, sin texto cortado.',
+        imageUrl: 'https://cdn.example.test/publicacion.jpg'
+      }
+    });
+
+    expect(normalized.attachments).toEqual([
+      {
+        kind: 'share',
+        ordinal: 0,
+        sourceKind: null,
+        sourceUrl: 'https://cdn.example.test/publicacion.jpg',
+        title: 'Una publicación completa, sin texto cortado.'
+      }
+    ]);
+  });
+
   it('un adjunto mal formado no invalida el mensaje', () => {
     const normalized = normalizeInboundMessage({
       ...base,

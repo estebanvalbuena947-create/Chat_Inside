@@ -8,6 +8,7 @@ const payload = {
     author: { id: 'author-1', username: 'alex.belmont' },
     createdAt: '2026-09-29T21:57:08.702Z',
     id: 'comment-1',
+    platformPostId: 'post-1',
     text: 'No es que este en el spam, es que no lo vi.'
   },
   event: 'comment.received',
@@ -83,6 +84,7 @@ describe('normalizeComment', () => {
       contactDisplayName: 'alex.belmont',
       contactReference: 'zernio:account-1:contact:author-1',
       contactUsername: 'alex.belmont',
+      platformPostId: 'post-1',
       receivedAt: '2026-09-29T21:57:08.702Z'
     });
   });
@@ -104,6 +106,7 @@ describe('recordComment', () => {
           body: payload.comment.text,
           conversation_id: 'conversation-1',
           direction: 'inbound',
+          platform_post_id: 'post-1',
           provider_message_id: 'zernio:account-1:comment:comment-1',
           sender_type: 'contact',
           source: 'comment',

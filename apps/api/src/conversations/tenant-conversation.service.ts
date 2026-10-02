@@ -4,7 +4,8 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
-  NotFoundException
+  NotFoundException,
+  UnprocessableEntityException
 } from '@nestjs/common';
 import {
   clampReadMark,
@@ -33,6 +34,12 @@ import {
   type UpdateConversationAssignmentResponse,
   type UpdateConversationStatus,
   type UpdateConversationStatusResponse
+} from '@chat-zernio/contracts';
+import { validateWonOutcome } from '@chat-zernio/domain';
+import {
+  conversationWonResponseSchema,
+  markConversationWonSchema,
+  type ConversationWonResponse
 } from '@chat-zernio/contracts';
 import { RequestAuthenticator } from '../auth/request-authenticator';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
@@ -565,6 +572,73 @@ export class TenantConversationService {
     return (data ?? []).flatMap((item) =>
       typeof item.conversation_id === 'string' ? [item.conversation_id] : []
     );
+  }
+
+  /**
+   * Marca la conversacion como ganada, con el valor total del servicio (no el deposito).
+   *
+   * Es el hecho de negocio explicito que exige Meta para aceptar una conversion: una persona o el
+   * bot lo registran, y queda quien fue y cuando. La base impone ademas que un negocio ganado traiga
+   * siempre valor, origen y fecha.
+   */
+  async markWon(
+    authorization: unknown,
+    tenantId: string,
+    conversationId: string,
+    rawBody: unknown
+  ): Promise<ConversationWonResponse> {
+    const parsed = markConversationWonSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new UnprocessableEntityException(
+        'La conversacion ganada necesita un importe y una moneda de tres letras.'
+      );
+    }
+
+    const identity = await this.requestAuthenticator.authenticate(authorization);
+    await this.tenantAccessService.assertMembership(identity.userId, tenantId);
+
+    const revision = validateWonOutcome({
+      amount: parsed.data.amount,
+      currency: parsed.data.currency,
+      recordedAt: new Date(),
+      recordedBy: 'persona',
+      recordedByUserId: identity.userId
+    });
+    if (!revision.ok) {
+      throw new UnprocessableEntityException(revision.reason);
+    }
+    const ahora = new Date().toISOString();
+    const { data, error } = await this.supabaseServerClientFactory
+      .create()
+      .from('conversations')
+      .update({
+        outcome: 'ganado',
+        outcome_amount: parsed.data.amount,
+        outcome_currency: parsed.data.currency,
+        outcome_set_at: ahora,
+        outcome_set_by: 'persona',
+        outcome_set_by_user_id: identity.userId,
+        updated_at: ahora
+      })
+      .eq('tenant_id', tenantId)
+      .eq('id', conversationId)
+      .select('id, outcome, outcome_amount, outcome_currency, outcome_set_at')
+      .maybeSingle();
+
+    if (error) {
+      throw new InternalServerErrorException('No fue posible registrar la conversacion ganada.');
+    }
+    if (!data) {
+      throw new NotFoundException('La conversacion no existe en este espacio.');
+    }
+
+    return conversationWonResponseSchema.parse({
+      amount: Number(data.outcome_amount),
+      conversationId: String(data.id),
+      currency: String(data.outcome_currency),
+      outcome: 'ganado',
+      setAt: String(data.outcome_set_at)
+    });
   }
 
   async changeStatus(
