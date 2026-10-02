@@ -151,6 +151,10 @@ export const conversationMessageSchema = z.object({
   attachments: z.array(messageAttachmentSchema),
   id: z.uuid(),
   body: z.string().max(8000),
+  // Estado del comentario en la plataforma. Solo presente en mensajes de comentario.
+  commentState: z.enum(['visible', 'hidden', 'deleted']).nullish(),
+  /** La respuesta privada es de un solo uso: la interfaz necesita saberlo antes de ofrecerla. */
+  commentPrivateReplyAvailable: z.boolean().nullish(),
   createdAt: z.string().datetime(),
   direction: messageDirectionSchema,
   senderType: messageSenderTypeSchema,
