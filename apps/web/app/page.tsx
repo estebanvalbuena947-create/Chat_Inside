@@ -2557,9 +2557,17 @@ export default function HomePage(): React.ReactNode {
                           {message.attachments.map((attachment) =>
                             attachment.kind === 'share' ? (
                               <article className="bubble-attachment" key={attachment.id}>
-                                {attachment.url && (
+                                {attachment.url && attachment.contentType?.startsWith('video/') ? (
+                                  <video
+                                    className="bubble-video"
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    src={attachment.url}
+                                  />
+                                ) : attachment.url ? (
                                   <img alt="Publicación compartida" src={attachment.url} />
-                                )}
+                                ) : null}
                                 <strong>Publicación compartida</strong>
                                 {attachment.title && <p>{attachment.title}</p>}
                               </article>
