@@ -23,6 +23,8 @@ import { RealtimeEventsController } from './realtime/realtime-events.controller'
 import { TenantRealtimeService } from './realtime/tenant-realtime.service';
 import { MeController } from './tenants/me.controller';
 import { TenantAccessService } from './tenants/tenant-access.service';
+import { ToolConversationService } from './tools/tool-conversation.service';
+import { ToolConversationsController } from './tools/tool-conversations.controller';
 import { TenantsController } from './tenants/tenants.controller';
 import { ZernioWebhookController } from './zernio/zernio-webhook.controller';
 import { ZernioWebhookService } from './zernio/zernio-webhook.service';
@@ -40,6 +42,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     ConversationMediaController,
     CommentModerationController,
     ConversationNotesController,
+    ToolConversationsController,
     MetricsController,
     MeController,
     RealtimeEventsController,
@@ -56,6 +59,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     ConversationMediaService,
     CommentModerationService,
     ConversationNoteService,
+    ToolConversationService,
     MetricsService,
     TenantMessageService,
     CannedResponseService,
