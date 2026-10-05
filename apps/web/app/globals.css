@@ -3573,3 +3573,20 @@ div:has(#won-dialog-title) button[type='submit']:hover,
 div:has(#won-dialog-title) button:not([aria-label]):hover {
   background: var(--brand-matcha-oscuro) !important;
 }
+/* Aire en el dialogo de ganado: entre el aviso de arriba y el primer campo, y entre un campo y el
+   siguiente. Sin esto, "IMPORTE TOTAL" queda pegado al recuadro del resultado. */
+div:has(#won-dialog-title) label {
+  margin: 18px 0 6px !important;
+}
+
+/* El primer campo no necesita el aire de arriba: ya lo aporta el aviso. */
+div:has(> #won-dialog-title) + * label:first-of-type,
+div:has(> #won-dialog-title) ~ * label:first-of-type {
+  margin-top: 16px !important;
+}
+
+/* Y un poco de aire antes del boton de confirmar. */
+div:has(#won-dialog-title) button[type='submit'],
+div:has(#won-dialog-title) button:not([aria-label]) {
+  margin-top: 20px !important;
+}
