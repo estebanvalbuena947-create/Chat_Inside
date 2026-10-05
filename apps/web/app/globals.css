@@ -3485,3 +3485,91 @@ div:has(> #won-dialog-title) button[type='submit']:disabled {
   margin: 0 6px 4px 0;
   padding: 5px 11px;
 }
+/* ============================================================================================
+   Dialogo de ganado, segunda pasada.
+
+   La primera usaba div:has(> #won-dialog-title), y el titulo vive dentro de un recuadro interno:
+   por eso los campos de abajo no recibian el estilo. Ahora se ancla sin el hijo directo, que
+   alcanza cualquier profundidad, y las etiquetas pasan a ir encima del campo.
+   ============================================================================================ */
+
+/* El aviso de arriba, mas compacto: tenia mucho aire de mas. */
+div:has(> #won-dialog-title) {
+  border: 1px solid var(--brand-dolar) !important;
+  border-radius: 14px !important;
+  min-height: 0 !important;
+  padding: 12px 16px !important;
+}
+
+#won-dialog-title {
+  font-size: 18px !important;
+  letter-spacing: -0.2px !important;
+  margin: 0 !important;
+}
+
+/* La etiqueta "RESULTADO", mas discreta. */
+div:has(> #won-dialog-title) > p,
+div:has(> #won-dialog-title) > span {
+  font-size: 11px !important;
+  letter-spacing: 0.4px !important;
+  margin: 0 0 4px !important;
+}
+
+/* Los campos: etiqueta encima, campo redondeado y ancho completo. */
+div:has(#won-dialog-title) label {
+  color: var(--brand-tinta-suave) !important;
+  display: block !important;
+  font-size: 12px !important;
+  letter-spacing: 0.3px !important;
+  margin: 0 0 6px !important;
+  text-transform: uppercase !important;
+}
+
+div:has(#won-dialog-title) input,
+div:has(#won-dialog-title) select,
+div:has(#won-dialog-title) textarea {
+  border: 1px solid var(--brand-dolar) !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+  color: var(--brand-tinta) !important;
+  padding: 11px 14px !important;
+  width: 100% !important;
+}
+
+div:has(#won-dialog-title) input:focus,
+div:has(#won-dialog-title) select:focus,
+div:has(#won-dialog-title) textarea:focus {
+  border-color: var(--brand-matcha) !important;
+  box-shadow: 0 0 0 3px rgba(101, 117, 78, 0.18) !important;
+  outline: none !important;
+}
+
+/* Sin las flechitas del campo numerico, que ensucian el formulario. */
+div:has(#won-dialog-title) input[type='number'] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
+div:has(#won-dialog-title) input[type='number']::-webkit-inner-spin-button,
+div:has(#won-dialog-title) input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+
+/* El boton de confirmar, redondeado y en verde de marca. */
+div:has(#won-dialog-title) button[type='submit'],
+div:has(#won-dialog-title) button:not([aria-label]) {
+  background: var(--brand-matcha) !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  color: #fff !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 11px 20px !important;
+}
+
+div:has(#won-dialog-title) button[type='submit']:hover,
+div:has(#won-dialog-title) button:not([aria-label]):hover {
+  background: var(--brand-matcha-oscuro) !important;
+}
