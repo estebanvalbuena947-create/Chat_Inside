@@ -23,6 +23,8 @@ import { RealtimeEventsController } from './realtime/realtime-events.controller'
 import { TenantRealtimeService } from './realtime/tenant-realtime.service';
 import { MeController } from './tenants/me.controller';
 import { TenantAccessService } from './tenants/tenant-access.service';
+import { ToolBranchesController } from './tools/tool-branches.controller';
+import { ToolBranchesService } from './tools/tool-branches.service';
 import { ToolConversationService } from './tools/tool-conversation.service';
 import { ToolTokenService } from './tools/tool-token.service';
 import { ToolConversationsController } from './tools/tool-conversations.controller';
@@ -43,6 +45,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     ConversationMediaController,
     CommentModerationController,
     ConversationNotesController,
+    ToolBranchesController,
     ToolConversationsController,
     MetricsController,
     MeController,
@@ -60,6 +63,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     ConversationMediaService,
     CommentModerationService,
     ConversationNoteService,
+    ToolBranchesService,
     ToolConversationService,
     ToolTokenService,
     MetricsService,
