@@ -6,5 +6,5 @@ export function startWorkerLoop(
   schedule: IntervalScheduler = (callback, intervalMs) => setInterval(callback, intervalMs)
 ): unknown {
   void drain();
-  return schedule(() => void drain(), 2_000);
+  return schedule(() => void drain(), 5_000);
 }
