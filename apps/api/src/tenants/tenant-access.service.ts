@@ -291,8 +291,13 @@ export class TenantAccessService {
     supabase: ReturnType<SupabaseServerClientFactory['create']>,
     email: string
   ): Promise<{ inviteLink: string; requiresPassword: boolean; userId: string }> {
-    const redirectTo = process.env.APP_PUBLIC_URL;
+    // El enlace lleva a crear la contrasena: sin eso, la persona entra sin poder volver a entrar.
+    const appPublicUrl = (process.env.APP_PUBLIC_URL ?? '').replace(/\/$/, '');
+    const redirectTo = appPublicUrl ? appPublicUrl + '/auth/password' : undefined;
     const options = redirectTo ? { redirectTo } : undefined;
+
+    // El correo va aparte del enlace: inviteUserByEmail lo envia, generateLink solo lo devuelve.
+    await supabase.auth.admin.inviteUserByEmail(email, options).catch(() => undefined);
 
     const invited = await supabase.auth.admin.generateLink({ email, options, type: 'invite' });
     const invitedUser = invited.data?.user;
@@ -302,6 +307,14 @@ export class TenantAccessService {
     }
 
     // Una cuenta existente no se invita de nuevo: se le entrega un enlace de acceso.
+    // Para quien ya tiene cuenta, inviteUserByEmail falla: aqui lo correcto es un enlace magico.
+    await supabase.auth
+      .signInWithOtp({
+        email,
+        options: { emailRedirectTo: redirectTo, shouldCreateUser: false }
+      })
+      .catch(() => undefined);
+
     const existing = await supabase.auth.admin.generateLink({ email, options, type: 'magiclink' });
     const existingUser = existing.data?.user;
     const existingLink = existing.data?.properties?.action_link;

@@ -12,7 +12,7 @@ describe('worker loop', () => {
 
     await Promise.resolve();
     expect(drain).toHaveBeenCalledTimes(1);
-    expect(schedule).toHaveBeenCalledWith(expect.any(Function), 2_000);
+    expect(schedule).toHaveBeenCalledWith(expect.any(Function), 5_000);
     expect(result).toBe(timer);
     expect(unref).not.toHaveBeenCalled();
   });

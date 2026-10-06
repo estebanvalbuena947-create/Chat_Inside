@@ -73,7 +73,13 @@ describe('TenantAccessService invitations', () => {
       },
       error: null
     });
-    (fake.client as { auth: { admin: unknown } }).auth = { admin: { generateLink } };
+    (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
+      admin: {
+        generateLink,
+        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+      },
+      signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
+    };
 
     await expect(
       createTeamService(fake.client).inviteMember('Bearer valid.jwt', tenantId, {
@@ -111,7 +117,13 @@ describe('TenantAccessService invitations', () => {
       },
       error: null
     });
-    (fake.client as { auth: { admin: unknown } }).auth = { admin: { generateLink } };
+    (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
+      admin: {
+        generateLink,
+        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+      },
+      signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
+    };
 
     await expect(
       createTeamService(fake.client).inviteMember('Bearer valid.jwt', tenantId, {
@@ -147,7 +159,13 @@ describe('TenantAccessService invitations', () => {
         },
         error: null
       });
-    (fake.client as { auth: { admin: unknown } }).auth = { admin: { generateLink } };
+    (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
+      admin: {
+        generateLink,
+        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+      },
+      signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
+    };
 
     await expect(
       createTeamService(fake.client).inviteMember('Bearer valid.jwt', tenantId, {
@@ -170,7 +188,13 @@ describe('TenantAccessService invitations', () => {
   it('refuses to invite when the caller is not an administrator', async () => {
     const fake = createTeamFake({ memberships: [{ data: { role: 'agent' }, error: null }] });
     const generateLink = vi.fn();
-    (fake.client as { auth: { admin: unknown } }).auth = { admin: { generateLink } };
+    (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
+      admin: {
+        generateLink,
+        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+      },
+      signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
+    };
 
     await expect(
       createTeamService(fake.client).inviteMember('Bearer valid.jwt', tenantId, {
@@ -186,7 +210,13 @@ describe('TenantAccessService invitations', () => {
       memberships: [{ data: { role: 'admin' }, error: null }]
     });
     const generateLink = vi.fn().mockResolvedValue({ data: null, error: { message: 'nope' } });
-    (fake.client as { auth: { admin: unknown } }).auth = { admin: { generateLink } };
+    (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
+      admin: {
+        generateLink,
+        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+      },
+      signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
+    };
 
     await expect(
       createTeamService(fake.client).inviteMember('Bearer valid.jwt', tenantId, {
@@ -209,7 +239,9 @@ describe('TenantAccessService member administration', () => {
     const getUserById = vi
       .fn()
       .mockResolvedValue({ data: { user: { email: 'agente@example.com' } }, error: null });
-    (fake.client as { auth: { admin: unknown } }).auth = { admin: { getUserById } };
+    (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
+      admin: { getUserById }
+    };
 
     await expect(
       createTeamService(fake.client).updateMemberRole('Bearer valid.jwt', tenantId, otherUserId, {
@@ -262,7 +294,9 @@ describe('TenantAccessService member administration', () => {
     const getUserById = vi
       .fn()
       .mockResolvedValue({ data: { user: { email: 'otro.admin@example.com' } }, error: null });
-    (fake.client as { auth: { admin: unknown } }).auth = { admin: { getUserById } };
+    (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
+      admin: { getUserById }
+    };
 
     await expect(
       createTeamService(fake.client).updateMemberRole('Bearer valid.jwt', tenantId, otherUserId, {
