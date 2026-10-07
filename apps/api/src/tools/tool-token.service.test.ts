@@ -8,6 +8,7 @@ const token = 'wep_tool_abc123';
 
 function createService(row: unknown, error: unknown = null) {
   const updates: unknown[] = [];
+  const sent: string[] = [];
   const query = {
     eq: vi.fn(() => query),
     maybeSingle: vi.fn().mockResolvedValue({ data: row, error }),
@@ -15,12 +16,18 @@ function createService(row: unknown, error: unknown = null) {
     update: vi.fn((value: unknown) => {
       updates.push(value);
       return query;
+    }),
+    // En supabase-js una consulta no se envia hasta que se espera su resultado. El doble lo
+    // representa, para que un `update` construido y nunca encadenado se note en la prueba.
+    then: vi.fn((resolve: (value: { error: null }) => unknown) => {
+      sent.push('tool_tokens');
+      return Promise.resolve({ error: null }).then(resolve);
     })
   };
   const service = new ToolTokenService({
     create: () => ({ from: () => query })
   } as never);
-  return { service, updates };
+  return { service, sent, updates };
 }
 
 describe('ToolTokenService', () => {
@@ -32,7 +39,7 @@ describe('ToolTokenService', () => {
   });
 
   it('resuelve el espacio con una credencial válida y anota su uso', async () => {
-    const { service, updates } = createService({
+    const { service, sent, updates } = createService({
       id: tokenId,
       revoked_at: null,
       scopes: ['messages', 'media'],
@@ -46,6 +53,9 @@ describe('ToolTokenService', () => {
     });
     expect(updates).toHaveLength(1);
     expect(updates[0]).toHaveProperty('last_used_at');
+    // Construir la anotacion no basta: tiene que enviarse. Antes se quedaba sin enviar, y una
+    // credencial en uso parecia no haberse usado nunca.
+    expect(sent).toContain('tool_tokens');
   });
 
   it('rechaza una credencial revocada aunque exista', async () => {

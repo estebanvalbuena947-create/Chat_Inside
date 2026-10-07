@@ -1,6 +1,8 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
+
+const logger = new Logger('ToolToken');
 
 /** Quien llama: el espacio del token y lo que ese token puede hacer. */
 export type ToolIdentity = {
@@ -42,11 +44,23 @@ export class ToolTokenService {
       throw new UnauthorizedException('La credencial de la tool no es válida.');
     }
 
-    // El uso se anota sin bloquear la llamada: si falla, la tool ya hizo su trabajo.
+    // El uso se anota sin bloquear la llamada: si falla, la tool ya hizo su trabajo, pero el fallo
+    // se registra. Hay que encadenar `then`: en supabase-js la consulta no se envia hasta que se
+    // espera su resultado, asi que un `void` encima la dejaba construida y sin enviar nunca.
     void supabase
       .from('tool_tokens')
       .update({ last_used_at: new Date().toISOString() })
-      .eq('id', data.id);
+      .eq('id', data.id)
+      .then(({ error: usageError }) => {
+        if (usageError) {
+          logger.warn(
+            JSON.stringify({
+              event: 'tool_token_usage_not_recorded',
+              databaseCode: usageError.code ?? 'unknown'
+            })
+          );
+        }
+      });
 
     return {
       scopes: readScopes(data.scopes),
