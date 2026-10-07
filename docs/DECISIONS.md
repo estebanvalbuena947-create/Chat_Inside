@@ -653,3 +653,155 @@ Y ninguno debe envolverlo en `Number()`. Era un resto de ManyChat, donde el iden
 el nuestro es un **UUID**, y `Number(uuid)` es `NaN`. Cuatro nodos de campos lo hacían, y otros seis
 leían el nombre que no existía: **ninguno se había ejecutado nunca contra la API** —n8n no tenía
 credencial— así que el fallo esperaba a la primera prueba con un cliente real.
+
+### El traductor reconstruye el sobre de ManyChat, no una cadena
+
+El traductor ponía el texto del cliente en `body` **como cadena**, porque el aviso llega anidado en
+`message.body` y se supuso que Sara lo leía en la raíz. No es así: Sara lee el texto **dentro** de
+`body`, con la forma que ManyChat le daba.
+
+En ManyChat, `body` es un sobre: `body.id`, `body.last_input_text`, `body.custom_fields`,
+`body.name`, `body.status`. Los doce nodos que tocan `body` lo tratan como **objeto**; ninguno como
+texto. Con una cadena el aviso entra, el traductor funciona y el turno llega **vacío**: el extractor
+devuelve `intencion=informacion` con todos los slots en nulo y el agente contesta un saludo genérico.
+El bot parece funcionar y no ha leído nada, que es el fallo más caro posible porque no se ve. Pasó en
+la primera prueba contra la plataforma: el cliente escribió «Test» y el bot saludó.
+
+La regla es que el traductor **reconstruye el sobre completo**, no un campo suelto, y que el nodo sea
+idempotente: lee primero de `weplash_evento`, así que ejecutarlo dos veces devuelve lo mismo.
+
+Dos campos se dejan **sin traducir a propósito**. `status` se pasa tal cual (`open`) porque el valor
+`active` de ManyChat habilita el seguimiento automático, que es un envío al cliente. `live_chat_url`
+sigue vacío porque es un enlace de ManyChat que no tenemos. Traducir cualquiera de los dos sería
+inventar una capacidad; el día que se quiera seguimiento, se decide y se implementa, no se hereda por
+parecido de nombres.
+
+Cómo se verifica: se ejecuta el código del traductor contra el aviso de ejemplo y su salida se
+alimenta a la **expresión real** extraída de `Edit Fields6`, no a una copia. La misma prueba se corre
+con `body` como cadena y **debe** dar vacío, para que la prueba no pueda pasar por casualidad.
+
+### Una fecha nula no se convierte en cadena vacía
+
+`Leer reserva confirmada del contacto` filtraba con `COALESCE(inicio, '') ~ '...'`. `inicio` es una
+columna temporal, así que el literal vacío obligaba a Postgres a convertirlo a **fecha**, y esa
+conversión falla en cuanto una fila tiene ambas fechas nulas:
+`invalid input syntax for type timestamp: ""`.
+
+El nodo tiene `onError: continueRegularOutput`, de modo que el error **no aparecía como error**: el
+turno seguía, `confirmada` quedaba siempre en falso y el cierre determinista de reserva confirmada
+nunca se disparaba. Un fallo silencioso en la ruta que decide si el cliente ya tiene cita.
+
+La regla es no convertir nunca un literal vacío a un tipo temporal, y no volver a parsear a fecha un
+texto que el propio SQL acaba de derivar. La consulta deja todo como texto: guarda los nulos de forma
+explícita, compara contra `to_char(...)` del mismo formato y ordena por ese texto, que en
+`YYYY-MM-DD HH:MM` ordena igual que el calendario. Tras el cambio la consulta no contiene **ninguna**
+conversión a `timestamp`. Queda por confirmar en la base si las columnas son `timestamp` o
+`timestamptz`: si fueran `timestamptz`, el cálculo de «4 horas» depende del huso de la sesión, que ya
+era así antes de este cambio y conviene fijar aparte.
+
+### La clave de idempotencia del bot se traduce en la puerta
+
+El contrato de las tools pedía claves legibles —su ejemplo era `flujo-4.2-paso-7-<mensaje>`— pero la
+implementación validaba la clave con el esquema de la interfaz, que exige un **UUID**. Así, ninguna de
+las claves que escriben los flujos (`send-flow-<subscriber_id>`, `catalogo-<subscriber_id>`,
+`foto-accesorios-<subscriber_id>`…) era aceptada: el envío respondía 422 y el bot no podía escribir.
+La documentación describía una puerta que no existía.
+
+Se corrigió **en la puerta**, no en cada flujo: `apps/api/src/tools/idempotency-key.ts` convierte la
+clave opaca en un UUID determinista derivado de espacio, conversación y clave. Tres razones:
+
+1. La columna `messages.idempotency_key` es de tipo `uuid`, así que algo tiene que generar el UUID; y
+   generarlo en un nodo Code de n8n dejaría esa lógica fuera de los cuatro controles del repositorio.
+2. El camino de la interfaz no cambia: sigue exigiendo un UUID.
+3. Es determinista, de modo que un reintento de n8n (`retryOnFail`) produce el mismo UUID y sigue
+   siendo idempotente. Un UUID ya válido se respeta tal cual, así que las claves que ya lo eran no
+   cambian de valor. Una clave **vacía** no se convierte: se deja para que el esquema la rechace, en
+   lugar de transformar un olvido en un mensaje enviado.
+
+Además, esas claves eran **fijas por contacto**. Con una clave fija, el segundo mensaje distinto de la
+misma conversación no se enviaba: la API responde 409 («la clave ya fue usada para otro mensaje»). El
+bot podía decir **una** frase por cliente y ninguna más. Ahora cada nodo usa
+`<propósito>-{{ $execution.id }}`, que identifica el turno, y la segunda parte de un texto largo sigue
+recibiendo una clave derivada distinta para no chocar con la primera.
+
+Cómo se verifica: pruebas unitarias de la traducción (misma clave → mismo UUID; otra conversación u
+otro espacio → otro UUID; un UUID válido no se toca; una clave vacía tampoco) y la prueba del servicio
+que comprueba que una clave legible llega al encolado convertida en UUID.
+
+### El turno moría antes de enviar: la comprobación seguía siendo de ManyChat
+
+El bot recibía, entendía y **no respondía**. No era el agente: eran tres costuras que seguían
+hablando el idioma de ManyChat.
+
+`Set AI Answers` —el nodo que guarda los campos del contacto— tenía `POST` a `/v1/tools/contact-fields`
+**sin cuerpo**. Con el cuerpo vacío ese extremo responde `422 Hace falta contactId o conversationId`,
+y como el nodo no maneja errores, la ejecución **terminaba ahí**, antes de `Enviar mensaje`. La respuesta
+del agente se descartaba en un nodo de guardado.
+
+`Enviar mensaje` tomaba la conversación de `$('Code in JavaScript').first().json.subscriber_id`, un campo
+que **no existe** en ese punto: ese Code devuelve sólo `{ output: { data: [...] } }` porque su entrada
+es un `Edit Fields` que sólo fija `output`. El envío iba con `conversationId` vacío. La regla es tomar
+la conversación de un nodo que **siempre** corre —`Detectar imagen ManyChat2`, común a la ruta de
+texto y a la de archivos— y no de la forma accidental de lo que venga delante.
+
+Los dos nodos de verificación exigían `status: "success"` en la raíz, que era la forma de ManyChat.
+Nuestra respuesta es `{ item: { id, status: "queued" }, tenantId }`. Como el mensaje se **encola**
+antes de que el verificador hable, el resultado era lo peor de los dos mundos: el cliente recibía el
+mensaje y la ejecución quedaba marcada como fallida, saltándose el registro de la última interacción y
+el seguimiento. Lo mismo con `Informar resultado de transferencia`, que buscaba `status: "success"`
+donde la asignación devuelve `assignedUserId`.
+
+La regla general es que **cada costura se comprueba contra la respuesta real de la API que la sirve**,
+y que un verificador no puede exigir la forma del sistema del que venimos. Cómo se verifica: contra
+producción, con cuerpos deliberadamente inválidos para no encolar nada —`{}` en cada extremo devuelve
+la 422 que nombra el campo que falta, y `GET /v1/tools/labels` devuelve 200, lo que demuestra que el
+token tiene los tres alcances sin necesidad de enviar nada.
+
+### La transferencia necesita una membresía real, y la tool vieja se retira
+
+`POST /v1/tools/assignments` exige `userId`, y el contrato documentado decía `advisorEmail`: los tres
+nodos de transferencia mandaban `{subscriber_id, flow_ns}`, un cuerpo de ManyChat que ese extremo no
+entiende. La implementación es la que manda y se comprueba contra `memberships`, así que el documento
+se corrigió a `userId` en lugar de añadir una búsqueda por correo: asignar a alguien que no pertenece
+al espacio es justo lo que no debe permitirse, y una segunda vía de identificación solo añadiría
+superficie.
+
+El espacio tiene dos membresías, así que la derivación se fija en la de **supervisor**
+(`hola@insidespa.com.mx`), que es quien atiende clientes; cambiarla es cambiar un UUID en tres nodos.
+La decisión queda escrita aquí porque el flujo, por sí solo, no puede explicar por qué ese UUID.
+
+`Foto_Deposito` se **elimina**: mandaba `{subscriber_id, flow_ns}` a `/v1/tools/messages` y su
+descripción («activar esta tool para que el asesor continúe la conversación») invitaba al agente a
+llamarla, así que era una trampa viva: el modelo podía romper el turno con un 422. Lo único que hacía
+falta de ella —derivar a una persona— ya lo cubre `Transferir_al_asesor`. Si el negocio quiere que el
+bot mande la foto del depósito, es otra herramienta y necesita el `branchMediaId` de esa imagen.
+
+### Una prueba lee los flujos que se despliegan
+
+Los flujos de `Flujos_v2/` son datos que se editan a mano y se pegan en n8n, y no pasaban por ningún
+control. Eso dejó llegar dos defectos de la misma clase, y ninguno de los cuatro controles podía
+verlos: la carpeta está excluida de `prettier` y no había pruebas sobre ella.
+
+El primero lo introdujo este trabajo: los cuerpos de los ocho envíos de Sara quedaron con los saltos
+de línea **estructurales** escritos como texto literal (`\n` en lugar de un salto), así que n8n no
+habría podido interpretarlos —el nodo falla con «JSON parameter needs to be valid JSON»— y los ocho
+envíos habrían muerto a la vez. Lo encontró una sonda de una sola ejecución, no una prueba. El
+segundo llevaba más tiempo en 4.1: dos cuerpos con saltos **reales** dentro de una cadena, que es el
+mismo error escrito al revés.
+
+`apps/api/src/tools/flow-payloads.test.ts` recorre los flujos y exige que cada cuerpo dirigido a
+nuestra API se pueda interpretar **como lo hace n8n**: en un cuerpo que es texto JSON con
+interpolaciones, se sustituyen y se parsea; en un cuerpo que es una sola expresión que devuelve un
+objeto, se normaliza el literal de JavaScript (claves sin comillas, comillas simples, referencias a
+nodos). La prueba vive en `apps/api` porque el contrato que esos cuerpos tienen que cumplir es el de
+estas tools.
+
+El sustituto de una interpolación es un **número**, y es deliberado: el mismo cuerpo puede usar la
+interpolación dentro de comillas (`"conversationId": "{{ … }}"`) o en el lugar de un valor
+(`"field_value": {{ … }}`), y un número es JSON válido en los dos contextos. Una comprobación que
+sólo cubriera el primero daría por bueno un cuerpo que n8n rechaza.
+
+Cómo se verifica: se restauró el cuerpo roto de 4.1 y la prueba falló con el nombre del nodo y la
+posición exacta (`Bad control character in string literal in JSON at position 79`); con el cuerpo
+arreglado, pasa. Los tres números de la prueba (flujos encontrados, nodos de salida y cuerpos
+revisados) están acotados: si la carpeta o el formato cambian, avisa en lugar de pasar en vacío.

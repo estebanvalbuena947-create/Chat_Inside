@@ -25,29 +25,45 @@ Sustituye a los **38 nodos** que hoy llaman a `api.manychat.com` para enviar.
 ```json
 {
   "conversationId": "uuid",
-  "idempotencyKey": "flujo-4.2-paso-7-<mensaje>",
+  "idempotencyKey": "catalogo-1729",
   "text": "Hola, tu cita quedó confirmada",
   "media": [{ "branchMediaId": "uuid" }],
   "templateName": "confirmacion_ig_is"
 }
 ```
 
-| Campo            | Obligatorio          | Nota                                                 |
-| ---------------- | -------------------- | ---------------------------------------------------- |
-| `conversationId` | sí                   | la conversación de nuestra base                      |
-| `idempotencyKey` | **muy recomendable** | si n8n reintenta, no se duplica el mensaje           |
-| `text`           | uno de los dos       | el texto a enviar                                    |
-| `media`          | uno de los dos       | por `branchMediaId` (nuestra multimedia) o por `url` |
-| `templateName`   | no                   | plantilla guardada en nuestra base                   |
+| Campo            | Obligatorio    | Nota                                                                      |
+| ---------------- | -------------- | ------------------------------------------------------------------------- |
+| `conversationId` | sí             | la conversación de nuestra base                                           |
+| `idempotencyKey` | sí             | **legible**: la API la convierte en UUID. Si n8n reintenta, no se duplica |
+| `text`           | uno de los dos | el texto a enviar                                                         |
+| `media`          | uno de los dos | por `branchMediaId` (nuestra multimedia); **una** por mensaje             |
+| `templateName`   | no             | plantilla guardada en nuestra base                                        |
+
+La `idempotencyKey` identifica **un envío**, no un contacto: una clave fija por conversación hace que
+el segundo mensaje distinto responda `409`. Lo natural en n8n es `<propósito>-{{ $execution.id }}`.
+La clave se traduce a UUID en la puerta (`apps/api/src/tools/idempotency-key.ts`), así que los flujos
+no tienen que saber generar uno; un UUID ya válido se respeta tal cual. Un texto de más de 900
+caracteres sale en **dos** mensajes, con claves derivadas distintas para que la segunda no choque con
+la primera.
 
 Respuesta `201`:
 
 ```json
-{ "messageId": "uuid", "providerMessageId": "zernio:...", "status": "sent" }
+{
+  "item": { "id": "uuid", "status": "queued", "body": "Hola, tu cita quedó confirmada" },
+  "tenantId": "uuid"
+}
 ```
 
-Errores: `404` conversación o multimedia inexistente · `422` ni texto ni multimedia · `502` Zernio
-no disponible (n8n puede reintentar con la misma `idempotencyKey`).
+`queued` significa **encolado**, no entregado: el trabajador lo entrega después, con la misma clave.
+Los verificadores de n8n tienen que leer `item.status`, no un `status` en la raíz: la forma antigua
+(`status: "success"`) era de ManyChat y hace fallar la ejecución **después** de haber encolado el
+mensaje.
+
+Errores: `404` conversación o multimedia inexistente · `409` la clave ya se usó para otro mensaje de
+esa conversación · `422` falta la conversación o la clave, no hay ni texto ni multimedia, o el envío
+del bot está apagado en el espacio.
 
 ## 2. Sedes — `GET /v1/tools/branches`
 
@@ -75,17 +91,26 @@ La `url` es **firmada y caduca** (10 minutos): se pide justo antes de enviarla. 
 Sustituye a **`Transferir_al_asesor`**.
 
 ```json
-{ "conversationId": "uuid", "advisorEmail": "asesor@ejemplo.com", "turnBotOff": true }
+{ "conversationId": "uuid", "userId": "uuid", "turnBotOff": true }
 ```
+
+`userId` tiene que ser una **membresía del espacio** (tabla `memberships`): la API comprueba que esa
+persona pertenece al espacio antes de asignarle la conversación, y responde `422` si no.
 
 Respuesta `200`:
 
 ```json
-{ "conversationId": "uuid", "assignedUserId": "uuid", "automationMode": "off" }
+{
+  "conversationId": "uuid",
+  "assignedUserId": "uuid",
+  "assignmentVersion": 2,
+  "automationMode": "paused"
+}
 ```
 
 `turnBotOff` por defecto es `true`: asignar **y** apagar el bot en el mismo acto, que es lo que evita
-que el bot siga contestando a alguien que ya está con una persona.
+que el bot siga contestando a alguien que ya está con una persona. El verificador de n8n debe
+comprobar `assignedUserId`, no un `status: "success"` que esta respuesta no tiene.
 
 ## 5. Estado de la conversación — `GET /v1/tools/conversations/{id}`
 

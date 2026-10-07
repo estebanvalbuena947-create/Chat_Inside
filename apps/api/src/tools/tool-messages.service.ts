@@ -7,6 +7,7 @@ import {
 import { createOutboundMessageSchema } from '@chat-zernio/contracts';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantMessageService } from '../conversations/tenant-message.service';
+import { claveIdempotencia } from './idempotency-key';
 import { partIdempotencyKey, splitOutboundText } from './outbound-text-splitter';
 import { ToolTokenService } from './tool-token.service';
 import { readPlaceholders } from './tool-templates.service';
@@ -87,16 +88,24 @@ export class ToolMessagesService {
     // Un texto largo se manda en dos mensajes. El contrato admite 4000 caracteres, pero el canal
     // corta alrededor de 1000, y quien lo sabe es la plataforma, no cada flujo que manda texto.
     const partes = splitOutboundText(cuerpoFinal);
-    const clave = createOutboundMessageSchema.shape.idempotencyKey.safeParse(cuerpo.idempotencyKey);
+
+    // La clave que manda el flujo es legible ("catalogo-<turno>"); aqui se convierte en el UUID que
+    // exigen la tabla y el contrato, sin obligar a 26 nodos de n8n a saber generar uno.
+    const claveResuelta = claveIdempotencia(
+      identity.tenantId,
+      conversationId,
+      cuerpo.idempotencyKey
+    );
+    const clave = createOutboundMessageSchema.shape.idempotencyKey.safeParse(claveResuelta);
 
     const comandos: Array<{ body: string; idempotencyKey: string }> = [];
     for (let indice = 0; indice < partes.length; indice++) {
       const command = createOutboundMessageSchema.safeParse({
         body: partes[indice],
         idempotencyKey:
-          typeof cuerpo.idempotencyKey === 'string'
-            ? partIdempotencyKey(cuerpo.idempotencyKey, indice + 1)
-            : cuerpo.idempotencyKey
+          typeof claveResuelta === 'string'
+            ? partIdempotencyKey(claveResuelta, indice + 1)
+            : claveResuelta
       });
       // Mandar un archivo sin texto es legitimo, pero solo tiene sentido en la primera parte.
       const soloArchivo = indice === 0 && tieneMultimedia && clave.success;
@@ -106,7 +115,7 @@ export class ToolMessagesService {
         );
       }
       comandos.push(
-        command.success ? command.data : { body: '', idempotencyKey: String(cuerpo.idempotencyKey) }
+        command.success ? command.data : { body: '', idempotencyKey: String(claveResuelta) }
       );
     }
 

@@ -115,15 +115,15 @@ describe('envio de mensajes del bot', () => {
     );
   });
 
-  it('rechaza un mensaje sin texto o sin clave de idempotencia valida', async () => {
+  it('rechaza un mensaje sin texto ni multimedia, o sin clave de idempotencia', async () => {
     const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
 
     await expect(
-      servicio.send('Bearer token', { ...cuerpoValido, idempotencyKey: 'no-es-un-uuid' })
+      servicio.send('Bearer token', { ...cuerpoValido, body: '   ' })
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     await expect(
-      servicio.send('Bearer token', { ...cuerpoValido, body: '   ' })
+      servicio.send('Bearer token', { ...cuerpoValido, idempotencyKey: '' })
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     await expect(
@@ -131,6 +131,37 @@ describe('envio de mensajes del bot', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     expect(enqueueOutbound).not.toHaveBeenCalled();
+  });
+
+  it('convierte una clave legible en un UUID estable por conversacion', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
+
+    // Asi manda la clave el flujo: legible, con el turno dentro.
+    await servicio.send('Bearer token', { ...cuerpoValido, idempotencyKey: 'catalogo-4321' });
+    // Un reintento del mismo nodo tiene que producir exactamente la misma clave.
+    await servicio.send('Bearer token', { ...cuerpoValido, idempotencyKey: 'catalogo-4321' });
+    // La misma clave en otra conversacion no puede chocar con la primera.
+    await servicio.send('Bearer token', {
+      ...cuerpoValido,
+      conversationId: 'conv-2',
+      idempotencyKey: 'catalogo-4321'
+    });
+
+    const claves = enqueueOutbound.mock.calls.map((llamada) => llamada[0].command.idempotencyKey);
+    expect(claves[0]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
+    expect(claves[1]).toBe(claves[0]);
+    expect(claves[2]).not.toBe(claves[0]);
+  });
+
+  it('respeta una clave que ya es un UUID', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
+
+    await servicio.send('Bearer token', cuerpoValido);
+
+    const claves = enqueueOutbound.mock.calls.map((llamada) => llamada[0].command.idempotencyKey);
+    expect(claves).toEqual([UUID]);
   });
 
   it('un texto largo se parte en dos mensajes, con claves de idempotencia distintas', async () => {

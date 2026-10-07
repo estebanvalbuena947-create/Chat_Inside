@@ -113,7 +113,7 @@ describe('envio solo con archivo, sin texto', () => {
     await expect(
       servicio.send('Bearer token', {
         conversationId: 'conv-1',
-        idempotencyKey: 'no-es-un-uuid',
+        idempotencyKey: '',
         media: [{ branchMediaId: MEDIA.id }]
       })
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
