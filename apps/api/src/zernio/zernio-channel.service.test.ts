@@ -29,7 +29,7 @@ function createClientFake(responses: Array<{ data: unknown; error: unknown }>) {
 
 function createService(
   responses: Array<{ data: unknown; error: unknown }>,
-  options: { canManage?: boolean } = {}
+  options: { canManage?: boolean; zernio?: unknown } = {}
 ) {
   const fake = createClientFake(responses);
   const assertRole = vi.fn(async () => {
@@ -39,7 +39,7 @@ function createService(
     { authenticate: async () => ({ userId }) } as never,
     { assertMembership: async () => undefined, assertRole } as never,
     { create: () => fake.client } as never,
-    {} as never
+    (options.zernio ?? {}) as never
   );
 
   return { assertRole, calls: fake.calls, service };
@@ -150,5 +150,55 @@ describe('ZernioChannelService list', () => {
     expect(calls.find((call) => call.method === 'select')?.args[0]).not.toContain(
       'provider_account_id'
     );
+  });
+});
+
+describe('ZernioChannelService plantillas de WhatsApp', () => {
+  const aprobada = {
+    category: 'UTILITY',
+    language: 'es_MX',
+    name: 'confirmacion_reserva',
+    status: 'APPROVED'
+  };
+
+  it('lee las plantillas de la cuenta de WhatsApp conectada', async () => {
+    const listWhatsappTemplates = vi.fn(async () => [aprobada]);
+    const { service } = createService(
+      [{ data: [{ provider_account_id: 'cuenta-wa' }], error: null }],
+      {
+        zernio: { listWhatsappTemplates }
+      }
+    );
+
+    await expect(service.listWhatsappTemplates('Bearer valid.jwt', tenantId)).resolves.toEqual({
+      items: [aprobada]
+    });
+    expect(listWhatsappTemplates).toHaveBeenCalledWith(['cuenta-wa']);
+  });
+
+  it('sin cuenta de WhatsApp devuelve una lista vacia y no molesta al proveedor', async () => {
+    const listWhatsappTemplates = vi.fn();
+    const { calls, service } = createService([{ data: [], error: null }], {
+      zernio: { listWhatsappTemplates }
+    });
+
+    await expect(service.listWhatsappTemplates('Bearer valid.jwt', tenantId)).resolves.toEqual({
+      items: []
+    });
+    expect(listWhatsappTemplates).not.toHaveBeenCalled();
+    expect(calls).toContainEqual({ args: ['platform', 'whatsapp'], method: 'eq' });
+  });
+
+  it('ignora una cuenta sin identificador de proveedor en lugar de consultarla', async () => {
+    const listWhatsappTemplates = vi.fn(async () => []);
+    const { service } = createService(
+      [
+        { data: [{ provider_account_id: null }, { provider_account_id: 'cuenta-wa' }], error: null }
+      ],
+      { zernio: { listWhatsappTemplates } }
+    );
+
+    await service.listWhatsappTemplates('Bearer valid.jwt', tenantId);
+    expect(listWhatsappTemplates).toHaveBeenCalledWith(['cuenta-wa']);
   });
 });

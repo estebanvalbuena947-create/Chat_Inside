@@ -695,3 +695,26 @@ export const conversationWonResponseSchema = z.object({
 });
 
 export type ConversationWonResponse = z.infer<typeof conversationWonResponseSchema>;
+
+/* ------------------------------------------------------------------------------------------------
+   Plantillas de WhatsApp.
+   
+   Son plantillas **aprobadas por Meta**, no respuestas guardadas nuestras: viven en la cuenta de
+   WhatsApp del espacio y son lo unico que Meta acepta para escribir fuera de la ventana de 24 horas.
+   El nombre y el idioma son la referencia exacta con la que se envian, asi que se muestran tal cual.
+   ------------------------------------------------------------------------------------------------ */
+
+export const whatsappTemplateSchema = z.object({
+  category: z.string().max(40).nullable(),
+  language: z.string().max(20).nullable(),
+  name: z.string().min(1).max(200),
+  status: z.string().max(40).nullable()
+});
+
+export type WhatsappTemplate = z.infer<typeof whatsappTemplateSchema>;
+
+export const whatsappTemplateListResponseSchema = z.object({
+  items: z.array(whatsappTemplateSchema)
+});
+
+export type WhatsappTemplateListResponse = z.infer<typeof whatsappTemplateListResponseSchema>;

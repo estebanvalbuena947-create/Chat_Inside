@@ -10,12 +10,14 @@ import {
   attachZernioChannelResponseSchema,
   renameZernioChannelResponseSchema,
   startZernioChannelConnectionResponseSchema,
+  whatsappTemplateListResponseSchema,
   zernioChannelListResponseSchema,
   zernioChannelSchema,
   type AttachZernioChannelResponse,
   type RenameZernioChannel,
   type RenameZernioChannelResponse,
   type StartZernioChannelConnectionResponse,
+  type WhatsappTemplateListResponse,
   type ZernioChannel,
   type ZernioChannelListResponse,
   type ZernioConnectPlatform
@@ -63,6 +65,44 @@ export class ZernioChannelService {
       throw new InternalServerErrorException('No fue posible cargar los canales conectados.');
     return zernioChannelListResponseSchema.parse({
       items: (data ?? []).map((channel) => asZernioChannel(channel))
+    });
+  }
+
+  /**
+   * Plantillas aprobadas de WhatsApp del espacio.
+   *
+   * Pertenecen a la cuenta de WhatsApp, no a la conversacion: se resuelven las cuentas de esa
+   * plataforma y se leen del proveedor. Sin ninguna cuenta conectada devuelve una lista vacia, que
+   * es la verdad —no hay plantillas que mostrar— y no un error que la pantalla tenga que entender.
+   */
+  async listWhatsappTemplates(
+    authorization: unknown,
+    tenantId: string
+  ): Promise<WhatsappTemplateListResponse> {
+    const identity = await this.requestAuthenticator.authenticate(authorization);
+    await this.tenantAccessService.assertMembership(identity.userId, tenantId);
+
+    const { data, error } = await this.supabaseServerClientFactory
+      .create()
+      .from('channel_accounts')
+      .select('provider_account_id')
+      .eq('tenant_id', tenantId)
+      .eq('provider', 'zernio')
+      .eq('platform', 'whatsapp')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new InternalServerErrorException('No fue posible resolver la cuenta de WhatsApp.');
+    }
+
+    const cuentas = (data ?? [])
+      .map((fila) => (typeof fila.provider_account_id === 'string' ? fila.provider_account_id : ''))
+      .filter(Boolean);
+
+    if (!cuentas.length) return whatsappTemplateListResponseSchema.parse({ items: [] });
+
+    return whatsappTemplateListResponseSchema.parse({
+      items: await this.zernioApiClient.listWhatsappTemplates(cuentas)
     });
   }
 

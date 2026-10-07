@@ -181,3 +181,80 @@ describe('cliente de Zernio: conversiones Meta', () => {
     expect(result.failures[0]?.message).toBe('Invalid event_time');
   });
 });
+
+describe('cliente de Zernio: plantillas de WhatsApp', () => {
+  const cliente = new ZernioApiClient();
+  let fetchSimulado: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    process.env.ZERNIO_API_KEY = 'clave-de-prueba';
+    fetchSimulado = vi.fn();
+    vi.stubGlobal('fetch', fetchSimulado);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.ZERNIO_API_KEY;
+  });
+
+  it('pide las plantillas de la cuenta y se queda con lo que el contrato necesita', async () => {
+    fetchSimulado.mockResolvedValue(
+      respuesta(200, {
+        success: true,
+        templates: [
+          {
+            name: 'confirmacion_reserva',
+            language: 'es_MX',
+            category: 'UTILITY',
+            status: 'APPROVED',
+            // Campos que el proveedor puede agregar: se ignoran en lugar de romper la pantalla.
+            quality_score: { score: 'GREEN' },
+            components: [{ type: 'BODY' }]
+          }
+        ]
+      })
+    );
+
+    await expect(cliente.listWhatsappTemplates(['cuenta-1'])).resolves.toEqual([
+      { category: 'UTILITY', language: 'es_MX', name: 'confirmacion_reserva', status: 'APPROVED' }
+    ]);
+
+    const [url, init] = fetchSimulado.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://zernio.com/api/v1/whatsapp/templates?accountId=cuenta-1');
+    expect(init.method).toBe('GET');
+  });
+
+  it('descarta una plantilla sin nombre y no repite la misma en dos cuentas', async () => {
+    fetchSimulado.mockResolvedValueOnce(
+      respuesta(200, {
+        success: true,
+        templates: [{ language: 'es_MX' }, { name: 'hola', language: 'es_MX' }]
+      })
+    );
+    fetchSimulado.mockResolvedValueOnce(
+      respuesta(200, {
+        success: true,
+        templates: [{ name: 'hola', language: 'es_MX', status: 'PENDING' }]
+      })
+    );
+
+    await expect(cliente.listWhatsappTemplates(['cuenta-1', 'cuenta-2'])).resolves.toEqual([
+      { category: null, language: 'es_MX', name: 'hola', status: null }
+    ]);
+  });
+
+  it('no inventa plantillas cuando el proveedor no devuelve la lista', async () => {
+    fetchSimulado.mockResolvedValue(respuesta(200, { success: true }));
+    await expect(cliente.listWhatsappTemplates(['cuenta-1'])).resolves.toEqual([]);
+  });
+
+  it('conserva el motivo cuando el proveedor rechaza la consulta', async () => {
+    fetchSimulado.mockResolvedValue(
+      respuesta(400, { error: 'Invalid input: expected string, received null' })
+    );
+
+    await expect(cliente.listWhatsappTemplates(['cuenta-1'])).rejects.toThrow(
+      'Invalid input: expected string, received null'
+    );
+  });
+});

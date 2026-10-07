@@ -316,6 +316,14 @@ export default function HomePage(): React.ReactNode {
   const [isUpdatingAutomation, setIsUpdatingAutomation] = useState(false);
   const [automationError, setAutomationError] = useState<string | null>(null);
   const [cannedResponses, setCannedResponses] = useState<CannedResponse[]>([]);
+  // Plantillas aprobadas de Meta. Son de la cuenta de WhatsApp, no de la conversacion, y se piden
+  // al abrir el panel: no tiene sentido ir al proveedor cada vez que se abre un chat.
+  const [whatsappTemplates, setWhatsappTemplates] = useState<
+    Array<{ category: string | null; language: string | null; name: string; status: string | null }>
+  >([]);
+  const [whatsappTemplatesError, setWhatsappTemplatesError] = useState<string | null>(null);
+  const [isWhatsappTemplatesLoading, setIsWhatsappTemplatesLoading] = useState(false);
+  const [isWhatsappTemplatesOpen, setIsWhatsappTemplatesOpen] = useState(false);
   const [cannedResponsesError, setCannedResponsesError] = useState<string | null>(null);
   const [isCannedResponsesLoading, setIsCannedResponsesLoading] = useState(false);
   const [isCannedResponsesOpen, setIsCannedResponsesOpen] = useState(false);
@@ -1636,6 +1644,40 @@ export default function HomePage(): React.ReactNode {
     }
   }
 
+  /**
+   * Plantillas aprobadas de WhatsApp de la cuenta del espacio.
+   *
+   * Se piden al abrir el panel y no al cargar la bandeja: son un catalogo de la cuenta, no de la
+   * conversacion, y no cambian de un chat a otro.
+   */
+  async function loadWhatsappTemplates(): Promise<void> {
+    setIsWhatsappTemplatesLoading(true);
+    setWhatsappTemplatesError(null);
+    try {
+      const response = await fetch('/api/whatsapp/templates', { cache: 'no-store' });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        items?: typeof whatsappTemplates;
+      };
+      if (!response.ok) {
+        setWhatsappTemplatesError(payload.error ?? 'No fue posible cargar las plantillas.');
+        return;
+      }
+      setWhatsappTemplates(payload.items ?? []);
+    } catch {
+      setWhatsappTemplatesError('Las plantillas no están disponibles.');
+    } finally {
+      setIsWhatsappTemplatesLoading(false);
+    }
+  }
+
+  function toggleWhatsappTemplates(): void {
+    const abriendo = !isWhatsappTemplatesOpen;
+    setIsCannedResponsesOpen(false);
+    setIsWhatsappTemplatesOpen(abriendo);
+    if (abriendo) void loadWhatsappTemplates();
+  }
+
   async function saveCannedResponse(): Promise<void> {
     const title = cannedResponseTitle.trim();
     const body = cannedResponseBody.trim();
@@ -2774,6 +2816,16 @@ export default function HomePage(): React.ReactNode {
                 >
                   Respuestas rápidas
                 </button>
+                {selectedConversation?.channelPlatform === 'whatsapp' && (
+                  <button
+                    aria-expanded={isWhatsappTemplatesOpen}
+                    className="canned-response-trigger"
+                    onClick={toggleWhatsappTemplates}
+                    type="button"
+                  >
+                    Plantillas de WhatsApp
+                  </button>
+                )}
               </div>
               {isCannedResponsesOpen && (
                 <div
@@ -2804,6 +2856,36 @@ export default function HomePage(): React.ReactNode {
               {cannedResponsesError && (
                 <p className="canned-response-error" role="alert">
                   {cannedResponsesError}
+                </p>
+              )}
+              {isWhatsappTemplatesOpen && (
+                <div
+                  aria-label="Plantillas de WhatsApp"
+                  className="canned-response-picker"
+                  role="dialog"
+                >
+                  {isWhatsappTemplatesLoading && <p>Cargando plantillas…</p>}
+                  {!isWhatsappTemplatesLoading && whatsappTemplates.length === 0 && (
+                    <p>Aún no hay plantillas aprobadas para esta cuenta.</p>
+                  )}
+                  {whatsappTemplates.map((plantilla) => (
+                    <div
+                      className="canned-response-option"
+                      key={plantilla.name + '|' + (plantilla.language ?? '')}
+                    >
+                      <strong>{plantilla.name}</strong>
+                      <span>
+                        {[plantilla.language, plantilla.category, plantilla.status]
+                          .filter(Boolean)
+                          .join(' · ') || 'Sin datos de Meta'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {whatsappTemplatesError && (
+                <p className="canned-response-error" role="alert">
+                  {whatsappTemplatesError}
                 </p>
               )}
               <textarea

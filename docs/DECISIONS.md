@@ -905,3 +905,24 @@ tabla nueva. Y los umbrales, que habían quedado en el servicio de métricas, se
 (`ATTENTION_THRESHOLDS`): el panel de actividad y la bandeja dicen lo mismo porque leen la misma
 política. La pantalla recibe el **nivel**, no los minutos, así que no puede quedarse con una copia
 vieja del límite ni contradecir al panel.
+
+## Las plantillas de WhatsApp son de Meta y se leen en vivo
+
+El equipo pidió las **plantillas aprobadas de Meta** junto a las respuestas rápidas, sólo en
+conversaciones de WhatsApp. No se copian a nuestra base: son de la cuenta de WhatsApp y se piden al
+proveedor cuando se abre el panel. Guardar una copia sería una segunda fuente de verdad que puede
+quedar vieja justo cuando importa —una plantilla que Meta acaba de rechazar—, y el panel tiene que
+enseñar el estado real.
+
+Lo que decidió varias cosas del diseño fue **comprobarlo contra la API en lugar de contra la
+documentación**: la ruta es `GET /v1/whatsapp/templates?accountId=…` y responde `{success, templates}`
+(las variantes con la cuenta en el camino dan 404). Además, la cuenta de WhatsApp todavía **no lista
+ninguna plantilla** aunque ya hay una creada y en revisión, así que la lectura es **tolerante**: se
+toman nombre, idioma, categoría y estado, se ignora lo demás y se descarta lo que no traiga nombre.
+Sin esa tolerancia, el primer cambio de forma del proveedor rompería la pantalla; y sin cuenta
+conectada la respuesta es una lista vacía, que es la verdad, en lugar de un error que la pantalla
+tenga que interpretar.
+
+Enviar con plantilla —lo que permite escribir fuera de la ventana de 24 horas— **no** entra aquí: toca
+el contrato del mensaje, el servicio de envío y el trabajador, y merece su propio corte. Está en
+`plans/035-plantillas-aprobadas-de-whatsapp.md`.

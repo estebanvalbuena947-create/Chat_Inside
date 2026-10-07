@@ -4,7 +4,7 @@ import {
   Injectable,
   ServiceUnavailableException
 } from '@nestjs/common';
-import type { ZernioConnectPlatform } from '@chat-zernio/contracts';
+import type { WhatsappTemplate, ZernioConnectPlatform } from '@chat-zernio/contracts';
 
 type ZernioProfileResponse = {
   _id?: unknown;
@@ -102,6 +102,40 @@ function conversionsErrorFrom(status: number, payload: unknown): Error {
     return new BadRequestException(mensaje);
   }
   return new ServiceUnavailableException(mensaje);
+}
+
+/** Un fallo al leer plantillas conserva el motivo del proveedor: casi siempre es la cuenta o sus permisos. */
+function whatsappTemplatesErrorFrom(status: number, payload: unknown): Error {
+  const mensaje = readText(payload, 'error') ?? 'Zernio rechazo la consulta de plantillas.';
+  if (status === 400 || status === 404 || status === 422) return new BadRequestException(mensaje);
+  return new ServiceUnavailableException(mensaje);
+}
+
+/**
+ * Lectura tolerante de las plantillas.
+ *
+ * Se toma solo lo que el contrato necesita y se ignora el resto: el proveedor puede agregar campos
+ * sin avisar, y eso no puede romper la pantalla. Una plantilla sin nombre se descarta, porque sin
+ * nombre no hay nada que mostrar ni que enviar.
+ */
+function readWhatsappTemplates(payload: unknown): WhatsappTemplate[] {
+  const lista = (payload as { templates?: unknown } | null)?.templates;
+  if (!Array.isArray(lista)) return [];
+
+  const plantillas: WhatsappTemplate[] = [];
+  for (const cruda of lista) {
+    if (!cruda || typeof cruda !== 'object') continue;
+    const fila = cruda as Record<string, unknown>;
+    const name = typeof fila.name === 'string' ? fila.name.trim() : '';
+    if (!name) continue;
+    plantillas.push({
+      category: typeof fila.category === 'string' ? fila.category : null,
+      language: typeof fila.language === 'string' ? fila.language : null,
+      name,
+      status: typeof fila.status === 'string' ? fila.status : null
+    });
+  }
+  return plantillas;
 }
 
 @Injectable()
@@ -393,6 +427,35 @@ export class ZernioApiClient {
     const payload = (await response.json().catch(() => ({}))) as unknown;
     throw commentErrorFrom(response.status, payload);
   }
+  /**
+   * Plantillas aprobadas de WhatsApp de las cuentas dadas.
+   *
+   * El proveedor resuelve la plantilla por nombre e idioma exactos antes de enviarla, asi que lo que
+   * se lista aqui es exactamente lo que se puede enviar. Se juntan sin repetir nombre e idioma: la
+   * misma plantilla en dos cuentas del espacio es la misma plantilla.
+   */
+  async listWhatsappTemplates(accountIds: string[]): Promise<WhatsappTemplate[]> {
+    const plantillas = new Map<string, WhatsappTemplate>();
+
+    for (const accountId of accountIds) {
+      const response = await this.request(
+        `/v1/whatsapp/templates?accountId=${encodeURIComponent(accountId)}`,
+        { method: 'GET' }
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw whatsappTemplatesErrorFrom(response.status, payload);
+
+      for (const plantilla of readWhatsappTemplates(payload)) {
+        const clave = `${plantilla.name}|${plantilla.language ?? ''}`;
+        // La primera cuenta que la declara manda: si la misma plantilla vive en dos cuentas, no se
+        // duplica en la pantalla, y su estado no se pisa con el de la otra.
+        if (!plantillas.has(clave)) plantillas.set(clave, plantilla);
+      }
+    }
+
+    return [...plantillas.values()];
+  }
+
   private async request(path: string, init: RequestInit): Promise<Response> {
     const apiKey = process.env.ZERNIO_API_KEY;
     if (!apiKey) {

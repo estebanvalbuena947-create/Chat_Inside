@@ -17,6 +17,7 @@ import {
   type AttachZernioChannelResponse,
   type RenameZernioChannelResponse,
   type StartZernioChannelConnectionResponse,
+  type WhatsappTemplateListResponse,
   type ZernioChannelListResponse
 } from '@chat-zernio/contracts';
 import type { FastifyRequest } from 'fastify';
@@ -36,6 +37,25 @@ export class ZernioChannelsController {
     const parsedTenantId = tenantIdSchema.safeParse(tenantId);
     if (!parsedTenantId.success) throw new BadRequestException('El tenant no es válido.');
     return this.zernioChannelService.list(request.headers.authorization, parsedTenantId.data);
+  }
+
+  /**
+   * Plantillas aprobadas de WhatsApp de este espacio.
+   *
+   * Su propia ruta, bajo `whatsapp/`, para que quede claro que no son los canales: son el catalogo
+   * de una cuenta de WhatsApp concreta.
+   */
+  @Get('whatsapp/templates')
+  async whatsappTemplates(
+    @Param('tenantId') tenantId: string,
+    @Req() request: FastifyRequest
+  ): Promise<WhatsappTemplateListResponse> {
+    const parsedTenantId = tenantIdSchema.safeParse(tenantId);
+    if (!parsedTenantId.success) throw new BadRequestException('El tenant no es válido.');
+    return this.zernioChannelService.listWhatsappTemplates(
+      request.headers.authorization,
+      parsedTenantId.data
+    );
   }
 
   @Post('connect')
