@@ -41,7 +41,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {subscriber_id:$('Entrada de un seguimiento').first().json.subscriber_id,flow_ns:'content20260727160555_940586'} }}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Entrada de un seguimiento').first().json.conversationId }}\",\n  \"idempotencyKey\": \"seguimiento-ig-isv-{{ $('Entrada de un seguimiento').first().json.conversationId }}\",\n  \"text\": \"{{ $('Entrada de un seguimiento').first().json.payload.mensaje }}\"\n}",
         "options": {
           "response": {
             "response": {

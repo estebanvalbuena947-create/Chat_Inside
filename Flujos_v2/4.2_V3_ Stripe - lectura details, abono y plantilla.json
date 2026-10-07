@@ -1657,7 +1657,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260727160555_940586\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-ig-isv-{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"text\": \"{{ $('Preparar campos plantilla confirmación').first().json.output.data[0].field_value }}\\n\\n{{ $('Preparar campos plantilla confirmación').first().json.output.data[1].field_value }}\"\n}",
         "options": {
           "response": {
             "response": {
@@ -1743,7 +1743,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260706133514_126519\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-ig-is-{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"text\": \"{{ $('Preparar campos plantilla confirmación').first().json.output.data[0].field_value }}\\n\\n{{ $('Preparar campos plantilla confirmación').first().json.output.data[1].field_value }}\"\n}",
         "options": {
           "response": {
             "response": {
@@ -1786,7 +1786,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260727172417_383894\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-tiktok-isv-{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"text\": \"{{ $('Preparar campos plantilla confirmación').first().json.output.data[0].field_value }}\\n\\n{{ $('Preparar campos plantilla confirmación').first().json.output.data[1].field_value }}\"\n}",
         "options": {
           "response": {
             "response": {

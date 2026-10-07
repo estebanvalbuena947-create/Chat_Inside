@@ -2502,7 +2502,7 @@
                                          "genericAuthType":  "httpBearerAuth",
                                          "sendBody":  true,
                                          "specifyBody":  "json",
-                                         "jsonBody":  "={{ {subscriber_id:Number($(\u0027Resolver cuenta y URL ManyChat\u0027).first().json.subscriber_id), flow_ns:$(\u0027Resolver cuenta y URL ManyChat\u0027).first().json.manychat_message_flow_ns} }}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Resolver cuenta y URL ManyChat').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"recordatorio-isv-{{ $('Resolver cuenta y URL ManyChat').first().json.subscriber_id }}\",\n  \"text\": \"{{ $('Preparar recordatorio de pago').first().json.mensaje_recordatorio }}\"\n}",
                                          "options":  {
                                                          "response":  {
                                                                           "response":  {
@@ -2546,7 +2546,7 @@
                                          "genericAuthType":  "httpBearerAuth",
                                          "sendBody":  true,
                                          "specifyBody":  "json",
-                                         "jsonBody":  "={{ {subscriber_id:Number($(\u0027Resolver cuenta y URL ManyChat\u0027).first().json.subscriber_id), flow_ns:$(\u0027Resolver cuenta y URL ManyChat\u0027).first().json.manychat_message_flow_ns} }}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Resolver cuenta y URL ManyChat').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"recordatorio-ig-is-{{ $('Resolver cuenta y URL ManyChat').first().json.subscriber_id }}\",\n  \"text\": \"{{ $('Preparar recordatorio de pago').first().json.mensaje_recordatorio }}\"\n}",
                                          "options":  {
                                                          "response":  {
                                                                           "response":  {
@@ -3166,7 +3166,7 @@
                                          "genericAuthType":  "httpBearerAuth",
                                          "sendBody":  true,
                                          "specifyBody":  "json",
-                                         "jsonBody":  "={{ {subscriber_id:Number($(\u0027Resolver cuenta para liberación\u0027).first().json.subscriber_id), flow_ns:$(\u0027Resolver cuenta para liberación\u0027).first().json.manychat_message_flow_ns} }}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Resolver cuenta para liberación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"liberacion-isv-{{ $('Resolver cuenta para liberación').first().json.subscriber_id }}\",\n  \"text\": \"{{ $('Preparar aviso de liberación').first().json.output.data[0].field_value }}\n\n{{ $('Preparar aviso de liberación').first().json.output.data[1].field_value }}\"\n}",
                                          "options":  {
                                                          "response":  {
                                                                           "response":  {
@@ -3210,7 +3210,7 @@
                                          "genericAuthType":  "httpBearerAuth",
                                          "sendBody":  true,
                                          "specifyBody":  "json",
-                                         "jsonBody":  "={{ {subscriber_id:Number($(\u0027Resolver cuenta para liberación\u0027).first().json.subscriber_id), flow_ns:$(\u0027Resolver cuenta para liberación\u0027).first().json.manychat_message_flow_ns} }}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Resolver cuenta para liberación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"liberacion-ig-is-{{ $('Resolver cuenta para liberación').first().json.subscriber_id }}\",\n  \"text\": \"{{ $('Preparar aviso de liberación').first().json.output.data[0].field_value }}\n\n{{ $('Preparar aviso de liberación').first().json.output.data[1].field_value }}\"\n}",
                                          "options":  {
                                                          "response":  {
                                                                           "response":  {
