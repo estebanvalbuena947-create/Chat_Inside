@@ -70,7 +70,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {conversationId:Number($('Preparar campos plantilla confirmación').first().json.conversationId),fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
+        "jsonBody": "={{ {conversationId:$('Preparar campos plantilla confirmación').first().json.conversationId,fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
         "options": {
           "response": {
             "response": {
@@ -1441,7 +1441,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {conversationId:Number($('Preparar campos plantilla confirmación').first().json.conversationId),fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
+        "jsonBody": "={{ {conversationId:$('Preparar campos plantilla confirmación').first().json.conversationId,fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
         "options": {
           "response": {
             "response": {

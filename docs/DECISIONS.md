@@ -642,3 +642,14 @@ espacio o el límite exacto.
 Las dos partes **no pueden compartir clave de idempotencia**: la segunda chocaría con la primera y no
 saldría nunca. Y como el contrato exige un **UUID**, no vale añadirle un sufijo: la segunda se deriva de
 la original de forma determinista, para que un reintento produzca exactamente las mismas partes.
+
+### Un identificador tiene un solo nombre, y es texto
+
+El aviso que recibe el bot trae `conversationId` en camel, pero el traductor lo devolvía **solo** como
+`conversation_id` y `subscriber_id`. Quien leyera el nombre original después del traductor recibía
+`undefined`. Ahora el traductor devuelve **los tres**, para que ningún nodo dependa de cuál eligió otro.
+
+Y ninguno debe envolverlo en `Number()`. Era un resto de ManyChat, donde el identificador era numérico;
+el nuestro es un **UUID**, y `Number(uuid)` es `NaN`. Cuatro nodos de campos lo hacían, y otros seis
+leían el nombre que no existía: **ninguno se había ejecutado nunca contra la API** —n8n no tenía
+credencial— así que el fallo esperaba a la primera prueba con un cliente real.
