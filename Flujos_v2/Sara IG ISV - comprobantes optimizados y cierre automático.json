@@ -470,7 +470,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"subscriber_id\": $json.subscriber_id, \"flow_ns\": \"content20260905060921_756466\" } }}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $json.subscriber_id }}\",\n  \"idempotencyKey\": \"catalogo-{{ $json.subscriber_id }}\",\n  \"text\": \"Aqui tienes nuestro catalogo completo: https://drive.google.com/file/d/1ASY69Hbp273NHhMw9bBTWliBwcBaBh-k/view?usp=sharing\"\n}",
         "options": {},
         "method": "POST",
         "authentication": "none",
