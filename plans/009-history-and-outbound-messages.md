@@ -1,6 +1,6 @@
 # Plan 009 — Historial local y envíos salientes de Zernio
 
-- **Estado:** aprobado para implementación
+- **Estado:** implementado
 - **Fecha:** 2026-08-13
 - **Autorización:** el administrador confirmó que `ZERNIO_API_KEY` ya está configurada y autorizó continuar con historial y envío real desde la bandeja.
 

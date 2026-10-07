@@ -1,8 +1,15 @@
 # Especificación: conversiones Meta mediante Zernio
 
-- **Estado:** borrador
+- **Estado:** implementada en su infraestructura; **pendiente la decision de negocio** sobre que hecho cuenta como conversion.
 - **Responsable:** integración y observabilidad
 - **Fecha:** 2026-10-01
+
+**Cierre:** construida y revisada el 2026-10-06. Existen la configuracion por espacio con su validacion
+contra Zernio, la cola de eventos con `event_id` idempotente, el cliente contra
+`POST /v1/ads/conversions` y el entregador del trabajador (`apps/worker/src/conversion-sender.ts`, con
+sus pruebas). **Lo que falta no es codigo**: es la fuente de negocio -que hecho cuenta como
+conversion-, que esta especificacion declara como decision pendiente en su ultima seccion. Sin esa
+decision no hay nada que enviar, y por eso no se envia nada.
 
 ## 1. Problema
 

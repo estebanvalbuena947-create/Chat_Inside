@@ -39,7 +39,7 @@ Una identidad autenticada solo puede consultar recursos del tenant donde posee u
 - UUID de tenant válido e inválido; límites mínimo, máximo y fuera de rango.
 - Usuario autenticado con membresía frente a usuario autenticado sin membresía y tenant distinto.
 - API sin configuración secreta devuelve fallo operativo `503` sin filtrar variables.
-- Revisión estática de que no existen claves `service_role` ni `SUPABASE_SERVICE_ROLE_KEY` en la web.
+- Revisión estática de que no existen claves `service_role` ni `SUPABASE_SERVICE_ROLE_KEY` en la web. **Ojo con el alcance**: esta revision cubre `apps/web` y no mira los `.env.example`. El 2026-10-06 se encontro una clave `service_role` real y util en `apps/api/.env.example`, versionada. El control correcto recorre **todos** los archivos que Git versiona, no solo la web.
 
 ## Criterios de aceptación
 

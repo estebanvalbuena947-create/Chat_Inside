@@ -13,7 +13,7 @@ Zernio ── webhook firmado ── inbox durable ───┼── PostgreSQL
                                               │         │
 n8n ── Agent Gateway ── worker Node.js ───────┤         └── Storage privado
                                               │
-                                      Redis + BullMQ ── outbox / DLQ
+                                      Colas en PostgreSQL ── outbox / DLQ
                                               │
                                        Adaptador Zernio ── Zernio
 ```
@@ -34,7 +34,7 @@ Entidades y políticas sin dependencias de framework: estados de conversación, 
 
 ### Infraestructura y adaptadores
 
-PostgreSQL/Supabase, Redis/BullMQ, Storage, SSE, Zernio y n8n implementan puertos internos. El adaptador de Zernio es el único que conoce sus endpoints, encabezados, límites y errores. **REQUIERE VERIFICACIÓN OFICIAL** cada detalle de su contrato y capacidades por canal.
+PostgreSQL/Supabase, las colas en tablas propias, el almacen privado, SSE, Zernio y n8n implementan puertos internos. El adaptador de Zernio es el único que conoce sus endpoints, encabezados, límites y errores. **REQUIERE VERIFICACIÓN OFICIAL** cada detalle de su contrato y capacidades por canal.
 
 ## Datos y consistencia
 
@@ -61,4 +61,4 @@ SSE es la opción inicial para UI: eventos por tenant autenticado, `Last-Event-I
 
 ## Despliegue y rollback
 
-Habrá entornos separados `local`, `test`, `staging` y `production`; cada uno tendrá datos, Redis, buckets y secretos propios. El despliegue deberá usar migraciones expandir-antes-de-contraer, health checks, observabilidad, rollback documentado y reconciliación tras incidentes. El proveedor de despliegue permanece pendiente de aprobación.
+Habrá entornos separados `local`, `test`, `staging` y `production`; cada uno tendrá datos, colas, buckets y secretos propios. El despliegue usa migraciones expandir-antes-de-contraer, health checks, observabilidad, rollback documentado y reconciliación tras incidentes, y **ya está hecho** en el servidor propio: ver `docs/DEPLOY-SERVIDOR.md`.

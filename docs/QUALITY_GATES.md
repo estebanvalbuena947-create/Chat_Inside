@@ -15,6 +15,8 @@ Una tarea no está terminada hasta superar los controles aplicables.
 - Auditoría de dependencias según la política del proyecto.
 - Migraciones verificadas en una base temporal cuando apliquen.
 
+Las cinco primeras de esta lista -- instalacion, formato, lint, tipos, pruebas unitarias y build -- se ejecutan solas en cada cambio mediante `.github/workflows/control.yml`. Las demas siguen siendo manuales: la integracion y las migraciones necesitan una base de datos, y el escaneo de secretos y la auditoria de dependencias son comandos aparte.
+
 ## Controles de comportamiento
 
 - Criterios de aceptación demostrados.

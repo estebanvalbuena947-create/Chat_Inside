@@ -88,3 +88,16 @@ comment on column public.conversations.branch_id is
 
 -- El acceso es exclusivamente desde la API con la clave de servicio; la interfaz nunca habla
 -- con la base directamente.
+
+-- Reversion: las cuatro piezas van en orden inverso al de creacion, porque tres dependen de
+-- public.branches. Quitar la tabla antes que la columna que la referencia falla.
+--
+--   alter table public.conversations drop column if exists branch_id;   -- depende de branches
+--   drop table if exists public.branch_media;                          -- depende de branches
+--   drop table if exists public.tool_tokens;
+--   drop table if exists public.branches;                              -- al final, sin dependencias
+--
+-- Que se pierde: la sede de cada conversacion (vuelve a nulo), el material de sede y las
+-- credenciales de maquina. Los archivos del almacen NO se borran: quedan huerfanos en el bucket
+-- branch-media y hay que vaciarlos aparte. Al desaparecer los tool_tokens, n8n recibe 401 hasta
+-- que se cree otro.

@@ -326,6 +326,99 @@ export default function HomePage(): React.ReactNode {
   const [isUpdatingConversationLabels, setIsUpdatingConversationLabels] = useState(false);
   const [isConversationLabelsOpen, setIsConversationLabelsOpen] = useState(false);
   const [isInternalLabelManagerOpen, setIsInternalLabelManagerOpen] = useState(false);
+  // Multimedia por sede: se elige la sede, se pega un enlace y se ve lo que ya hay. Se reutilizan
+  // las clases del panel de etiquetas, que ya trae su estilo.
+  const [isBranchMediaOpen, setIsBranchMediaOpen] = useState(false);
+  const [branchMediaBranches, setBranchMediaBranches] = useState<
+    Array<{ name: string; slug: string }>
+  >([]);
+  const [branchMediaSlug, setBranchMediaSlug] = useState('');
+  const [branchMediaSourceUrl, setBranchMediaSourceUrl] = useState('');
+  const [branchMediaTitle, setBranchMediaTitle] = useState('');
+  const [branchMediaItems, setBranchMediaItems] = useState<
+    Array<{ id: string; kind: string; title: string | null; url: string | null }>
+  >([]);
+  const [branchMediaNotice, setBranchMediaNotice] = useState<string | null>(null);
+  const [isLoadingBranchMedia, setIsLoadingBranchMedia] = useState(false);
+  const [isImportingBranchMedia, setIsImportingBranchMedia] = useState(false);
+
+  async function loadBranchMedia(slug: string): Promise<void> {
+    setIsLoadingBranchMedia(true);
+    setBranchMediaNotice(null);
+    try {
+      const respuesta = await fetch(`/api/branches/media?branchSlug=${encodeURIComponent(slug)}`, {
+        cache: 'no-store'
+      });
+      const cuerpo = (await respuesta.json().catch(() => ({}))) as {
+        error?: string;
+        items?: Array<{ id: string; kind: string; title: string | null; url: string | null }>;
+      };
+      if (!respuesta.ok) {
+        setBranchMediaNotice(cuerpo.error ?? 'No se pudo leer el material de la sede.');
+        return;
+      }
+      setBranchMediaItems(Array.isArray(cuerpo.items) ? cuerpo.items : []);
+    } catch {
+      setBranchMediaNotice('No se pudo leer el material de la sede.');
+    } finally {
+      setIsLoadingBranchMedia(false);
+    }
+  }
+
+  async function openBranchMediaManager(): Promise<void> {
+    setIsBranchMediaOpen(true);
+    setIsLoadingBranchMedia(true);
+    setBranchMediaNotice(null);
+    try {
+      const respuesta = await fetch('/api/branches', { cache: 'no-store' });
+      const cuerpo = (await respuesta.json().catch(() => ({}))) as {
+        branches?: Array<{ name: string; slug: string }>;
+        error?: string;
+      };
+      if (!respuesta.ok) {
+        setBranchMediaNotice(cuerpo.error ?? 'No se pudieron leer las sedes.');
+        return;
+      }
+      const sedes = Array.isArray(cuerpo.branches) ? cuerpo.branches : [];
+      setBranchMediaBranches(sedes);
+      const primera = sedes[0]?.slug ?? '';
+      setBranchMediaSlug(primera);
+      if (primera) await loadBranchMedia(primera);
+    } catch {
+      setBranchMediaNotice('No se pudieron leer las sedes.');
+    } finally {
+      setIsLoadingBranchMedia(false);
+    }
+  }
+
+  async function importBranchMedia(): Promise<void> {
+    setIsImportingBranchMedia(true);
+    setBranchMediaNotice(null);
+    try {
+      const respuesta = await fetch('/api/branches/media', {
+        body: JSON.stringify({
+          branchSlug: branchMediaSlug,
+          sourceUrl: branchMediaSourceUrl,
+          title: branchMediaTitle.trim() || undefined
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST'
+      });
+      const cuerpo = (await respuesta.json().catch(() => ({}))) as { error?: string };
+      if (!respuesta.ok) {
+        setBranchMediaNotice(cuerpo.error ?? 'No se pudo importar el archivo.');
+        return;
+      }
+      setBranchMediaSourceUrl('');
+      setBranchMediaTitle('');
+      setBranchMediaNotice('Archivo importado.');
+      await loadBranchMedia(branchMediaSlug);
+    } catch {
+      setBranchMediaNotice('No se pudo importar el archivo.');
+    } finally {
+      setIsImportingBranchMedia(false);
+    }
+  }
   const [editingInternalLabel, setEditingInternalLabel] = useState<InternalLabel | null>(null);
   const [internalLabelName, setInternalLabelName] = useState('');
   const [isSavingInternalLabel, setIsSavingInternalLabel] = useState(false);
@@ -1022,11 +1115,16 @@ export default function HomePage(): React.ReactNode {
       isConversationLabelsOpen ||
       isDetailsOpen ||
       isInternalLabelManagerOpen ||
+      isBranchMediaOpen ||
       isLabelFilterOpen;
     if (!hasOpenOverlay) return;
 
     function closeTopOverlay(event: KeyboardEvent): void {
       if (event.key !== 'Escape') return;
+      if (isBranchMediaOpen) {
+        setIsBranchMediaOpen(false);
+        return;
+      }
       if (isChannelSetupOpen) {
         setIsChannelSetupOpen(false);
         return;
@@ -1064,6 +1162,7 @@ export default function HomePage(): React.ReactNode {
     return () => window.removeEventListener('keydown', closeTopOverlay);
   }, [
     isAssignmentOpen,
+    isBranchMediaOpen,
     isCannedResponseManagerOpen,
     isCannedResponsesOpen,
     isChannelSetupOpen,
@@ -3529,12 +3628,103 @@ export default function HomePage(): React.ReactNode {
                 Textos que el equipo reutiliza al responder. Cada quien administra los suyos.
               </span>
             </button>
+            {(tenant?.role === 'admin' || tenant?.role === 'supervisor') && (
+              <button
+                className="settings-card"
+                onClick={() => void openBranchMediaManager()}
+                type="button"
+              >
+                <strong>Multimedia por sede</strong>
+                <span>
+                  Las fotos y videos que el bot comparte de cada sucursal. Se importan desde un
+                  enlace publico.
+                </span>
+              </button>
+            )}
           </div>
           <p className="media-view-copy">
             Los canales conectados se administran aparte, con el icono de Canales.
           </p>
         </section>
       )}{' '}
+      {isBranchMediaOpen && (tenant?.role === 'admin' || tenant?.role === 'supervisor') && (
+        <section className="internal-label-manager" aria-label="Multimedia por sede">
+          <div className="internal-label-manager-heading">
+            <strong>Multimedia por sede</strong>
+            <button
+              aria-label="Cerrar multimedia por sede"
+              onClick={() => setIsBranchMediaOpen(false)}
+              type="button"
+            >
+              ×
+            </button>
+          </div>
+          <label>
+            Sede
+            <select
+              onChange={(event) => {
+                setBranchMediaSlug(event.target.value);
+                void loadBranchMedia(event.target.value);
+              }}
+              value={branchMediaSlug}
+            >
+              {branchMediaBranches.map((sede) => (
+                <option key={sede.slug} value={sede.slug}>
+                  {sede.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Enlace publico del archivo
+            <input
+              maxLength={2048}
+              onChange={(event) => setBranchMediaSourceUrl(event.target.value)}
+              placeholder="https://…"
+              value={branchMediaSourceUrl}
+            />
+          </label>
+          <label>
+            Titulo (opcional)
+            <input
+              maxLength={160}
+              onChange={(event) => setBranchMediaTitle(event.target.value)}
+              placeholder="Ej. Fachada"
+              value={branchMediaTitle}
+            />
+          </label>
+          <div className="internal-label-manager-actions">
+            <button
+              className="internal-label-save"
+              disabled={!branchMediaSlug || !branchMediaSourceUrl.trim() || isImportingBranchMedia}
+              onClick={() => void importBranchMedia()}
+              type="button"
+            >
+              {isImportingBranchMedia ? 'Importando…' : 'Importar'}
+            </button>
+          </div>
+          {branchMediaNotice && <p className="media-view-copy">{branchMediaNotice}</p>}
+          {isLoadingBranchMedia ? (
+            <p className="media-view-copy">Cargando…</p>
+          ) : branchMediaItems.length === 0 ? (
+            <p className="media-view-copy">Esta sede todavia no tiene material.</p>
+          ) : (
+            <ul className="branch-media-list">
+              {branchMediaItems.map((item) => (
+                <li className="branch-media-list-item" key={item.id}>
+                  {item.url ? (
+                    <img alt={item.title ?? 'Material de la sede'} loading="lazy" src={item.url} />
+                  ) : (
+                    // Sin copia en el almacen no hay enlace: se dice, en vez de dejar un hueco.
+                    <span className="branch-media-missing">Falta el archivo</span>
+                  )}
+                  <span>{item.title ?? 'Sin titulo'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       {isInternalLabelManagerOpen &&
         (tenant?.role === 'admin' || tenant?.role === 'supervisor') && (
           <section className="internal-label-manager" aria-label="Administrar etiquetas">

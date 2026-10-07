@@ -1,0 +1,48 @@
+name: Control de calidad
+
+# Las cinco puertas de `docs/QUALITY_GATES.md` que se pueden ejecutar sin base de datos ni secretos.
+# Existe porque estos controles dependian de la memoria: en la sesion de octubre se dejo la suite en
+# rojo dos rondas seguidas, y el formato fallo varias veces mas, siempre por no ejecutarlos.
+#
+# Lo que NO cubre, y conviene saberlo:
+#   - las pruebas de integracion y la verificacion de migraciones (puertas 6 y 10): necesitan una base
+#   - el escaneo de secretos y la auditoria de dependencias (puertas 8 y 9): son comandos aparte
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  puertas:
+    name: Formato, lint, tipos, pruebas y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Habilitar corepack
+        run: corepack enable
+
+      - name: Instalacion reproducible
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Formato
+        run: corepack pnpm run format:check
+
+      - name: Lint
+        run: corepack pnpm run lint
+
+      - name: Tipos
+        run: corepack pnpm run typecheck
+
+      - name: Pruebas
+        run: corepack pnpm run test
+
+      - name: Build de produccion
+        run: corepack pnpm run build

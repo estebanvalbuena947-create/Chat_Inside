@@ -1,6 +1,6 @@
 # Plan 008 — Normalización de mensajes entrantes de Zernio
 
-- **Estado:** aprobado para implementación
+- **Estado:** implementado
 - **Fecha:** 2026-08-13
 - **Autorización:** el administrador autorizó convertir los eventos `message.received` ya ingresados en datos visibles de bandeja.
 

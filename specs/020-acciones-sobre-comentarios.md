@@ -1,6 +1,9 @@
 # Especificación: acciones sobre comentarios
 
-- **Estado:** propuesta
+- **Estado:** implementada
+
+**Cierre:** implementada: el servicio y el controlador de moderacion existen y sus cinco rutas aparecen mapeadas al arrancar la API. Revisado el 2026-10-06.
+
 - **Responsable:** integración de comentarios
 - **Fecha:** 2026-10-01
 - **Complementa:** `specs/019-zernio-meta-conversions-api.md` (independiente)

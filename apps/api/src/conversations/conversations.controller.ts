@@ -168,7 +168,7 @@ export class ConversationsController {
     const parsedConversationId = tenantIdSchema.safeParse(conversationId);
     const parsedBody = updateConversationAssignmentSchema.safeParse(rawBody);
     if (!parsedTenantId.success || !parsedConversationId.success || !parsedBody.success) {
-      throw new BadRequestException('La solicitud de asignaciÃ³n no es vÃ¡lida.');
+      throw new BadRequestException('La solicitud de asignación no es válida.');
     }
     return this.tenantConversationService.changeAssignment(
       request.headers.authorization,

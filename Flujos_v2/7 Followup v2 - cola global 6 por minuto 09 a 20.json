@@ -1,4 +1,4 @@
-﻿{
+{
     "name":  "7 Followup v2 - cola global 6 por minuto 09 a 20 (v2 WEPLASH)",
     "nodes":  [
                   {
@@ -84,7 +84,7 @@
                       "parameters":  {
                                          "jsCode":  "return $input.all().filter(i=\u003ei.json.tarea?.id).map(i=\u003e({json:i.json.tarea}));"
                                      },
-                      "name":  "Una tarea por conversaciÃ³n",
+                      "name":  "Una tarea por conversación",
                       "id":  "63ceaf35-712a-4969-a301-a0b9334148ec",
                       "type":  "n8n-nodes-base.code",
                       "typeVersion":  2,
@@ -120,7 +120,7 @@
 
                                                      }
                                      },
-                      "name":  "Es simulaciÃ³n",
+                      "name":  "Es simulación",
                       "id":  "2b589f70-8ff6-41a2-8d6c-96e06cef992a",
                       "type":  "n8n-nodes-base.if",
                       "typeVersion":  2.2,
@@ -345,7 +345,7 @@
                                                                   "main":  [
                                                                                [
                                                                                    {
-                                                                                       "node":  "Una tarea por conversaciÃ³n",
+                                                                                       "node":  "Una tarea por conversación",
                                                                                        "type":  "main",
                                                                                        "index":  0
                                                                                    }
@@ -356,25 +356,25 @@
                                                        "main":  [
                                                                     [
                                                                         {
-                                                                            "node":  "Una tarea por conversaciÃ³n",
+                                                                            "node":  "Una tarea por conversación",
                                                                             "type":  "main",
                                                                             "index":  0
                                                                         }
                                                                     ]
                                                                 ]
                                                    },
-                        "Una tarea por conversaciÃ³n":  {
+                        "Una tarea por conversación":  {
                                                             "main":  [
                                                                          [
                                                                              {
-                                                                                 "node":  "Es simulaciÃ³n",
+                                                                                 "node":  "Es simulación",
                                                                                  "type":  "main",
                                                                                  "index":  0
                                                                              }
                                                                          ]
                                                                      ]
                                                         },
-                        "Es simulaciÃ³n":  {
+                        "Es simulación":  {
                                                "main":  [
                                                             [
                                                                 {

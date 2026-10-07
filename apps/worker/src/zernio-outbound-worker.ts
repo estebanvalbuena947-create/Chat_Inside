@@ -3,6 +3,7 @@ import {
   supabaseServerEnvironmentSchema,
   type SupabaseServerClient
 } from '@chat-zernio/config';
+import { signMediaPaths } from '@chat-zernio/media';
 import { abandonedBefore, isReclaimDue } from './abandoned-claims';
 import { z } from 'zod';
 
@@ -15,6 +16,8 @@ type OutboxEvent = {
 
 type DispatchInput = {
   accountId: string;
+  /** Adjunto ya firmado. Meta admite una multimedia por mensaje, asi que va uno solo. */
+  attachment?: { kind: string; url: string };
   body: string;
   conversationId: string;
   idempotencyKey: string;
@@ -24,6 +27,15 @@ type DispatchResult = {
   providerMessageId: string;
   sentAt: string | null;
 };
+
+/**
+ * Deposito y caducidad de las direcciones firmadas de multimedia de sede.
+ *
+ * Diez minutos, como fija docs/TOOLS_CONTRACT.md: la direccion se firma en el momento de enviar y
+ * solo tiene que servir para ese envio.
+ */
+const BRANCH_MEDIA_BUCKET = 'branch-media';
+const BRANCH_MEDIA_URL_TTL_SECONDS = 600;
 
 const sendResponseSchema = z.object({
   data: z.object({
@@ -52,7 +64,15 @@ export function createZernioDispatcher(
       const response = await request(
         `https://zernio.com/api/v1/inbox/conversations/${encodeURIComponent(input.conversationId)}/messages`,
         {
-          body: JSON.stringify({ accountId: input.accountId, message: input.body }),
+          body: JSON.stringify({
+            accountId: input.accountId,
+            message: input.body,
+            // Solo se anaden cuando hay adjunto: sin el, el cuerpo es el de siempre y el
+            // comportamiento no cambia.
+            ...(input.attachment
+              ? { attachmentType: input.attachment.kind, attachmentUrl: input.attachment.url }
+              : {})
+          }),
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
@@ -275,6 +295,7 @@ export class ZernioOutboundWorker {
         .eq('status', 'queued');
       const dispatch = await this.dispatcher.send({
         accountId: channel.provider_account_id,
+        attachment: await this.readSignedAttachment(supabase, event.tenant_id, message.id),
         body: message.body,
         conversationId: providerConversationId,
         idempotencyKey: message.idempotency_key
@@ -305,6 +326,49 @@ export class ZernioOutboundWorker {
     } catch (error) {
       await this.fail(supabase, event, attempt, messageId, error);
     }
+  }
+
+  /**
+   * El adjunto del mensaje, ya firmado, o nada si no lleva.
+   *
+   * Se firma AQUI, en el momento de enviar, y no al encolar: la direccion firmada caduca, y un
+   * reintento tardio mandaria un enlace muerto. El cliente no veria la imagen y nada lo delataria.
+   *
+   * Meta admite una multimedia por mensaje, asi que se toma la primera por su orden.
+   */
+  private async readSignedAttachment(
+    supabase: SupabaseServerClient,
+    tenantId: string,
+    messageId: string
+  ): Promise<{ kind: string; url: string } | undefined> {
+    const { data: filas } = await supabase
+      .from('message_attachments')
+      .select('kind, storage_object_path')
+      .eq('tenant_id', tenantId)
+      .eq('message_id', messageId)
+      .order('ordinal', { ascending: true })
+      .limit(1);
+
+    const fila = (Array.isArray(filas) ? filas[0] : null) as
+      | { kind?: unknown; storage_object_path?: unknown }
+      | null
+      | undefined;
+    const ruta = typeof fila?.storage_object_path === 'string' ? fila.storage_object_path : null;
+    if (!ruta) return undefined;
+
+    // Se firma en el momento de enviar, no al listar: la direccion solo tiene que servir para este
+    // envio. Si el almacen falla, esto lanza a proposito -- antes se enviaba el mensaje sin la foto
+    // y nadie se enteraba; asi el despachador lo reintenta y el adjunto llega.
+    const firmadas = await signMediaPaths({
+      bucket: BRANCH_MEDIA_BUCKET,
+      paths: [ruta],
+      signer: supabase,
+      ttlSeconds: BRANCH_MEDIA_URL_TTL_SECONDS
+    });
+    const url = firmadas.get(ruta) ?? null;
+    if (!url) return undefined;
+
+    return { kind: typeof fila?.kind === 'string' ? fila.kind : 'image', url };
   }
 
   private async fail(

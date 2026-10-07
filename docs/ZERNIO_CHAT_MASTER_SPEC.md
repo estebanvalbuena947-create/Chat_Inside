@@ -1,7 +1,7 @@
 # Especificación maestra — Chat Zernio
 
 **Versión:** 2.0
-**Estado:** diseño aprobado; implementación pendiente
+**Estado:** diseño aprobado; **implementado y en producción** — ver `docs/DEPLOY-SERVIDOR.md`.
 **Fecha:** 2026-08-13
 
 ## 1. Objetivo y límites
@@ -37,7 +37,7 @@ Validación documental del 2026-08-13: Zernio documenta HMAC-SHA256 del cuerpo c
 
 ### Supabase
 
-Se evaluará para PostgreSQL, Auth, RLS, Storage privado, URLs firmadas y migraciones. Cada entidad operativa tendrá `tenant_id`; RLS será defensa adicional; `service_role` se restringe a backend/workers. No se usarán datos reales ni se conectará producción durante el inicio.
+Es la base: PostgreSQL, Auth, RLS, Storage privado, URLs firmadas y migraciones, todo en uso. **La norma de no usar datos reales hoy no se cumple**: la base de desarrollo tiene contactos reales mientras dura la migración (ver `docs/SECURITY.md`). Cada entidad operativa tendrá `tenant_id`; RLS será defensa adicional; `service_role` se restringe a backend/workers. No se usarán datos reales ni se conectará producción durante el inicio.
 
 ### n8n
 
@@ -74,7 +74,9 @@ La misma operación conserva una única clave idempotente y cuerpo. Los errores 
 
 ### Multimedia
 
-`Navegador → autorización → URL firmada → Storage privado → validación + cuarentena + antivirus → aprobado → outbox → Zernio`.
+`Enlace público o navegador → descarga o subida → tipo reconocido por sus bytes → Storage privado → outbox → Zernio
+
+**No hay cuarentena, antivirus ni flujo de aprobación de activos.** Lo que se valida es el tamaño, el tipo real, la sede y el espacio; lo que se sube, se sirve.`.
 
 Se valida tamaño, extensión, MIME declarado/real, firma binaria, hash, tenant, cargador y compatibilidad con canal. No se envía un activo pendiente, rechazado o de otro tenant. El worker usará la modalidad multipart confirmada por la documentación de Zernio para no hacer público un objeto de Storage.
 
@@ -82,7 +84,7 @@ Se valida tamaño, extensión, MIME declarado/real, firma binaria, hash, tenant,
 
 La implementación debe cumplir [SECURITY.md](SECURITY.md), registrar trazas sin contenido sensible y medir recepción de webhooks, duplicados, fallos de envío, colas, agente, medios y SSE. Incluye rate limits, DLQ, reconciliación, backups/restauraciones y alertas.
 
-Antes de producción: pruebas unitarias, integración con PostgreSQL/Redis, contratos de Zernio/n8n, pruebas de RLS e idempotencia, E2E, carga y validación real por canal. No se declarará compatibilidad de una capacidad de Zernio sin evidencia oficial y de staging.
+Antes de producción: pruebas unitarias (461 en verde), contratos de Zernio y de las herramientas de n8n, pruebas de RLS e idempotencia, E2E de la interfaz, carga y validación real por canal. **No hay Redis**: las colas son tablas de PostgreSQL con un trabajador que las sondea. No se declarará compatibilidad de una capacidad de Zernio sin evidencia oficial y de staging.
 
 ## 7. Supabase MCP para desarrollo
 
@@ -90,8 +92,9 @@ El MCP oficial es una herramienta de Codex, no una dependencia de runtime. Está
 
 ## 8. Decisiones pendientes
 
-- Proyecto Supabase de desarrollo y proveedor de despliegue.
-- Redis administrado y estrategia de alta disponibilidad.
-- Contrato y autenticación reales de n8n.
+- ~~Proyecto Supabase de desarrollo y proveedor de despliegue.~~ **Resueltos.**
+- ~~Redis administrado y estrategia de alta disponibilidad.~~ **No se usa Redis**: las colas viven en PostgreSQL.
+- ~~Contrato y autenticación reales de n8n.~~ **Resuelto**: credencial de máquina en `tool_tokens`, doce extremos y su contrato en `docs/TOOLS_CONTRACT.md`.
 - Canales Zernio, volumen, cuotas y capacidades del piloto.
-- Límites de archivos, retención, número de agentes/tenants y SLO de disponibilidad.
+- Retención, exportación y borrado por espacio; SLO de disponibilidad.
+- Límites de archivos **por sede**, hoy fijos en 25 MB.

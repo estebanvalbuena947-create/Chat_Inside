@@ -10,3 +10,7 @@ plans/TEMPLATE.md
 Flujos/
 Flujos_v2/
 *.csv
+
+# Prompts extraidos de los flujos: son documentos de referencia y deben quedar textuales.
+docs/prompt-maestro-sara.md
+docs/prompt-sara-servicios-precios.md

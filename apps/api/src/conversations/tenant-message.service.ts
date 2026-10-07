@@ -179,6 +179,30 @@ export class TenantMessageService {
   ): Promise<CreateOutboundMessageResponse> {
     const identity = await this.requestAuthenticator.authenticate(authorization);
     await this.tenantAccessService.assertMembership(identity.userId, tenantId);
+    return this.enqueueOutbound({
+      command,
+      conversationId,
+      senderType: 'agent',
+      senderUserId: identity.userId,
+      tenantId
+    });
+  }
+
+  /**
+   * Nucleo del envio saliente.
+   *
+   * Lo comparten la interfaz —donde quien escribe es la asesora y hay sesion— y las herramientas del
+   * bot, donde quien escribe es la automatizacion y no hay sesion de nadie. Todo lo demas es igual:
+   * la comprobacion del canal, la idempotencia y el encolado para que el trabajador lo entregue.
+   */
+  async enqueueOutbound(context: {
+    command: CreateOutboundMessage;
+    conversationId: string;
+    senderType: 'agent' | 'automation';
+    senderUserId: string | null;
+    tenantId: string;
+  }): Promise<CreateOutboundMessageResponse> {
+    const { command, conversationId, senderType, senderUserId, tenantId } = context;
     const supabase = this.supabaseServerClientFactory.create();
     const { data: conversation, error: conversationError } = await supabase
       .from('conversations')
@@ -206,8 +230,8 @@ export class TenantMessageService {
         conversation_id: conversationId,
         direction: 'outbound',
         idempotency_key: command.idempotencyKey,
-        sender_type: 'agent',
-        sender_user_id: identity.userId,
+        sender_type: senderType,
+        sender_user_id: senderUserId,
         sent_at: new Date().toISOString(),
         status: 'queued',
         tenant_id: tenantId

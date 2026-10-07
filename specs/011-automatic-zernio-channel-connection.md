@@ -1,6 +1,9 @@
 # Especificación: conexión automática de canales Zernio
 
-- **Estado:** aprobada
+- **Estado:** implementada
+
+**Cierre:** implementada y registrada en `docs/DECISIONS.md` como ADR-034: un perfil Zernio por tenant, OAuth solo para administradores y el webhook `account.connected` como unica fuente que crea o actualiza `channel_accounts`. Revisado el 2026-10-06.
+
 - **Fecha:** 2026-08-14
 - **Responsable:** integración Zernio
 

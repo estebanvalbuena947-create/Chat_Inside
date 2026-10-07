@@ -1,4 +1,4 @@
-﻿# Flujos v2 — reapuntados a WEPLASH (Zernio + nuestra base)
+# Flujos v2 — reapuntados a WEPLASH (Zernio + nuestra base)
 
 Estas son las **versiones nuevas** de los 15 flujos. Se importan en n8n y **no se activan** hasta que
 la versión vieja se apague: un mensaje, un emisor.
@@ -23,8 +23,8 @@ la versión vieja se apague: un mensaje, un emisor.
 
 ## Lo que falta antes de activar nada
 
-1. **Los endpoints** (`/v1/tools/...`): todavía **no existen**. Hasta que estén, estos flujos solo
-   pueden probarse en seco.
+1. **Los endpoints** (`/v1/tools/...`): **completos** — doce rutas con sus pruebas. Ya no hace falta
+   probar en seco.
 2. **El cuerpo de cada llamada**: el `jsonBody` sigue siendo el de ManyChat. Hay que ajustarlo al
    contrato de cada endpoint (por eso cada nodo lleva su nota). El `subscriber_id` de ManyChat se
    sustituye por el **contacto** de nuestra base.
@@ -40,3 +40,26 @@ La lógica del negocio se queda donde está.
 ## Checklist
 
 `nodos-migrados.csv` lista los 60 nodos: flujo, nodo, método, endpoint y qué representa.
+
+## Si vuelves a procesar estos flujos
+
+Los quince originales de `Flujos/` están **limpios**. Las versiones nuevas tuvieron que repararse.
+
+Al reapuntar los flujos se leyó y se escribió con codificaciones distintas, y el resultado fueron
+**más de trece mil secuencias rotas** en los textos que el bot le dice a los clientes: `Cotización`
+donde va `Cotización`, `Liberación` donde va `Liberación`. Estaban en los prompts, en los nombres de
+nodo y en la tabla de precios.
+
+Se corrigieron con un script que recorre el árbol, sustituye los pares de doble codificación y
+**valida cada JSON antes de escribirlo** — un flujo a medio reparar es peor que uno sin reparar: se
+importa, parece completo, y falla al ejecutarse.
+
+Si alguna vez hay que volver a exportar o procesar estos archivos:
+
+- **Lee y escribe siempre en UTF-8**, las dos cosas. El daño vino de mezclarlas.
+- **Valida el JSON después de transformarlo** y no escribas si deja de parsear.
+- Y comprueba el resultado: busca `Ã` seguido de vocal en los archivos que hayas tocado.
+
+Las conexiones entre nodos se referencian **por nombre**. Renombrar un nodo para arreglar un acento
+rompe las conexiones que apuntaban a él, y el flujo falla sin decir por qué. Si hay que renombrar,
+hay que revisar las conexiones una a una.

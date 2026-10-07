@@ -165,14 +165,14 @@ docker compose up -d
 
 ## Si algo falla
 
-| Síntoma                                 | Causa habitual                                                     |
-| --------------------------------------- | ------------------------------------------------------------------ |
-| `up` levanta pero `/health` no responde | `.env` mal, o `API_HOST` no llegó al contenedor                    |
-| La web no inicia sesión                 | faltan las URLs de Supabase (paso 8)                               |
-| No llegan mensajes                      | el webhook apunta a otro sitio, o el **trabajador** está caído     |
-| El trabajador se reinicia en bucle      | `SUPABASE_SECRET_KEY` o `ZERNIO_*` mal en su `.env`                |
-| La bandeja se queda cargando            | nginx sin los ajustes de SSE (paso 6)                              |
-| n8n recibe **401** en las tools         | normal **por ahora**: los endpoints `/v1/tools/...` aún no existen |
+| Síntoma                                 | Causa habitual                                                          |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `up` levanta pero `/health` no responde | `.env` mal, o `API_HOST` no llegó al contenedor                         |
+| La web no inicia sesión                 | faltan las URLs de Supabase (paso 8)                                    |
+| No llegan mensajes                      | el webhook apunta a otro sitio, o el **trabajador** está caído          |
+| El trabajador se reinicia en bucle      | `SUPABASE_SECRET_KEY` o `ZERNIO_*` mal en su `.env`                     |
+| La bandeja se queda cargando            | nginx sin los ajustes de SSE (paso 6)                                   |
+| n8n recibe **401** en las tools         | token de máquina ausente, revocado o mal pegado en `WEPLASH_TOOL_TOKEN` |
 
 ## Alternativa con PM2 (sin contenedores)
 

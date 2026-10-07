@@ -15,9 +15,11 @@ Comprobaciones rápidas:
 | ------- | ------------------------------------------------------------------ | --------------------- |
 | UI      | `curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:3000/login` | `200`                 |
 | API     | `curl.exe -s http://127.0.0.1:4000/health`                         | `{"status":"ok",...}` |
-| Webhook | `POST http://127.0.0.1:4000/v1/webhooks/zernio` sin firma          | `400`                 |
+| Webhook | `POST http://127.0.0.1:4000/v1/webhooks/zernio` sin firma          | `401`                 |
 
-Un `400` en el webhook significa que la ruta está viva y la firma se valida; **no** es un fallo.
+Un `401` en el webhook significa que la ruta está viva y que la autenticación se aplica antes de
+procesar nada; **no** es un fallo. Antes esta comprobación decía `400`: la respuesta cambió al
+endurecerse la validación de firma, y el manual se quedó con el número viejo.
 
 ## Webhook de Zernio: la dirección pública
 

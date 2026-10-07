@@ -1,6 +1,6 @@
 # Plan 007 — Ingreso seguro de webhooks de Zernio
 
-- **Estado:** aprobado para implementación
+- **Estado:** implementado
 - **Fecha:** 2026-08-13
 - **Autorización:** el administrador autorizó la fase de integración y habilitó un túnel temporal para pruebas.
 

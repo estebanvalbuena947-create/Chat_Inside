@@ -8,6 +8,10 @@ import { isIP } from 'node:net';
  * solo https, sin credenciales en la URL y solo si el host resuelve a direcciones publicas
  * (evita que un enlace apunte a la red interna). El tipo se reconoce despues por los bytes,
  * nunca por lo que declare el proveedor.
+ *
+ * Vive en un paquete propio porque lo usan dos aplicaciones: el trabajador, al copiar lo que
+ * envia un contacto, y la API, al importar la multimedia de una sede desde un enlace. Antes
+ * estaba en el trabajador y la API no podia alcanzarlo.
  */
 export type RemoteFile = {
   bytes: Buffer;

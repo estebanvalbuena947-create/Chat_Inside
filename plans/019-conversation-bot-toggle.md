@@ -1,6 +1,6 @@
 # Plan 019 - Interruptor de bot por conversacion
 
-- **Estado:** en implementacion
+- **Estado:** implementado
 - **Fecha:** 2026-08-14
 - **Cierre:** implementado y validado; n8n/Zernio quedan fuera de este corte.
 

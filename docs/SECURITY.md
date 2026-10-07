@@ -5,7 +5,7 @@
 - Mínimo privilegio, validación en límites y defensa en profundidad.
 - Datos y acciones se aíslan por `tenant_id`, sesión, capacidad y recurso.
 - Los secretos no se guardan en Git, navegador, logs, pruebas ni mensajes.
-- No se usan datos reales de clientes en desarrollo.
+- **No se usan datos reales de clientes en desarrollo, y hoy no se cumple.** La base de desarrollo tiene contactos reales mientras se trabaja en la migración. Es una norma a restablecer antes de abrir el producto a más gente, no una descripción de lo que hay.
 
 ## Autenticación y autorización
 

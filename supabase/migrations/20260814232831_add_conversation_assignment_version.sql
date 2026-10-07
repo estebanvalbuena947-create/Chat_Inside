@@ -3,4 +3,4 @@ alter table public.conversations
   add constraint conversations_assignment_version_check check (assignment_version >= 1);
 
 comment on column public.conversations.assignment_version is
-  'VersiÃ³n de concurrencia para asignaciones internas de conversaciones.';
+  'Versión de concurrencia para asignaciones internas de conversaciones.';

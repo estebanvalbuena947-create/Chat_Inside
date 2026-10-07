@@ -21,32 +21,32 @@ No pertenece al producto ninguna regla de reservas, citas, agenda, disponibilida
 
 - Es propietario de la sesión, membresías, roles, capacidades y alcance por tenant.
 - No es propietario del estado de conversaciones ni de credenciales de integraciones.
-- Punto de entrada previsto: `packages/auth` y `apps/api`.
+- Punto de entrada: `apps/api/src/auth` (sesión) y `apps/api/src/tenants` (membresías y roles).
 
 ### Conversaciones
 
 - Es propietario de `open`, `pending`, `resolved`, no leídos, asignación y modo de automatización.
 - Reabre una conversación resuelta al persistir un nuevo mensaje entrante.
 - No es propietario de los estados de transporte del mensaje ni de etiquetas de proveedor.
-- Punto de entrada previsto: `packages/domain/conversations`.
+- Punto de entrada: `packages/domain/src/conversations.ts` (reglas) y `apps/api/src/conversations` (casos de uso).
 
 ### Mensajes
 
 - Es propietario de la dirección, emisor, contenido local, idempotencia y progresión monotónica de estados.
 - No es propietario de los contratos ni capacidades de Zernio.
-- Punto de entrada previsto: `packages/domain/messages`.
+- Punto de entrada: `packages/domain/src/messages.ts` (reglas), `apps/api/src/conversations/tenant-message.service.ts` (encolar) y `apps/worker/src/zernio-outbound-worker.ts` (enviar).
 
 ### Multimedia
 
-- Es propietario de autorización de carga, metadatos, escaneo, almacenamiento privado y aprobación de activos.
-- No es propietario del almacenamiento temporal de un proveedor externo.
-- Punto de entrada previsto: `packages/storage`.
+- Es propietario de la copia al almacén propio, del reconocimiento del tipo por sus bytes, del depósito privado y de los enlaces firmados.
+- No es propietario del almacenamiento temporal de un proveedor externo, y **no** hay escaneo antivirus ni flujo de aprobación de activos: lo que se sube se sirve.
+- Punto de entrada: `packages/media` (el motor compartido) y sus tres consumidores —`apps/worker/src/conversation-media-storage.ts`, `apps/worker/src/contact-avatar-storage.ts` y `apps/api/src/branches/branch-media.service.ts`—.
 
 ### Organización de atención
 
 - Es propietaria de etiquetas internas, respuestas rápidas y asignaciones.
 - No representa estados de negocio de otro sistema ni etiquetas propias de plataformas conectadas.
-- Punto de entrada previsto: `packages/domain/organization`.
+- Punto de entrada: `apps/api/src/tools/tool-assignments.service.ts` (etiquetas y asignación) y `packages/domain/src/labels.ts`.
 
 ### Integración y automatización
 
@@ -65,14 +65,14 @@ No pertenece al producto ninguna regla de reservas, citas, agenda, disponibilida
 
 ## Dónde implementar cada cambio
 
-| Tipo de cambio                  | Propietario     | Ubicación prevista                          |
-| ------------------------------- | --------------- | ------------------------------------------- |
-| Regla de conversación o mensaje | Dominio         | `packages/domain`                           |
-| Caso de uso y transacción       | Aplicación      | `apps/api` / `apps/worker`                  |
-| HTTP, webhook o proveedor       | Adaptadores     | `packages/zernio`, `packages/agent-gateway` |
-| Persistencia, colas y storage   | Infraestructura | `packages/database`, `packages/storage`     |
-| UI y accesibilidad              | Presentación    | `apps/web`                                  |
+| Tipo de cambio                  | Propietario     | Ubicación prevista                                                 |
+| ------------------------------- | --------------- | ------------------------------------------------------------------ |
+| Regla de conversación o mensaje | Dominio         | `packages/domain`                                                  |
+| Caso de uso y transacción       | Aplicación      | `apps/api` / `apps/worker`                                         |
+| HTTP, webhook o proveedor       | Adaptadores     | `apps/api/src/zernio`, `apps/worker/src/agent-gateway.ts`          |
+| Persistencia, colas y storage   | Infraestructura | `apps/api/src/infrastructure`, `packages/media`, `packages/config` |
+| UI y accesibilidad              | Presentación    | `apps/web`                                                         |
 
 ## Verificación prevista
 
-Los comandos se definirán al inicializar el monorepo. Todo corte debe incluir pruebas unitarias, de integración de PostgreSQL/Redis, contratos de proveedor, autorización por tenant, idempotencia y E2E de UI cuando corresponda.
+Los cuatro comandos son `corepack pnpm typecheck`, `lint`, `format:check` y `test`, y se ejecutan en cada corte. Todo corte debe incluir pruebas unitarias, contratos de proveedor, autorización por tenant e idempotencia; la integración con PostgreSQL y Redis se comprueba contra el proyecto real, y el E2E de UI cuando corresponda.

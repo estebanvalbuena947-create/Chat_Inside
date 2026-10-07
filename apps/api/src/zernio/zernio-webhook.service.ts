@@ -129,7 +129,7 @@ export class ZernioWebhookService {
     const profileId = payload.account?.profileId;
     const platform = payload.account?.platform;
     if (!accountId || !profileId || !platform) {
-      throw new UnprocessableEntityException('El evento de conexiÃ³n de Zernio no es vÃ¡lido.');
+      throw new UnprocessableEntityException('El evento de conexión de Zernio no es válido.');
     }
 
     const supabase = this.supabaseServerClientFactory.create();
@@ -142,7 +142,7 @@ export class ZernioWebhookService {
       throw new InternalServerErrorException('No fue posible resolver el perfil de Zernio.');
     }
     if (!tenant) {
-      throw new UnprocessableEntityException('El perfil de Zernio no estÃ¡ asociado a un tenant.');
+      throw new UnprocessableEntityException('El perfil de Zernio no está asociado a un tenant.');
     }
 
     const { data: existing, error: existingError } = await supabase

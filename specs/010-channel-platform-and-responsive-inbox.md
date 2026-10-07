@@ -1,6 +1,9 @@
 # Especificación: plataforma de canal y bandeja compacta
 
-- **Estado:** aprobada por solicitud de interfaz
+- **Estado:** implementada
+
+**Cierre:** implementada. `channel_accounts.platform` esta en uso desde la sincronizacion por webhook firmado, y las media queries de la bandeja convierten el panel en cajon y alternan lista y conversacion. Revisado contra el codigo el 2026-10-06.
+
 - **Fecha:** 2026-08-14
 - **Responsables:** integración Zernio y presentación
 

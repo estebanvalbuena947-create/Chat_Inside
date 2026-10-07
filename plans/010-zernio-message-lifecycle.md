@@ -1,6 +1,6 @@
 # Plan 010 — Ciclo de vida de mensajes Zernio
 
-- **Estado:** aprobado para implementación
+- **Estado:** implementado
 - **Fecha:** 2026-08-14
 - **Autorización:** continuación de desarrollo solicitada por el administrador.
 

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { SupabaseServerClient } from '@chat-zernio/config';
-import { fetchRemoteMedia } from './remote-media';
+import { storeRemoteMedia, supabaseMediaStorage } from '@chat-zernio/media';
 
 const avatarBucket = 'contact-avatars';
 const maxAvatarBytes = 2 * 1024 * 1024;
@@ -16,18 +16,16 @@ export async function storeContactAvatar(input: {
   supabase: SupabaseServerClient;
   tenantId: string;
 }): Promise<string | null> {
-  const media = await fetchRemoteMedia({
+  const guardado = await storeRemoteMedia({
+    // El avatar solo admite imagen: cualquier otro contenido se descarta sin escribirlo. Es el
+    // filtro que la pieza compartida deja decidir a quien llama, porque cambia en cada caso.
+    accept: (media) => media.contentType.startsWith('image/'),
+    bucket: avatarBucket,
     maxBytes: maxAvatarBytes,
+    path: (media) => `${input.tenantId}/${input.contactId}/${input.sourceHash}.${media.extension}`,
     sourceUrl: input.sourceUrl,
+    storage: supabaseMediaStorage(input.supabase),
     timeoutMs: 10_000
   });
-  // El avatar solo admite imagen: cualquier otro contenido se descarta sin escribirlo.
-  if (!media || !media.contentType.startsWith('image/')) return null;
-
-  const path = `${input.tenantId}/${input.contactId}/${input.sourceHash}.${media.extension}`;
-  const { error } = await input.supabase.storage.from(avatarBucket).upload(path, media.bytes, {
-    contentType: media.contentType,
-    upsert: true
-  });
-  return error ? null : path;
+  return guardado ? guardado.path : null;
 }

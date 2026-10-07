@@ -1,6 +1,9 @@
 # Especificación: perfiles visuales de contactos Zernio
 
-- **Estado:** aprobada
+- **Estado:** implementada
+
+**Cierre:** implementada: `contacts.avatar_object_path` y `external_username` existen, y el trabajador copia el avatar al bucket privado desde un webhook firmado, con el tipo reconocido por bytes. Revisado el 2026-10-06.
+
 - **Fecha:** 2026-08-14
 - **Responsable:** normalización de entrada Zernio
 

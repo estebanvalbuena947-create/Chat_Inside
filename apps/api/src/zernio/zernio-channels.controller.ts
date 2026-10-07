@@ -34,7 +34,7 @@ export class ZernioChannelsController {
     @Req() request: FastifyRequest
   ): Promise<ZernioChannelListResponse> {
     const parsedTenantId = tenantIdSchema.safeParse(tenantId);
-    if (!parsedTenantId.success) throw new BadRequestException('El tenant no es vÃ¡lido.');
+    if (!parsedTenantId.success) throw new BadRequestException('El tenant no es válido.');
     return this.zernioChannelService.list(request.headers.authorization, parsedTenantId.data);
   }
 
@@ -47,7 +47,7 @@ export class ZernioChannelsController {
     const parsedTenantId = tenantIdSchema.safeParse(tenantId);
     const parsedBody = startZernioChannelConnectionSchema.safeParse(rawBody);
     if (!parsedTenantId.success || !parsedBody.success) {
-      throw new BadRequestException('La solicitud para conectar el canal no es vÃ¡lida.');
+      throw new BadRequestException('La solicitud para conectar el canal no es válida.');
     }
     return this.zernioChannelService.startConnection(
       request.headers.authorization,

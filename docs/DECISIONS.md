@@ -457,3 +457,159 @@ por recibir un mensaje o cambiar un estado.
 
 **Consecuencias.** Ninguna migracion aplicada se ve afectada (la de este cambio aun no estaba
 aplicada). Perdido, otras monedas y otros tipos de evento quedan como extensiones del mismo corte.
+
+---
+
+## Migración de los flujos de ManyChat a WEPLASH (sesión de octubre 2026)
+
+### La identidad del bot es `automation`, no `bot`
+
+`sender_type` admite `contact`, `agent`, `automation` y `system`. El bot escribe como
+**`automation`** y sin usuario asociado: no es una persona. Se comprobó en la restricción de la base
+antes de escribir el código; `bot` no existe.
+
+### El interruptor de envío vive en la plataforma
+
+`bot_integrations.sending_enabled`, apagado por defecto. El extremo de envío lo comprueba y rechaza
+con 422. **No depende de que n8n se acuerde de no llamar**: si mañana alguien importa un flujo con el
+nodo de envío activo, los mensajes no salen. Se enciende y se apaga con una fila.
+
+### El envío se encola; la herramienta responde "aceptado", no "enviado"
+
+`docs/TOOLS_CONTRACT.md` pide un `201` con `providerMessageId`. Ese identificador **no existe** cuando
+la herramienta responde: lo produce Zernio, y quien entrega es el trabajador. Se mantiene la cola
+—reintentos, idempotencia, tolerancia a caídas de Zernio— y la respuesta se documenta como aceptado.
+Un mensaje que se reintenta solo vale más que un mensaje inmediato que se pierde.
+
+### Idempotencia hacia Zernio con la clave del mensaje
+
+El despachador ya envía `Idempotency-Key: messages.idempotency_key`. Zernio no reintenta y su envío
+no es idempotente: sin esa cabecera, un reintento nuestro tras un fallo ambiguo entregaría el mensaje
+**dos veces al cliente**.
+
+### La multimedia se guarda como ruta, no como URL
+
+La URL firmada caduca (10 minutos, según el contrato). Si se guardara al encolar, un reintento tardío
+enviaría un enlace muerto y el cliente no vería la imagen, sin error visible. El trabajador **firma en
+el momento de enviar**.
+
+### El aviso al bot nace de un disparador de la base
+
+La cola `bot_deliveries` se llena con un disparador sobre los mensajes entrantes. Un aviso encolado
+desde el código se puede olvidar en algún camino nuevo; uno que nace del mensaje, no.
+
+### El aviso no almacena el contenido del mensaje
+
+`bot_deliveries` apunta al mensaje; el trabajador lo lee al entregar. Los datos del cliente no se
+duplican por la base, igual que en las conversiones.
+
+### La identidad de ManyChat no se puede reproducir
+
+`subscriber_id` aparece **292 veces** en los flujos; `conversation_id`, dos. El bot no tiene el
+identificador de ManyChat y no puede tenerlo. El nodo traductor de la puerta rellena `subscriber_id`
+con el identificador de la conversación **como puente**, y lo marca (`identidad_manychat: false`) para
+localizar dónde hay que sustituir las llamadas a ManyChat por nuestras herramientas.
+
+### `customer` propio en lugar de ManyChat en los «campos personalizados»
+
+Parte de los nodos migrados no enviaban mensajes: escribían campos del contacto. Tienen su propio
+almacén (`contact_fields`) con **el mismo cuerpo que ManyChat**, para que migrarlos sea cambiar la
+dirección y un nombre de campo, no reescribir cada nodo.
+
+### Los precios son datos, no texto en el prompt
+
+Hoy viven en un prompt de 273.547 caracteres y repetidos en seis nodos de código. `branch_services`
+los saca a una tabla con importe y **unidad** por separado (`per_person` o `total`): sin esa
+distinción el bot diría «$1.998 por persona» cuando son dos. Además, un prompt más corto es una
+respuesta más rápida y más barata.
+
+### Los servicios y la multimedia son por sede, y la sede sale del token
+
+Ninguna ruta lleva `tenantId`: la credencial de máquina identifica el espacio. La sede se busca dentro
+de ese espacio, así que un slug de otro negocio no existe. Comprobado con prueba.
+
+### `advisorEmail` no es resoluble hoy
+
+El contrato recibe el correo del asesor. Los correos del equipo viven solo en el sistema de
+autenticación de Supabase, que no se consulta desde la API de datos: `memberships` no tiene esa
+columna y no existe ninguna tabla que la sustituya. Se aceptan las dos formas (`userId` o
+`advisorEmail`) cuando el dato exista; hoy `userId` es la única que se puede resolver.
+
+### Las plantillas llevan huecos, y los rellena el servidor
+
+Seis nodos envían «plantilla confirmación». `message_templates` guarda el texto con huecos (`{fecha}`,
+`{sede}`) y **el servicio los rellena**, no el flujo. Una sustitución hecha en n8n que falle deja el
+`{fecha}` a la vista del cliente, sin error y sin rastro; aquí, si falta un valor, la respuesta es 422
+y **no se envía nada**.
+
+### El contrato dice «uno de los dos», y se cumple
+
+El envío exigía texto siempre. El contrato dice «`text`: uno de los dos» y «`media`: uno de los dos», y
+la base acepta el cuerpo vacío (`body text not null default ''`; ya hay mensajes así, de clientes que
+mandaron solo una foto). Ahora un archivo sin texto es válido. La clave de idempotencia **sigue siendo
+obligatoria**: sin ella, un reintento le mandaría la foto dos veces al cliente.
+
+### La multimedia de sede puede cambiar por canal
+
+Los nodos están duplicados por canal y no por capricho: Instagram y TikTok piden formatos distintos.
+`branch_media.channel` nace con `any`, así que nada cambia para lo que ya exista —la misma imagen sigue
+sirviendo en cualquier sitio— y una distinta se añade con su canal sin tocar la común.
+
+### Derivar apaga el bot, por la regla del dominio y con su versión
+
+El propio texto de los nodos de transferencia dice «para que el asesor continúe». Si el bot sigue
+contestando, la asesora y el bot le hablan al cliente a la vez. `turnBotOff` es verdadero por defecto,
+el valor no se escribe a mano sino que sale de `handoffToHuman()` en el dominio, y la actualización sube
+`automation_version` para que dos cambios simultáneos no se pisen en silencio.
+
+### El listado de sedes solo devuelve las activas
+
+El bot necesita la lista para poder ofrecer una: no puede fijar la sede con un slug que no conoce.
+Ofrecer una sede cerrada sería peor que no ofrecer ninguna.
+
+### Un solo doble de Supabase para las pruebas
+
+Cada archivo de prueba se fabricaba el suyo, y tres fallaron por simplificar lo mismo: el constructor
+real es **encadenable y esperable a la vez**. Ahora hay un único doble compartido que reproduce esa
+naturaleza doble y anota las llamadas por tabla, así una prueba afirma sobre lo que se pidió sin
+depender del orden de las consultas.
+
+### La multimedia de sede se importa desde un enlace, y la ruta sale del hash
+
+En vez de subir el archivo desde el navegador, el administrador pega una dirección pública y nosotros
+lo copiamos. Reutiliza el mismo motor que ya trae los adjuntos de las conversaciones —con su defensa
+contra direcciones internas y el tipo reconocido por bytes— en lugar de escribir uno nuevo.
+
+La ruta se deriva de un **hash de la dirección**: la misma foto importada dos veces apunta al mismo
+archivo, y la restricción única de la tabla impide registrarla dos veces. La idempotencia no se
+programa: sale del esquema.
+
+### Los precios del prompt viven en su sección 5
+
+El prompt maestro tiene 2 333 líneas y dieciocho secciones. Los importes están en la **sección 5**
+(líneas 519 a 837), más tres menciones sueltas: la 636 —la tabla de formato, dentro de la 5—, la 2159
+—una respuesta de ejemplo con la cifra dentro— y la 2256. Saber dónde están convierte «sacar los
+precios del prompt» de una intuición en una lista de sustituciones con número de línea.
+
+### El prompt no puede consultar la base: los precios entran como variable
+
+El prompt es el **mensaje de sistema** de un nodo de agente: un texto, no un programa. No puede llamar
+a ninguna herramienta. Quien llama es el **flujo**, y mete el resultado en el prompt como variable
+—igual que ya hace con el estado de la reserva.
+
+Así que el trabajo son dos piezas: un nodo que consulte `GET /v1/tools/branches/{sede}/services` y dé
+formato a la lista, y las sustituciones que usan esa variable. Solo las sustituciones no funcionarían:
+el bot diría las llaves en crudo.
+
+### El anticipo no es un precio: es un plazo
+
+El anticipo de 500 aparece en la sección 2.6.3 y en las plantillas de pago, y describe **cuándo** hay
+que pagar y qué pasa si no se paga. Eso es una regla de proceso, no una tarifa: **no sale del prompt**.
+La tabla guarda lo que el bot cobra; el prompt explica cuándo cobrarlo.
+
+### Los flujos de ManyChat eran transporte, no contenido
+
+Los veintiocho nodos que lanzaban un flujo de ManyChat no esperaban un contenido que hubiera que
+rescatar: ManyChat **no permite enviar un mensaje directo** por su API, y activar un flujo era la única
+forma de mandar algo. Con nuestra plataforma sí se puede enviar directo, así que esos nodos se
+**sustituyen**, no se migran. No hay nada que recuperar de ManyChat.

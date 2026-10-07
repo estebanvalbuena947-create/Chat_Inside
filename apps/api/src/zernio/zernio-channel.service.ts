@@ -167,7 +167,7 @@ export class ZernioChannelService {
     try {
       new URL(redirectUrl);
     } catch {
-      throw new ServiceUnavailableException('La URL de retorno de Zernio no es vÃ¡lida.');
+      throw new ServiceUnavailableException('La URL de retorno de Zernio no es válida.');
     }
 
     const supabase = this.supabaseServerClientFactory.create();

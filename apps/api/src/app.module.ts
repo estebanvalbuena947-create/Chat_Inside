@@ -24,12 +24,22 @@ import { TenantRealtimeService } from './realtime/tenant-realtime.service';
 import { MeController } from './tenants/me.controller';
 import { TenantAccessService } from './tenants/tenant-access.service';
 import { ToolAssignmentsController } from './tools/tool-assignments.controller';
+import { ToolMessagesController } from './tools/tool-messages.controller';
+import { ToolMessagesService } from './tools/tool-messages.service';
 import { ToolAssignmentsService } from './tools/tool-assignments.service';
 import { ToolBranchesController } from './tools/tool-branches.controller';
 import { ToolBranchesService } from './tools/tool-branches.service';
+import { ToolContactFieldsController } from './tools/tool-contact-fields.controller';
+import { ToolContactFieldsService } from './tools/tool-contact-fields.service';
 import { ToolConversationService } from './tools/tool-conversation.service';
 import { ToolTokenService } from './tools/tool-token.service';
 import { ToolConversationsController } from './tools/tool-conversations.controller';
+import { BranchController } from './branches/branch.controller';
+import { BranchService } from './branches/branch.service';
+import { BranchMediaController } from './branches/branch-media.controller';
+import { BranchMediaService } from './branches/branch-media.service';
+import { ToolTemplatesController } from './tools/tool-templates.controller';
+import { ToolTemplatesService } from './tools/tool-templates.service';
 import { TenantsController } from './tenants/tenants.controller';
 import { ZernioWebhookController } from './zernio/zernio-webhook.controller';
 import { ZernioWebhookService } from './zernio/zernio-webhook.service';
@@ -48,8 +58,13 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     CommentModerationController,
     ConversationNotesController,
     ToolAssignmentsController,
+    ToolMessagesController,
     ToolBranchesController,
+    ToolContactFieldsController,
     ToolConversationsController,
+    ToolTemplatesController,
+    BranchMediaController,
+    BranchController,
     MetricsController,
     MeController,
     RealtimeEventsController,
@@ -68,7 +83,12 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     ConversationNoteService,
     ToolAssignmentsService,
     ToolBranchesService,
+    ToolContactFieldsService,
+    ToolMessagesService,
     ToolConversationService,
+    ToolTemplatesService,
+    BranchMediaService,
+    BranchService,
     ToolTokenService,
     MetricsService,
     TenantMessageService,

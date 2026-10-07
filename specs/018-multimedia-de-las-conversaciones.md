@@ -3,7 +3,8 @@
 - **Estado:** implementada
 - **Responsable:** conversaciones y almacenamiento
 - **Fecha:** 2026-09-29
-- **Cierre:** implementada y verificada el 2026-09-29 con una fotografía real recibida por el webhook: quedó registrada, copiada al bucket privado y entregable con enlace firmado, y el mensaje sin texto se conservó.
+
+**Cierre:** implementada y verificada el 2026-09-29 con una fotografia real. La pasada periodica que reintenta las copias fallidas tambien existe: `apps/worker/src/media-repair.ts`, con sus pruebas. Revisado el 2026-10-06.
 
 ## Resultado
 
@@ -37,4 +38,4 @@ El proveedor entrega la multimedia como un **enlace firmado del CDN de Instagram
 - Tabla `message_attachments` con claves compuestas por tenant, unicidad `(tenant_id, message_id, ordinal)`, RLS y permisos retirados a los roles públicos, igual que el resto.
 - Bucket privado `conversation-media` con límite de tamaño y tipos permitidos.
 - Rollback: dejar de exponer la galería y el campo `attachments`. Los mensajes y las copias permanecen; el bucket puede vaciarse aparte.
-- Queda pendiente una pasada periódica que reintente las copias marcadas como fallidas (el índice parcial ya existe para encontrarlas).
+- La pasada periódica que reintenta las copias marcadas como fallidas ya existe: `apps/worker/src/media-repair.ts`, que usa el índice parcial para encontrarlas.

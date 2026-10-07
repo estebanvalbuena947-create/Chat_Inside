@@ -89,12 +89,12 @@ function readChannelPlatform(channelAccount: unknown): string | null {
 
 function normalizeTimestamp(value: unknown, field: string): string {
   if (typeof value !== 'string') {
-    throw new InternalServerErrorException(`La conversaciÃ³n no tiene ${field} vÃ¡lido.`);
+    throw new InternalServerErrorException(`La conversación no tiene ${field} válido.`);
   }
 
   const timestamp = new Date(value.replace(/([+-]\d{2})$/, '$1:00'));
   if (Number.isNaN(timestamp.getTime())) {
-    throw new InternalServerErrorException(`La conversaciÃ³n no tiene ${field} vÃ¡lido.`);
+    throw new InternalServerErrorException(`La conversación no tiene ${field} válido.`);
   }
 
   return timestamp.toISOString();

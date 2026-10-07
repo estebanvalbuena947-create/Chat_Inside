@@ -1,4 +1,5 @@
-import { Controller, Get, Headers, Inject, Param } from '@nestjs/common';
+import { Controller, Get, Headers, Inject, Param, Post, Req } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { ToolConversationService } from './tool-conversation.service';
 
 /**
@@ -10,6 +11,15 @@ import { ToolConversationService } from './tool-conversation.service';
 @Controller('v1/tools/conversations')
 export class ToolConversationsController {
   constructor(@Inject(ToolConversationService) private readonly service: ToolConversationService) {}
+
+  /** Fija la sede de la conversacion: lo que permite ofrecer el catalogo y los precios correctos. */
+  @Post(':conversationId/branch')
+  async setBranch(
+    @Param('conversationId') conversationId: string,
+    @Req() request: FastifyRequest
+  ): Promise<unknown> {
+    return this.service.setBranch(request.headers.authorization, conversationId, request.body);
+  }
 
   @Get(':conversationId')
   async read(

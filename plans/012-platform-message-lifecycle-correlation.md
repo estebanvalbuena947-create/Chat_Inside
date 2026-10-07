@@ -1,6 +1,6 @@
 # Plan 012 — Correlación de ciclo de vida por identificador de plataforma
 
-- **Estado:** aprobado para implementación
+- **Estado:** implementado
 - **Fecha:** 2026-08-14
 - **Autorización:** el administrador autorizó corregir que un mensaje leído no cambiara de estado.
 

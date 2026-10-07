@@ -61,14 +61,16 @@ Una tarea termina únicamente cuando:
 
 ## Comandos del proyecto
 
-Reemplazar al iniciar el repositorio:
-
 - Instalar: `corepack pnpm install --frozen-lockfile`
 - Desarrollo: `corepack pnpm dev`
 - Pruebas: `corepack pnpm test`
 - Lint: `corepack pnpm lint`
+- Formato: `corepack pnpm format:check`
 - Tipos: `corepack pnpm typecheck`
 - Build: `corepack pnpm build`
+
+Los cuatro controles que hay que pasar en cada corte son `typecheck`, `lint`, `format:check` y `test`.
+`build` se ejecuta antes de desplegar. El detalle de todos ellos está en `docs/QUALITY_GATES.md`.
 
 ## Reglas de revisión de código
 

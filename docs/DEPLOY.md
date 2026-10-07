@@ -97,11 +97,12 @@ Variables (verificadas en `apps/api/.env` y `apps/worker/.env`):
 
 ## 5. Lo que falta de mi lado
 
-- **Migraciones**: todas aplicadas ✅ (`branches`, `branch_media`, `tool_tokens`, `started_at`,
-  `messages.source`, las marcas de origen).
-- **Bucket `branch-media`**: pendiente de crear cuando implemente la multimedia por sede.
-- **Los endpoints `/v1/tools/...`**: en construcción (etapa 2). **No bloquean** el despliegue de la
-  web: solo los necesitan los flujos nuevos, que están sin activar.
+- **Migraciones**: quedan **cinco** por aplicar en el SQL Editor —
+  `bot_integrations.sending_enabled`, `contact_fields`, `branch_services`, `message_templates` y
+  `branch_media.channel`. Sin ellas no hay precios, ni campos del contacto, ni interruptor de envío,
+  ni plantillas, ni imagen por canal.
+- **Bucket `branch-media`**: creado, con la importación desde enlace funcionando y probada.
+- **Los endpoints `/v1/tools/...`**: **completos** — doce rutas, con sus pruebas.
 - **Pruebas del botón de conectar**: pendientes.
 
 Yo no tengo credenciales de Vercel ni del host, así que el despliegue lo lanzas tú. Si algo falla,

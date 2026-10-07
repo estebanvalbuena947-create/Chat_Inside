@@ -21,7 +21,7 @@ PostgreSQL es la fuente de verdad local. Todo recurso operativo lleva `tenant_id
 
 - El proyecto remoto está vacío; la migración solo agrega estructura.
 - No hay rollback automático destructivo: si se decide abandonarla, se restaura el proyecto de desarrollo o se aplica una migración revisada explícita. Nunca se eliminan tablas con datos como atajo.
-- La API aún no obtiene un secreto de servidor ni muestra datos de Supabase; esa conexión se realizará al implementar autenticación y casos de uso autorizados.
+- La API obtiene su secreto de servidor y lee datos de Supabase desde hace tiempo: `/health` responde `"supabase":"configured"` contra el proyecto real, comprobado en vivo el 2026-10-06.
 
 ## Verificación
 

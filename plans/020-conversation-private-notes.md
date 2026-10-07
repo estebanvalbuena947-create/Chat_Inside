@@ -1,6 +1,6 @@
 # Plan 020 - Notas privadas por conversacion
 
-- **Estado:** en implementacion
+- **Estado:** implementado
 - **Fecha:** 2026-08-14
 - **Cierre:** implementado; no se incluye edicion o eliminacion de notas en este corte.
 

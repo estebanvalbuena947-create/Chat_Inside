@@ -2,7 +2,8 @@ import {
   BadRequestException,
   Inject,
   Injectable,
-  InternalServerErrorException
+  InternalServerErrorException,
+  Logger
 } from '@nestjs/common';
 import {
   mediaListResponseSchema,
@@ -11,11 +12,14 @@ import {
   type MediaListResponse
 } from '@chat-zernio/contracts';
 import { decodeMediaCursor, encodeMediaCursor, sanitizeSearchTerm } from '@chat-zernio/domain';
+import { signMediaPaths } from '@chat-zernio/media';
 import { RequestAuthenticator } from '../auth/request-authenticator';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantAccessService } from '../tenants/tenant-access.service';
 
 export const MEDIA_BUCKET = 'conversation-media';
+
+const logger = new Logger('ConversationMedia');
 const SIGNED_URL_TTL_SECONDS = 600;
 const DEFAULT_PAGE_SIZE = 30;
 const SEARCH_CONTACT_LIMIT = 50;
@@ -38,28 +42,28 @@ type PersistedAttachment = {
 /**
  * Firma en lote las copias propias. El bucket es privado y su ruta interna nunca sale al
  * cliente: solo se entrega un enlace temporal.
+ *
+ * Envuelve la pieza compartida para **conservar el comportamiento de este camino**: aqui un fallo
+ * del almacen devuelve un mapa vacio, y la galeria se muestra con las filas sin enlace en vez de
+ * caerse entera. El catalogo del bot y la multimedia de sede, en cambio, prefieren el error visible.
  */
 export async function signMediaUrls(
   supabase: ReturnType<SupabaseServerClientFactory['create']>,
   paths: string[]
 ): Promise<Map<string, string>> {
-  const uniquePaths = [...new Set(paths.filter((path) => path.length > 0))];
-  const signed = new Map<string, string>();
-  if (uniquePaths.length === 0) return signed;
-
-  const { data, error } = await supabase.storage
-    .from(MEDIA_BUCKET)
-    .createSignedUrls(uniquePaths, SIGNED_URL_TTL_SECONDS);
-  if (error || !data) return signed;
-
-  for (const entry of data) {
-    const path = (entry as { path?: unknown }).path;
-    const signedUrl = (entry as { signedUrl?: unknown }).signedUrl;
-    if (typeof path === 'string' && typeof signedUrl === 'string') {
-      signed.set(path, signedUrl);
-    }
+  try {
+    return await signMediaPaths({
+      bucket: MEDIA_BUCKET,
+      paths,
+      signer: supabase,
+      ttlSeconds: SIGNED_URL_TTL_SECONDS
+    });
+  } catch (error) {
+    // Un fallo aqui no se silencia: se registra el motivo y cuantas rutas quedaron sin firmar.
+    // La galeria se muestra con esas filas sin enlace, pero el fallo queda rastro para poder verlo.
+    logger.warn(`No se pudieron firmar ${paths.length} rutas: ${String(error)}`);
+    return new Map();
   }
-  return signed;
 }
 
 function readContactName(conversation: unknown): { contactId: string; contactName: string } | null {

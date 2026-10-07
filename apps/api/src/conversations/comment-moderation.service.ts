@@ -50,6 +50,7 @@ export class CommentModerationService {
   constructor(
     @Inject(RequestAuthenticator) private readonly requestAuthenticator: RequestAuthenticator,
     @Inject(TenantAccessService) private readonly tenantAccessService: TenantAccessService,
+    @Inject(SupabaseServerClientFactory)
     private readonly supabaseServerClientFactory: SupabaseServerClientFactory,
     @Inject(ZernioApiClient) private readonly zernioApiClient: ZernioApiClient
   ) {}

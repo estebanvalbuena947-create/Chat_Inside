@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Inject, Post, Req } from '@nestjs/common';
+import { Controller, Get, Headers, Inject, Param, Post, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { ToolAssignmentsService } from './tool-assignments.service';
 
@@ -10,6 +10,15 @@ export class ToolAssignmentsController {
   @Post('assignments')
   async assign(@Req() request: FastifyRequest): Promise<unknown> {
     return this.service.assign(request.headers.authorization, request.body);
+  }
+
+  /** Marca una conversacion con etiquetas. Es la pieza del "no insistir" en los seguimientos. */
+  @Post('conversations/:conversationId/labels')
+  async applyLabels(
+    @Param('conversationId') conversationId: string,
+    @Req() request: FastifyRequest
+  ): Promise<unknown> {
+    return this.service.applyLabels(request.headers.authorization, conversationId, request.body);
   }
 
   @Get('labels')

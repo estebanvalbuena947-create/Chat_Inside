@@ -1,6 +1,6 @@
 # Plan 011 — Worker persistente de inbox y outbox
 
-- **Estado:** aprobado para implementación
+- **Estado:** implementado
 - **Fecha:** 2026-08-14
 - **Autorización:** el administrador autorizó corregir el mensaje que permanecía en cola.
 

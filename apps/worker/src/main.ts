@@ -13,12 +13,15 @@ const supabase = createServerSupabaseClient(supabaseServerEnvironmentSchema.pars
 /**
  * Cada cuantos ciclos rapidos se atienden las tareas de maquina.
  *
- * El ciclo rapido existe para la atencion al cliente: recibir y enviar. Las colas internas —el aviso
- * al bot, y mas adelante las conversiones— no son urgentes, y cada ciclo cuesta consultas en
- * Supabase (que ademas se registran). Atenderlas cada quince vueltas las reduce un 93% sin que nadie
- * note la diferencia: unos treinta segundos.
+ * El bot es quien responde las conversaciones: la asesora solo entra cuando hay un problema. Eso
+ * convierte su aviso en algo urgente, no en una cola de fondo. Por eso las tareas de maquina van en
+ * CADA ciclo y el bot recibe el mensaje en unos cinco segundos.
+ *
+ * El ahorro de consultas se sostiene en otro sitio: el ciclo esta en 5 segundos en lugar de 2, y la
+ * multimedia ya no se re-descarga. Espaciar estas tareas fue un error de criterio: medí el consumo
+ * antes de entender como se usa la herramienta.
  */
-const CICLOS_ENTRE_TAREAS_DE_MAQUINA = 15;
+const CICLOS_ENTRE_TAREAS_DE_MAQUINA = 1;
 let ciclosCompletados = 0;
 
 async function drainInbox(): Promise<void> {

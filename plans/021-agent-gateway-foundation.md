@@ -1,6 +1,6 @@
 # Plan 021 - Base segura del Agent Gateway
 
-- **Estado:** en implementacion
+- **Estado:** implementado
 - **Fecha:** 2026-08-14
 - **Cierre:** implementado y validado; la conexion n8n real requiere contrato y autenticacion del workflow existente.
 

@@ -5,8 +5,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/main.ts",
-    "pretest": "corepack pnpm --filter @chat-zernio/config --filter @chat-zernio/contracts --filter @chat-zernio/domain build",
-    "pretypecheck": "corepack pnpm --filter @chat-zernio/config --filter @chat-zernio/contracts --filter @chat-zernio/domain build",
+    "pretest": "corepack pnpm --filter @chat-zernio/config --filter @chat-zernio/contracts --filter @chat-zernio/domain --filter @chat-zernio/media build",
+    "pretypecheck": "corepack pnpm --filter @chat-zernio/config --filter @chat-zernio/contracts --filter @chat-zernio/domain --filter @chat-zernio/media build",
     "start": "node dist/main.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -15,6 +15,7 @@
     "@chat-zernio/config": "workspace:*",
     "@chat-zernio/contracts": "workspace:*",
     "@chat-zernio/domain": "workspace:*",
+    "@chat-zernio/media": "workspace:*",
     "@fastify/cors": "11.3.0",
     "@nestjs/common": "11.1.29",
     "@nestjs/core": "11.1.29",
@@ -27,8 +28,9 @@
     "zod": "4.1.8"
   },
   "devDependencies": {
+    "@nestjs/testing": "11.1.29",
     "@types/node": "22.18.0",
     "tsx": "4.20.5",
-    "vitest": "3.2.4"
+    "vitest": "3.2.6"
   }
 }

@@ -1,6 +1,6 @@
 # Plan 025 - Perfiles visuales de contactos Zernio
 
-- **Estado:** implementado; pendiente de recibir un evento con foto
+- **Estado:** implementado y verificado en vivo
 - **Fecha:** 2026-08-14
 
 1. Añadir columnas aditivas para usuario y avatar privado, crear el bucket sin acceso público y verificarlo en Supabase.
