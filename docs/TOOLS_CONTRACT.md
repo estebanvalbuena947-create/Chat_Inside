@@ -126,6 +126,42 @@ El bot decide la sede mientras conversa; aquí la deja fijada.
 
 Crea la etiqueta si no existe en el espacio (con su color pastel) y la aplica.
 
+## 8. Conversión ganada — `POST /v1/tools/conversions`
+
+Sustituye al nodo **CAPI de ManyChat**: cuando el pago se confirma —solo, o aprobado a mano— el flujo
+marca la conversión y el trabajador la entrega a Meta.
+
+```json
+{
+  "conversationId": "uuid",
+  "amount": 1998,
+  "currency": "MXN",
+  "occurredAt": "2026-10-07T15:00:00.000Z"
+}
+```
+
+`conversationId` y `amount` son obligatorios; `currency` es `MXN` por defecto y `occurredAt` es ahora.
+
+Respuesta `200`:
+
+```json
+{ "queued": true, "conversationId": "uuid", "tenantId": "uuid" }
+```
+
+Y si la integración de conversiones está apagada:
+
+```json
+{ "queued": false, "reason": "La integracion de conversiones no esta activa." }
+```
+
+También con `200`: no es un fallo del flujo, es que ese espacio no manda conversiones a Meta.
+
+**Una conversión por conversación.** La clave del evento es estable, así que un reintento de n8n no
+cuenta la compra dos veces: Meta la deduplica. El alcance es **`conversations`**, no uno propio, para
+no obligar a reemitir el token de quien ya está en producción.
+
+Errores: `404` conversación inexistente · `422` falta el importe o la conversación.
+
 ## Qué NO pasa por aquí
 
 Disponibilidad, reservas, pagos, catálogo y la memoria del agente: eso es **lógica** y se queda donde
