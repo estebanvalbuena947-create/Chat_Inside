@@ -1484,7 +1484,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260718000743_496933\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-is-{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"media\": [ { \"branchMediaId\": \"eee43939-4e2c-46a3-98aa-f252d7fadbf0\" } ]\n}",
         "options": {
           "response": {
             "response": {
@@ -1700,7 +1700,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260727160555_969729\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-isv-{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"media\": [ { \"branchMediaId\": \"eee43939-4e2c-46a3-98aa-f252d7fadbf0\" } ]\n}",
         "options": {
           "response": {
             "response": {
@@ -1829,7 +1829,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260727173020_411282\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-tiktok-isv-{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"media\": [ { \"branchMediaId\": \"eee43939-4e2c-46a3-98aa-f252d7fadbf0\" } ]\n}",
         "options": {
           "response": {
             "response": {
