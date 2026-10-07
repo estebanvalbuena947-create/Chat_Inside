@@ -3960,10 +3960,19 @@ export default function HomePage(): React.ReactNode {
 
 type MetricsPayload = {
   closedConversations: number;
+  closure: { byAdvisor: number; byBot: number };
   error?: string;
   messagesByChannel: Array<{ platform: string; received: number; sent: number }>;
   messagesPerDay: Array<{ date: string; received: number; sent: number }>;
   periodDays: number;
+  responseTime: {
+    averageSeconds: number | null;
+    betweenFiveAndTenMinutes: number;
+    conversations: number;
+    overTenMinutes: number;
+    thresholds: { amberSeconds: number; redSeconds: number };
+    underFiveMinutes: number;
+  };
   totalMessages: number;
   truncated: boolean;
 };
@@ -3972,6 +3981,57 @@ type MetricsState =
   | { kind: 'loading' }
   | { kind: 'ready'; data: MetricsPayload }
   | { kind: 'error'; message: string };
+
+/** Espera legible: segundos si no llega al minuto, y minutos con los segundos que sobran. */
+function esperaEnPalabras(segundos: number | null): string {
+  if (segundos === null) return 'Sin datos';
+  if (segundos < 60) return String(segundos) + ' s';
+  const minutos = Math.floor(segundos / 60);
+  const resto = segundos % 60;
+  return resto ? minutos + ' min ' + resto + ' s' : minutos + ' min';
+}
+
+/**
+ * Color de una espera segun la politica de la API.
+ *
+ * Los limites no se escriben aqui: viajan en la respuesta para que cambiar la politica no obligue a
+ * tocar la pantalla, y para que no haya dos versiones del mismo numero.
+ */
+function colorDeEspera(
+  segundos: number | null,
+  thresholds: { amberSeconds: number; redSeconds: number }
+): string {
+  if (segundos === null) return 'sin-datos';
+  if (segundos > thresholds.redSeconds) return 'alto';
+  if (segundos >= thresholds.amberSeconds) return 'aviso';
+  return 'ok';
+}
+
+/** Los tres tramos de espera, con su etiqueta construida a partir de los limites recibidos. */
+function tramosDeEspera(responseTime: MetricsPayload['responseTime']) {
+  const minutos = (segundos: number) => Math.round(segundos / 60);
+  const { amberSeconds, redSeconds } = responseTime.thresholds;
+  return [
+    {
+      clave: 'ok',
+      color: 'ok',
+      etiqueta: 'Menos de ' + minutos(amberSeconds) + ' min',
+      valor: responseTime.underFiveMinutes
+    },
+    {
+      clave: 'aviso',
+      color: 'aviso',
+      etiqueta: 'Entre ' + minutos(amberSeconds) + ' y ' + minutos(redSeconds) + ' min',
+      valor: responseTime.betweenFiveAndTenMinutes
+    },
+    {
+      clave: 'alto',
+      color: 'alto',
+      etiqueta: 'Mas de ' + minutos(redSeconds) + ' min',
+      valor: responseTime.overTenMinutes
+    }
+  ];
+}
 
 /**
  * Panel de actividad: cuantos mensajes llegan, por donde, y cuantas conversaciones se cerraron.
@@ -4017,11 +4077,61 @@ function MetricsPanel({
             <div className="metrics-card">
               <p className="metrics-card-label">Conversaciones cerradas</p>
               <p className="metrics-card-value">{state.data.closedConversations}</p>
+              <p className="metrics-hint">
+                {state.data.closure.byBot} por el bot · {state.data.closure.byAdvisor} por un asesor
+              </p>
+            </div>
+            <div className="metrics-card">
+              <p className="metrics-card-label">Respuesta del asesor</p>
+              <p className="metrics-card-value">
+                {esperaEnPalabras(state.data.responseTime.averageSeconds)}
+              </p>
+              <p
+                className={
+                  'metrics-hint ' +
+                  colorDeEspera(
+                    state.data.responseTime.averageSeconds,
+                    state.data.responseTime.thresholds
+                  )
+                }
+              >
+                <span
+                  className={
+                    'metrics-dot ' +
+                    colorDeEspera(
+                      state.data.responseTime.averageSeconds,
+                      state.data.responseTime.thresholds
+                    )
+                  }
+                />
+                {state.data.responseTime.conversations} conversaciones medidas
+              </p>
             </div>
             <div className="metrics-card">
               <p className="metrics-card-label">Canales con actividad</p>
               <p className="metrics-card-value">{state.data.messagesByChannel.length}</p>
             </div>
+          </div>
+
+          <div className="metrics-block">
+            <h3>Cuánto esperó el cliente</h3>
+            {state.data.responseTime.conversations === 0 ? (
+              <p className="metrics-note">
+                Ningún asesor respondió en este periodo, así que no hay espera que medir.
+              </p>
+            ) : (
+              tramosDeEspera(state.data.responseTime).map((tramo) => (
+                <div className="metrics-row" key={tramo.clave}>
+                  <span className="metrics-row-name">
+                    <span className={'metrics-dot ' + tramo.color} />
+                    {tramo.etiqueta}
+                  </span>
+                  <span className="metrics-row-values">
+                    {tramo.valor} {tramo.valor === 1 ? 'conversación' : 'conversaciones'}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
 
           {state.data.truncated && (

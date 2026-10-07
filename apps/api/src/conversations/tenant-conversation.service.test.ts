@@ -506,7 +506,32 @@ describe('TenantConversationService status', () => {
     expect(fake.callsIn('conversations', 'eq')).toContainEqual(['status_version', 1]);
     expect(fake.callsIn('conversations', 'update')).toContainEqual([
       {
+        resolved_at: null,
         status: 'pending',
+        status_version: 2,
+        updated_at: expect.any(String)
+      }
+    ]);
+  });
+
+  it('guarda la fecha de cierre al resolver, que es lo que permite contarlas por periodo', async () => {
+    const { fake, service } = createService({
+      conversations: [
+        { data: conversationRow({ status: 'resolved', status_version: 2 }), error: null }
+      ]
+    });
+
+    await expect(
+      service.changeStatus('Bearer valid.jwt', tenantId, conversationId, {
+        status: 'resolved',
+        statusVersion: 1
+      })
+    ).resolves.toEqual({ item: expectedSummary({ status: 'resolved', statusVersion: 2 }) });
+
+    expect(fake.callsIn('conversations', 'update')).toContainEqual([
+      {
+        resolved_at: expect.any(String),
+        status: 'resolved',
         status_version: 2,
         updated_at: expect.any(String)
       }

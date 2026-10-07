@@ -654,6 +654,9 @@ export class TenantConversationService {
       supabase
         .from('conversations')
         .update({
+          // La fecha de cierre se escribe aqui y se limpia al reabrir: es lo que permite decir
+          // cuantas se cerraron EN UN PERIODO, y no cuantas estan cerradas hoy.
+          resolved_at: input.status === 'resolved' ? new Date().toISOString() : null,
           status: input.status,
           status_version: input.statusVersion + 1,
           updated_at: new Date().toISOString()

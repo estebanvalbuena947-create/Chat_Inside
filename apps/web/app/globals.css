@@ -3343,6 +3343,53 @@ h2 {
   font-size: 13px;
   margin: 0 0 8px;
 }
+
+/* Los tramos de espera: verde, ambar y rojo. Los limites los manda la API, aqui solo van los colores. */
+.metrics-hint {
+  color: var(--brand-tinta-suave);
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+.metrics-dot {
+  border-radius: 999px;
+  display: inline-block;
+  height: 8px;
+  margin-right: 6px;
+  vertical-align: middle;
+  width: 8px;
+}
+
+.metrics-hint.ok,
+.metrics-row-name .metrics-dot.ok {
+  color: #1f7a4d;
+}
+
+.metrics-dot.ok {
+  background: #37a06a;
+}
+
+.metrics-hint.aviso,
+.metrics-row-name .metrics-dot.aviso {
+  color: #946200;
+}
+
+.metrics-dot.aviso {
+  background: #d9a521;
+}
+
+.metrics-hint.alto,
+.metrics-row-name .metrics-dot.alto {
+  color: #b3261e;
+}
+
+.metrics-dot.alto {
+  background: #d1453b;
+}
+
+.metrics-dot.sin-datos {
+  background: #b9b4a6;
+}
 /* La vista de actividad ocupa la pantalla y lleva su cabecera fija, como Comprobantes. */
 .metrics-view {
   background: #fcfbf6;

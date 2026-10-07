@@ -620,11 +620,44 @@ export const metricsChannelSchema = z.object({
   sent: z.number().int()
 });
 
+/**
+ * Quien atendio una conversacion cerrada.
+ *
+ * Se atribuye por PARTICIPACION, no por quien pulso el boton: si ningun asesor escribio, la llevo el
+ * bot de principio a fin. Medir quien pulso «cerrar» diria quien ordena la lista, no quien atendio.
+ */
+export const metricsClosureSchema = z.object({
+  byAdvisor: z.number().int(),
+  byBot: z.number().int()
+});
+
+export type MetricsClosure = z.infer<typeof metricsClosureSchema>;
+
+/** Cuando una respuesta de asesor deja de ser buena. Viaja en la respuesta para no repetirla en la interfaz. */
+export const metricsResponseThresholdsSchema = z.object({
+  amberSeconds: z.number().int(),
+  redSeconds: z.number().int()
+});
+
+export const metricsResponseTimeSchema = z.object({
+  /** Nulo cuando ningun asesor respondio en el periodo: un cero mentiria. */
+  averageSeconds: z.number().int().nullable(),
+  betweenFiveAndTenMinutes: z.number().int(),
+  conversations: z.number().int(),
+  overTenMinutes: z.number().int(),
+  thresholds: metricsResponseThresholdsSchema,
+  underFiveMinutes: z.number().int()
+});
+
+export type MetricsResponseTime = z.infer<typeof metricsResponseTimeSchema>;
+
 export const metricsSummarySchema = z.object({
   closedConversations: z.number().int(),
+  closure: metricsClosureSchema,
   messagesByChannel: z.array(metricsChannelSchema),
   messagesPerDay: z.array(metricsDaySchema),
   periodDays: z.number().int(),
+  responseTime: metricsResponseTimeSchema,
   totalMessages: z.number().int(),
   /** Verdadero cuando se alcanzo el tope de lectura: las cifras son un minimo, no el total. */
   truncated: z.boolean()

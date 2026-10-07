@@ -832,3 +832,58 @@ salto, comillas, barra invertida, vacío, `null` y número.
 Cómo se verifica: la prueba exige el escape en los seis flujos y falla **nombrando el nodo y la
 interpolación**; se deshizo el escape de un solo valor y falló, y al restaurarlo pasó. El primer turno
 real entregado es del 7 de octubre a las 20:08, con estado `read`.
+
+## Métricas de cierre y de tiempo de respuesta del asesor
+
+### Quién atendió una conversación cerrada se mide por participación
+
+Cerrar una conversación ya existía (`status = 'resolved'`) pero no decía **quién** la había cerrado, y
+la métrica de «cerradas por el bot y por un asesor» necesitaba esa respuesta. Guardar «quién pulsó
+cerrar» habría medido quién ordena la lista, no quién atendió al cliente; y como el bot todavía no
+cierra conversaciones, ese dato nacería casi siempre vacío. Se atribuye por **participación**, que es
+un hecho ya registrado (`messages.sender_type = 'agent'`): si ningún asesor escribió, la llevó el bot;
+si alguno escribió, la atendió una persona.
+
+Faltaba, eso sí, **cuándo** se cerró. Se contaban las cerradas con `status = 'resolved'`, que dice
+cuántas están cerradas hoy y no cuántas se cerraron en el periodo: una conversación resuelta hace un
+mes seguía sumando en la semana. Se añadió `conversations.resolved_at`, escrita en el mismo `update`
+que cambia el estado y limpiada al reabrir. Al aplicar la migración no había ninguna resuelta (0 de
+422), así que no hubo nada que rellenar.
+
+El total (`closedConversations`) se conserva como la suma de las dos partes, y ese invariante se
+prueba.
+
+### El tiempo de respuesta mide la primera respuesta, y los límites viajan con el dato
+
+Es el tiempo desde el mensaje del cliente hasta la **primera** respuesta de un asesor en el periodo.
+Se mide la primera porque lo que se quiere saber es cuánto esperó el cliente; una segunda respuesta más
+lenta no lo cambia. Lo que manda el bot no cuenta —no es espera de una persona— y una respuesta sin
+mensaje previo del cliente tampoco: no hay espera que medir.
+
+Sin ninguna respuesta de asesor, el periodo devuelve **`null`, no `0`**: un cero mentiría y además
+pintaría de verde un periodo sin datos. Los umbrales (ámbar desde 5 minutos, rojo por encima de 10) son
+política del negocio y **viajan en la respuesta** para que la interfaz no tenga su propia copia del
+número: cambiarlos es cambiar un sitio. La pantalla construye las etiquetas («Entre 5 y 10 min») a
+partir de esos límites, no de constantes escritas en el cliente.
+
+Riesgo declarado: una respuesta de asesor que conteste a un mensaje de hace más de 24 horas queda
+fuera de la medición, porque la lectura mira ese margen hacia atrás para poder emparejar la respuesta
+con el mensaje que contesta. Es un borde, no un error de cálculo. El desglose por asesor queda para el
+siguiente corte: necesita resolver nombres y no cabía aquí.
+
+### El resumen se leía cortado en mil filas
+
+Se descubrió **midiendo, no leyendo**: al calcular a mano lo que debía mostrar la tarjeta, una petición
+de veinte mil filas devolvió exactamente mil. El servidor de datos corta cada respuesta en mil filas
+aunque se pidan más, así que el resumen contaba mil mensajes y los presentaba como el total del
+periodo, con `truncated` en falso: un número incompleto con aspecto de cifra exacta. El defecto venía
+de antes y afectaba también a la métrica que ya existía.
+
+Ahora se pide **por páginas** hasta el tope, y el aviso de «cifra mínima» dice la verdad. La
+diferencia es real: en 30 días hay **2 728** mensajes que emparejar, no los 1 000 que se leían. El tope
+sigue existiendo porque la agregación se hace en memoria; a más volumen, lo correcto será agregar en la
+base de datos, y eso está declarado como el siguiente límite.
+
+De la primera medición real sale un dato que conviene mirar: en 30 días hay **una** conversación medida
+y la espera fue de **6 horas 2 minutos**, es decir roja. No es un error de cálculo: es el único caso del
+periodo en el que un asesor respondió.
