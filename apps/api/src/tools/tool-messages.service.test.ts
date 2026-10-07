@@ -132,6 +132,35 @@ describe('envio de mensajes del bot', () => {
 
     expect(enqueueOutbound).not.toHaveBeenCalled();
   });
+
+  it('un texto largo se parte en dos mensajes, con claves de idempotencia distintas', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
+    const primera = 'Parte uno ' + 'x'.repeat(500);
+    const segunda = 'Parte dos ' + 'y'.repeat(500);
+
+    await servicio.send('Bearer token', { ...cuerpoValido, body: `${primera}\n\n${segunda}` });
+
+    expect(enqueueOutbound).toHaveBeenCalledTimes(2);
+    const cuerpos = enqueueOutbound.mock.calls.map((llamada) => llamada[0].command.body);
+    expect(cuerpos).toEqual([primera, segunda]);
+    // Si las dos partes compartieran clave, la segunda chocaria con la idempotencia de la primera
+    // y no saldria nunca.
+    const claves = enqueueOutbound.mock.calls.map((llamada) => llamada[0].command.idempotencyKey);
+    expect(claves[0]).toBe(UUID);
+    expect(claves[1]).not.toBe(UUID);
+    // Sigue siendo un UUID: es lo que exige el contrato del comando.
+    expect(claves[1]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
+  });
+
+  it('un texto que cabe se encola una sola vez', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
+
+    await servicio.send('Bearer token', cuerpoValido);
+
+    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
+  });
 });
 
 /** Referencia de tipo para que el import no quede sin usar si el archivo cambia. */

@@ -628,3 +628,17 @@ La regla es que un duplicado al abrir una conversación significa que **otro pro
 hilo es el mismo: se adopta la que ganó. El camino de la automatización ya lo hacía así; faltaba en el
 camino de entrada. Las dos usan ahora `createOrAdoptConversation`, para que la regla viva en un solo
 sitio y no puedan divergir.
+
+### Un mensaje largo se parte en dos en la puerta, no en cada flujo
+
+El contrato de la tool admite 4000 caracteres, pero **el canal no**: Instagram corta alrededor de 1000.
+El límite no es nuestro, y quien lo conoce es la plataforma, no el flujo.
+
+Partirlo en el flujo habría significado duplicar nueve nodos y sus conexiones, y volver a repetir la
+regla en cada flujo nuevo. Se parte en `POST /v1/tools/messages`, por el último **salto de párrafo** que
+quepa —que es donde el texto ya separa sus dos partes— y, si no lo hay, por un salto de línea, un
+espacio o el límite exacto.
+
+Las dos partes **no pueden compartir clave de idempotencia**: la segunda chocaría con la primera y no
+saldría nunca. Y como el contrato exige un **UUID**, no vale añadirle un sufijo: la segunda se deriva de
+la original de forma determinista, para que un reintento produzca exactamente las mismas partes.

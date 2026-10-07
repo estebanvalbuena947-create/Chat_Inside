@@ -7,6 +7,7 @@ import {
 import { createOutboundMessageSchema } from '@chat-zernio/contracts';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantMessageService } from '../conversations/tenant-message.service';
+import { partIdempotencyKey, splitOutboundText } from './outbound-text-splitter';
 import { ToolTokenService } from './tool-token.service';
 import { readPlaceholders } from './tool-templates.service';
 
@@ -83,31 +84,51 @@ export class ToolMessagesService {
     const tieneMultimedia = Array.isArray(cuerpo.media) && cuerpo.media.length > 0;
     const cuerpoFinal = dePlantilla ?? texto ?? '';
 
-    const command = createOutboundMessageSchema.safeParse({
-      body: cuerpoFinal,
-      idempotencyKey: cuerpo.idempotencyKey
-    });
+    // Un texto largo se manda en dos mensajes. El contrato admite 4000 caracteres, pero el canal
+    // corta alrededor de 1000, y quien lo sabe es la plataforma, no cada flujo que manda texto.
+    const partes = splitOutboundText(cuerpoFinal);
     const clave = createOutboundMessageSchema.shape.idempotencyKey.safeParse(cuerpo.idempotencyKey);
-    if (!command.success && !(tieneMultimedia && clave.success)) {
-      throw new UnprocessableEntityException(
-        'El mensaje necesita un texto o una imagen, y una clave de idempotencia valida.'
+
+    const comandos: Array<{ body: string; idempotencyKey: string }> = [];
+    for (let indice = 0; indice < partes.length; indice++) {
+      const command = createOutboundMessageSchema.safeParse({
+        body: partes[indice],
+        idempotencyKey:
+          typeof cuerpo.idempotencyKey === 'string'
+            ? partIdempotencyKey(cuerpo.idempotencyKey, indice + 1)
+            : cuerpo.idempotencyKey
+      });
+      // Mandar un archivo sin texto es legitimo, pero solo tiene sentido en la primera parte.
+      const soloArchivo = indice === 0 && tieneMultimedia && clave.success;
+      if (!command.success && !soloArchivo) {
+        throw new UnprocessableEntityException(
+          'El mensaje necesita un texto o una imagen, y una clave de idempotencia valida.'
+        );
+      }
+      comandos.push(
+        command.success ? command.data : { body: '', idempotencyKey: String(cuerpo.idempotencyKey) }
       );
     }
-    const comando = command.success
-      ? command.data
-      : { body: '', idempotencyKey: String(cuerpo.idempotencyKey) };
 
     // La multimedia se resuelve ANTES de encolar: si un archivo no existe en este espacio, no se
     // encola nada. Encolar primero y fallar despues dejaria un mensaje en la cola sin su imagen.
     const adjuntos = await this.resolveAttachments(supabase, identity.tenantId, cuerpo.media);
 
-    const item = await this.tenantMessageService.enqueueOutbound({
-      command: comando,
-      conversationId,
-      senderType: 'automation',
-      senderUserId: null,
-      tenantId: identity.tenantId
-    });
+    // Las dos partes se encolan seguidas, y la multimedia viaja con la primera.
+    let item: Awaited<ReturnType<TenantMessageService['enqueueOutbound']>> | null = null;
+    for (const comando of comandos) {
+      const encolado = await this.tenantMessageService.enqueueOutbound({
+        command: comando,
+        conversationId,
+        senderType: 'automation',
+        senderUserId: null,
+        tenantId: identity.tenantId
+      });
+      item ??= encolado;
+    }
+    if (!item) {
+      throw new UnprocessableEntityException('El mensaje no tenia contenido que enviar.');
+    }
 
     if (adjuntos.length > 0) {
       const { error: adjuntoError } = await supabase.from('message_attachments').insert(
