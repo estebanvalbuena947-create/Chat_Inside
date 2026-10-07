@@ -178,6 +178,58 @@ export async function storeMessageAttachments(
   }
 }
 
+/** Lo minimo de una conversacion para colgarle mensajes. */
+type ConversationRow = {
+  id: string;
+  last_message_at: string | null;
+  status: string;
+  status_version: number;
+};
+
+/**
+ * Crea la conversacion del hilo, o adopta la que otro proceso creo a la vez.
+ *
+ * Dos mensajes seguidos del mismo contacto pueden entrar en paralelo y crear los dos la misma
+ * conversacion. El segundo recibe un duplicado; si eso se tratara como un fallo, su mensaje se
+ * quedaria sin guardar y el evento no se reprocesa nunca, asi que el mensaje del cliente se
+ * perderia. En vez de eso se adopta la conversacion que gano, porque el hilo es el mismo.
+ *
+ * Devuelve null cuando el fallo no es un duplicado: ahi si hay que fallar.
+ */
+export async function createOrAdoptConversation(
+  supabase: SupabaseServerClient,
+  params: {
+    channelAccountId: string;
+    contactId: string;
+    conversationReference: string;
+    tenantId: string;
+  }
+): Promise<ConversationRow | null> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .insert({
+      channel_account_id: params.channelAccountId,
+      contact_id: params.contactId,
+      external_reference: params.conversationReference,
+      tenant_id: params.tenantId
+    })
+    .select('id, last_message_at, status, status_version')
+    .single();
+
+  if (!error && data) return data;
+  if (error?.code !== '23505') return null;
+
+  const { data: raced } = await supabase
+    .from('conversations')
+    .select('id, last_message_at, status, status_version')
+    .eq('tenant_id', params.tenantId)
+    .eq('channel_account_id', params.channelAccountId)
+    .eq('external_reference', params.conversationReference)
+    .maybeSingle();
+
+  return raced ?? null;
+}
+
 export class ZernioInboxWorker {
   private isRunning = false;
   private isReconcilingLifecycle = false;
@@ -486,19 +538,17 @@ export class ZernioInboxWorker {
       }
     }
     if (!conversation) {
-      const { data, error } = await supabase
-        .from('conversations')
-        .insert({
-          channel_account_id: channelAccount.id,
-          contact_id: contact.id,
-          external_reference: incoming.conversationReference,
-          tenant_id: event.tenant_id
-        })
-        .select('id, last_message_at, status, status_version')
-        .single();
-
-      if (error || !data) throw new ProcessingFailure('conversation_create_failed');
-      conversation = data;
+      // Dos mensajes seguidos del mismo hilo pueden procesarse a la vez y crear los dos la
+      // conversacion. El que pierde adopta la del que gano: si fallara, el mensaje del cliente se
+      // quedaria sin guardar y el evento no se reprocesa, asi que se perderia para siempre.
+      const created = await createOrAdoptConversation(supabase, {
+        channelAccountId: String(channelAccount.id),
+        contactId: String(contact.id),
+        conversationReference: incoming.conversationReference,
+        tenantId: String(event.tenant_id)
+      });
+      if (!created) throw new ProcessingFailure('conversation_create_failed');
+      conversation = created;
     }
 
     const { data: insertedMessage, error: messageError } = await supabase
@@ -679,33 +729,14 @@ export async function recordAutomationMessage(
     if (contactError || !contact) {
       throw new ProcessingFailure('automation_contact_create_failed');
     }
-    const { data: created, error: createError } = await supabase
-      .from('conversations')
-      .insert({
-        channel_account_id: channelAccountId,
-        contact_id: contact.id,
-        external_reference: sent.conversationReference,
-        tenant_id: tenantId
-      })
-      .select('id, last_message_at, status, status_version')
-      .maybeSingle();
-    if (createError && createError.code !== '23505') {
-      throw new ProcessingFailure('automation_conversation_create_failed');
-    }
-
-    if (created) {
-      targetConversation = created;
-    } else {
-      const { data: raced } = await supabase
-        .from('conversations')
-        .select('id, last_message_at, status, status_version')
-        .eq('tenant_id', tenantId)
-        .eq('channel_account_id', channelAccountId)
-        .eq('external_reference', sent.conversationReference)
-        .maybeSingle();
-      if (!raced) throw new ProcessingFailure('automation_conversation_create_failed');
-      targetConversation = raced;
-    }
+    const created = await createOrAdoptConversation(supabase, {
+      channelAccountId: String(channelAccountId),
+      contactId: String(contact.id),
+      conversationReference: sent.conversationReference,
+      tenantId: String(tenantId)
+    });
+    if (!created) throw new ProcessingFailure('automation_conversation_create_failed');
+    targetConversation = created;
     console.log(JSON.stringify({ event: 'worker.automation_conversation_created' }));
   }
 

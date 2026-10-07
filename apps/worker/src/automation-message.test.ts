@@ -37,6 +37,10 @@ function createClient(input: {
     readIndex += 1;
     return Promise.resolve({ data: value ?? null, error: null });
   });
+  // El alta de la conversacion devuelve la fila creada.
+  conversationBuilder.single = vi.fn(() =>
+    Promise.resolve({ data: input.created ?? null, error: null })
+  );
   conversationBuilder.insert = vi.fn((payloadValue: unknown) => {
     calls.push({ args: [payloadValue], method: 'conversations.insert' });
     return conversationBuilder;

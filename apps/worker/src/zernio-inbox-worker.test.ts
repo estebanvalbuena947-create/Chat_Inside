@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ABANDONED_CLAIM_MS } from './abandoned-claims';
 import {
+  createOrAdoptConversation,
   synchronizeChannelName,
   synchronizeChannelPlatform,
   ZernioInboxWorker
@@ -201,5 +202,74 @@ describe('ZernioInboxWorker', () => {
     } finally {
       logError.mockRestore();
     }
+  });
+});
+
+/** Cliente falso: el insert responde `insertResult` y la busqueda posterior, `racedResult`. */
+function createConversationClient(
+  insertResult: FakeResponse,
+  racedResult: FakeResponse = { data: null, error: null }
+) {
+  const builder: Record<string, unknown> = {};
+  builder.insert = vi.fn(() => builder);
+  builder.select = vi.fn(() => builder);
+  builder.eq = vi.fn(() => builder);
+  builder.single = vi.fn(() => Promise.resolve(insertResult));
+  builder.maybeSingle = vi.fn(() => Promise.resolve(racedResult));
+  const from = vi.fn(() => builder);
+  return { builder, client: { from }, from };
+}
+
+const conversationParams = {
+  channelAccountId: 'channel-1',
+  contactId: 'contact-1',
+  conversationReference: 'zernio:account-1:conversation:thread-1',
+  tenantId: 'tenant-1'
+};
+
+describe('createOrAdoptConversation', () => {
+  it('creates the conversation when nothing raced', async () => {
+    const fila = { id: 'conv-1', last_message_at: null, status: 'open', status_version: 1 };
+    const { client } = createConversationClient({ data: fila, error: null });
+
+    await expect(createOrAdoptConversation(client as never, conversationParams)).resolves.toEqual(
+      fila
+    );
+  });
+
+  it('adopts the conversation that won the race instead of losing the message', async () => {
+    const ganadora = {
+      id: 'conv-ganadora',
+      last_message_at: null,
+      status: 'open',
+      status_version: 1
+    };
+    const { client } = createConversationClient(
+      { data: null, error: { code: '23505' } },
+      { data: ganadora, error: null }
+    );
+
+    await expect(createOrAdoptConversation(client as never, conversationParams)).resolves.toEqual(
+      ganadora
+    );
+  });
+
+  it('returns null when the failure is not a duplicate', async () => {
+    const { client } = createConversationClient({ data: null, error: { code: '23503' } });
+
+    await expect(
+      createOrAdoptConversation(client as never, conversationParams)
+    ).resolves.toBeNull();
+  });
+
+  it('returns null when it was a duplicate but the winner cannot be found', async () => {
+    const { client } = createConversationClient(
+      { data: null, error: { code: '23505' } },
+      { data: null, error: null }
+    );
+
+    await expect(
+      createOrAdoptConversation(client as never, conversationParams)
+    ).resolves.toBeNull();
   });
 });

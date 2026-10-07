@@ -613,3 +613,18 @@ Los veintiocho nodos que lanzaban un flujo de ManyChat no esperaban un contenido
 rescatar: ManyChat **no permite enviar un mensaje directo** por su API, y activar un flujo era la única
 forma de mandar algo. Con nuestra plataforma sí se puede enviar directo, así que esos nodos se
 **sustituyen**, no se migran. No hay nada que recuperar de ManyChat.
+
+### Que la conversación ya exista no es un fallo: es una carrera
+
+Dos mensajes seguidos del mismo cliente entran en paralelo y los dos intentan **abrir** la
+conversación. La tabla tiene una clave única por `(tenant_id, channel_account_id, external_reference)`,
+así que el segundo recibe un duplicado.
+
+Tratarlo como fallo no era solo ruidoso: el evento quedaba marcado como fallido, el trabajador solo lee
+eventos sin fallo, y por tanto **el mensaje del cliente se perdía sin que nadie lo viera**. En producción
+pasó en siete de doscientos veinticinco mensajes entrantes.
+
+La regla es que un duplicado al abrir una conversación significa que **otro proceso ya la abrió**, y el
+hilo es el mismo: se adopta la que ganó. El camino de la automatización ya lo hacía así; faltaba en el
+camino de entrada. Las dos usan ahora `createOrAdoptConversation`, para que la regla viva en un solo
+sitio y no puedan divergir.
