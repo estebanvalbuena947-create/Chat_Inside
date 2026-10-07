@@ -17,6 +17,7 @@ type Conversation = {
   lastMessageAt: string | null;
   lastMessageDirection: 'inbound' | 'outbound' | null;
   lastMessagePreview: string | null;
+  attentionLevel: 'ok' | 'aviso' | 'alto' | null;
   needsAttention: boolean;
   startedAt: string | null;
   status: 'open' | 'pending' | 'resolved';
@@ -210,6 +211,17 @@ function channelPlatformAbbreviation(platform: Conversation['channelPlatform']):
 function contactUsernameLabel(username: Conversation['contactUsername']): string | null {
   if (!username) return null;
   return username.startsWith('@') ? username : `@${username}`;
+}
+/**
+ * Que significa cada color del punto de la bandeja.
+ *
+ * No se escriben minutos aqui a proposito: el nivel ya lo decidio la API con la politica del
+ * dominio, y esta pantalla solo lo cuenta con palabras. Si los limites cambian, esto sigue valiendo.
+ */
+function attentionLevelLabel(level: NonNullable<Conversation['attentionLevel']>): string {
+  if (level === 'alto') return 'Sin responder: ya es urgente';
+  if (level === 'aviso') return 'Sin responder: empieza a demorar';
+  return 'Sin responder: dentro de lo normal';
 }
 function conversationPreviewLabel(conversation: Conversation): string {
   if (conversation.lastMessagePreview) {
@@ -2414,7 +2426,9 @@ export default function HomePage(): React.ReactNode {
                   {channelPlatformAbbreviation(conversation.channelPlatform)}
                 </span>
               </div>
-              <div className="conversation-summary">
+              <div
+                className={'conversation-summary' + (conversation.needsAttention ? ' unread' : '')}
+              >
                 <div className="conversation-title">
                   <strong>{conversation.contactName}</strong>
                   <span className="contact-origin">
@@ -2425,8 +2439,12 @@ export default function HomePage(): React.ReactNode {
                 </div>
                 <p className="conversation-preview">{conversationPreviewLabel(conversation)}</p>
               </div>
-              {conversation.needsAttention && (
-                <span aria-label="Requiere atención" className="unread-dot" />
+              {conversation.attentionLevel && (
+                <span
+                  aria-label={attentionLevelLabel(conversation.attentionLevel)}
+                  className={'attention-dot ' + conversation.attentionLevel}
+                  title={attentionLevelLabel(conversation.attentionLevel)}
+                />
               )}
             </button>
           ))}

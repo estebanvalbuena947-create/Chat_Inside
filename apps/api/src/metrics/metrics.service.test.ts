@@ -1,6 +1,6 @@
+import { ATTENTION_THRESHOLDS } from '@chat-zernio/domain';
 import { describe, expect, it } from 'vitest';
 import {
-  ADVISOR_RESPONSE_THRESHOLDS,
   leerPorPaginas,
   summarizeClosure,
   summarizeMessages,
@@ -174,8 +174,8 @@ describe('tiempo de respuesta del asesor', () => {
       mensaje('c3', '2026-10-01T10:00:00.000Z', 'inbound', 'contact'),
       mensaje('c3', new Date(Date.parse(aminuto(10)) + 1000).toISOString(), 'outbound', 'agent')
     ]);
-    expect(ADVISOR_RESPONSE_THRESHOLDS).toEqual({ amberSeconds: 300, redSeconds: 600 });
-    expect(r.thresholds).toEqual(ADVISOR_RESPONSE_THRESHOLDS);
+    expect(ATTENTION_THRESHOLDS).toEqual({ amberSeconds: 300, redSeconds: 600 });
+    expect(r.thresholds).toEqual(ATTENTION_THRESHOLDS);
     expect(r.underFiveMinutes).toBe(0);
     expect(r.betweenFiveAndTenMinutes).toBe(2);
     expect(r.overTenMinutes).toBe(1);

@@ -35,3 +35,18 @@ La bandeja muestra qué conversaciones requieren atención de la persona que est
 - Rollback de aplicación: la interfaz puede volver al indicador de sesión y la API ignorar los campos nuevos. La tabla es aditiva y no altera conversaciones, mensajes ni eventos existentes.
 - Alternativa considerada y aplazada: una función SQL que devuelva página, vista previa y **conteo** de no leídos en una sola consulta. Se aplaza porque exige que el conteo viva en la base y porque el indicador booleano cubre la necesidad actual; el conteo puede agregarse después sin cambiar este contrato.
 - Riesgo operativo de la migración: el repositorio no contiene cadena de conexión y el CLI de Supabase no está autenticado en este equipo, así que aplicar la migración requiere `supabase db push` con sesión autorizada o pegarla en el editor SQL del proyecto.
+
+## Ampliación: el nivel de atención (2026-10-08)
+
+La marca de lectura dice qué no se ha visto; **no** dice cuánto lleva el cliente esperando respuesta,
+que es otra cosa y la que decide a quién atender primero. Cada elemento del listado agrega ahora
+`attentionLevel`: `ok`, `aviso` o `alto`, y nulo cuando el último mensaje no es del cliente.
+
+- El reloj es el del **último mensaje del cliente**, no el de la marca de lectura: abrir la
+  conversación sin contestar no responde, y ése es justo el caso que hay que ver. El punto de la
+  bandeja desaparece cuando se responde, no cuando se lee.
+- `needsAttention` no cambia: sigue marcando lo no leído, y la bandeja lo muestra con la vista previa
+  en negrita. El punto pasó a significar «sin respuesta».
+- Los umbrales (ámbar desde 5 minutos, rojo por encima de 10) son **los mismos** del panel de actividad
+  y viven en el dominio (`ATTENTION_THRESHOLDS`), en un solo sitio: cambiar la política es cambiar un
+  valor, y la interfaz no tiene copia del número.

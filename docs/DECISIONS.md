@@ -887,3 +887,21 @@ base de datos, y eso está declarado como el siguiente límite.
 De la primera medición real sale un dato que conviene mirar: en 30 días hay **una** conversación medida
 y la espera fue de **6 horas 2 minutos**, es decir roja. No es un error de cálculo: es el único caso del
 periodo en el que un asesor respondió.
+
+## El punto de la bandeja cuenta la espera, no la lectura
+
+La bandeja marcaba con un punto naranja lo que nadie había abierto, y el encargo fue que ese punto
+dijera además **cuánto lleva el cliente sin respuesta**. Se descartó colorear el mismo punto sin
+cambiar su significado: al abrir una conversación sin contestar el punto desaparecía, así que el caso
+más urgente —leído y sin responder— se escondía solo.
+
+Ahora el punto aparece cuando el **último mensaje es del cliente**, su color dice la espera (`ok`,
+`aviso`, `alto`) y se apaga cuando se responde. Lo no leído no se pierde: `needsAttention` se sigue
+calculando igual y la bandeja lo enseña con la vista previa en negrita, que es el gesto habitual de las
+bandejas de correo.
+
+El nivel se calcula en la API, donde ya estaba el último mensaje: no hizo falta ni consulta nueva ni
+tabla nueva. Y los umbrales, que habían quedado en el servicio de métricas, se movieron al dominio
+(`ATTENTION_THRESHOLDS`): el panel de actividad y la bandeja dicen lo mismo porque leen la misma
+política. La pantalla recibe el **nivel**, no los minutos, así que no puede quedarse con una copia
+vieja del límite ni contradecir al panel.

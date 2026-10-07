@@ -365,6 +365,29 @@ h1 {
   border-radius: 50%;
   background: #d66b39;
 }
+/* El punto de la bandeja dice cuanto lleva el cliente sin respuesta. Mismo vocabulario que el panel. */
+.attention-dot {
+  width: 8px;
+  height: 8px;
+  align-self: center;
+  margin-left: 4px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.attention-dot.ok {
+  background: #37a06a;
+}
+.attention-dot.aviso {
+  background: #d9a521;
+}
+.attention-dot.alto {
+  background: #d1453b;
+}
+/* Lo no leido se marca con la vista previa en negrita: el punto ya cuenta otra cosa. */
+.conversation-summary.unread .conversation-preview {
+  color: var(--brand-tinta);
+  font-weight: 600;
+}
 .unread-count {
   position: absolute;
   right: 10px;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyInboundMessage,
+  ATTENTION_THRESHOLDS,
+  attentionLevel,
   clampReadMark,
   handoffToHuman,
   needsAttention,
@@ -106,5 +108,48 @@ describe('conversation attention', () => {
   it('never requires attention from unusable data', () => {
     expect(needsAttention(mark, 'ayer')).toBe(false);
     expect(needsAttention(mark, '')).toBe(false);
+  });
+});
+
+describe('attention level: cuanto lleva el cliente sin respuesta', () => {
+  const ahora = new Date('2026-10-07T20:00:00.000Z');
+  const hace = (minutos: number) => new Date(ahora.getTime() - minutos * 60_000).toISOString();
+
+  it('no hay nada pendiente cuando el ultimo mensaje es nuestro', () => {
+    expect(
+      attentionLevel({ direction: 'outbound', lastMessageAt: hace(1), now: ahora })
+    ).toBeNull();
+  });
+
+  it('sin mensaje, o con una fecha ilegible, no inventa un nivel', () => {
+    expect(attentionLevel({ direction: 'inbound', lastMessageAt: null, now: ahora })).toBeNull();
+    expect(attentionLevel({ direction: 'inbound', lastMessageAt: 'ayer', now: ahora })).toBeNull();
+  });
+
+  it('esta dentro de lo normal mientras la espera es corta', () => {
+    expect(attentionLevel({ direction: 'inbound', lastMessageAt: hace(4), now: ahora })).toBe('ok');
+  });
+
+  it('los limites exactos no son rojo: a los 5 minutos avisa, y a los 10 tambien', () => {
+    expect(attentionLevel({ direction: 'inbound', lastMessageAt: hace(5), now: ahora })).toBe(
+      'aviso'
+    );
+    expect(attentionLevel({ direction: 'inbound', lastMessageAt: hace(10), now: ahora })).toBe(
+      'aviso'
+    );
+  });
+
+  it('un segundo mas alla del limite ya es urgente', () => {
+    const pasado = new Date(
+      ahora.getTime() - ATTENTION_THRESHOLDS.redSeconds * 1000 - 1000
+    ).toISOString();
+    expect(attentionLevel({ direction: 'inbound', lastMessageAt: pasado, now: ahora })).toBe(
+      'alto'
+    );
+  });
+
+  it('no cuenta tiempo negativo si la fecha viene del futuro', () => {
+    const futuro = new Date(ahora.getTime() + 60_000).toISOString();
+    expect(attentionLevel({ direction: 'inbound', lastMessageAt: futuro, now: ahora })).toBe('ok');
   });
 });

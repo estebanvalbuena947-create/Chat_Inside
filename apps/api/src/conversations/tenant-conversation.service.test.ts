@@ -128,6 +128,7 @@ function expectedSummary(overrides: Record<string, unknown> = {}) {
   return {
     assignmentVersion: 1,
     assignedUserId: null,
+    attentionLevel: null,
     automationMode: 'auto',
     automationVersion: 1,
     channelPlatform: 'instagram',
@@ -230,6 +231,42 @@ describe('TenantConversationService list', () => {
       startedAt: null,
       needsAttention: false
     });
+  });
+
+  it('dice cuanto lleva el cliente sin respuesta, aunque alguien haya abierto la conversacion', async () => {
+    const otraConversacion = '22222222-2222-4222-8222-222222222222';
+    const hace = (minutos: number) => new Date(Date.now() - minutos * 60_000).toISOString();
+
+    const { service } = createService({
+      conversations: [
+        {
+          data: [
+            conversationRow({
+              // Abierta DESPUES del mensaje del cliente (marca mas nueva) y sin responder.
+              inbound: [{ created_at: hace(2) }],
+              last_message_at: hace(2),
+              latest: [{ body: 'Hola', created_at: hace(2), direction: 'inbound' }],
+              read: [{ last_read_at: hace(1) }]
+            }),
+            conversationRow({
+              id: otraConversacion,
+              last_message_at: hace(20),
+              latest: [{ body: 'Hola', created_at: hace(20), direction: 'inbound' }]
+            })
+          ],
+          error: null
+        }
+      ]
+    });
+
+    const result = await service.list('Bearer valid.jwt', tenantId, {
+      assignmentScope: 'all',
+      limit: 2
+    });
+
+    expect(result.items.map((item) => item.attentionLevel)).toEqual(['ok', 'alto']);
+    // Abrir no responde: la primera sigue pendiente, y por eso el punto cuenta la espera y no la lectura.
+    expect(result.items[0].needsAttention).toBe(false);
   });
 
   it('bounds the preview and omits it when the message has no visible text', async () => {

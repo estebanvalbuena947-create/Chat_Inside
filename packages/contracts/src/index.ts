@@ -79,12 +79,22 @@ export const conversationListQuerySchema = z.object({
   search: z.string().trim().max(80).optional()
 });
 
+/**
+ * Cuanto lleva esperando respuesta el cliente.
+ *
+ * Nulo cuando no hay nada pendiente: si el ultimo mensaje no es del cliente, ya se respondio.
+ */
+export const attentionLevelSchema = z.enum(['ok', 'aviso', 'alto']);
+
+export type AttentionLevel = z.infer<typeof attentionLevelSchema>;
+
 export const conversationSummarySchema = z.object({
   id: z.uuid(),
   contactId: z.uuid(),
   contactName: z.string().min(1).max(160),
   contactUsername: z.string().min(1).max(160).nullable(),
   contactAvatarAvailable: z.boolean(),
+  attentionLevel: attentionLevelSchema.nullable(),
   assignedUserId: z.uuid().nullable(),
   channelPlatform: z.string().trim().min(1).max(64).nullable(),
   status: conversationStatusSchema,

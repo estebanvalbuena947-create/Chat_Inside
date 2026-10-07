@@ -8,6 +8,7 @@ import {
   UnprocessableEntityException
 } from '@nestjs/common';
 import {
+  attentionLevel,
   clampReadMark,
   decodeInboxCursor,
   encodeInboxCursor,
@@ -178,6 +179,11 @@ function asConversationSummary(conversation: PersistedConversation): Conversatio
   const latest = readLatestMessage(conversation.latest);
   const lastInboundAt = readMessageCreatedAt(conversation.inbound);
   const lastReadAt = readLastReadAt(conversation.read);
+  const lastMessageAt = normalizeNullableTimestamp(
+    conversation.last_message_at,
+    'una fecha de último mensaje'
+  );
+  const lastMessageDirection = latest?.direction ?? null;
 
   return conversationSummarySchema.parse({
     assignmentVersion: conversation.assignment_version,
@@ -194,12 +200,12 @@ function asConversationSummary(conversation: PersistedConversation): Conversatio
       conversation.started_at === null || conversation.started_at === undefined
         ? null
         : normalizeNullableTimestamp(conversation.started_at, 'una fecha de inicio'),
-    lastMessageAt: normalizeNullableTimestamp(
-      conversation.last_message_at,
-      'una fecha de último mensaje'
-    ),
-    lastMessageDirection: latest?.direction ?? null,
+    lastMessageAt,
+    lastMessageDirection,
     lastMessagePreview: buildPreview(latest),
+    // Cuanto lleva esperando el cliente. Se calcula aqui, donde ya esta el ultimo mensaje, y no en
+    // la pantalla: la politica de tiempo es del dominio y la bandeja solo pinta el nivel.
+    attentionLevel: attentionLevel({ direction: lastMessageDirection, lastMessageAt }),
     needsAttention: needsAttention(lastReadAt, lastInboundAt),
     status: conversation.status,
     statusVersion: conversation.status_version,

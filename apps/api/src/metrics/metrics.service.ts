@@ -5,21 +5,13 @@ import {
   type MetricsResponseTime,
   type MetricsSummary
 } from '@chat-zernio/contracts';
+import { ATTENTION_THRESHOLDS } from '@chat-zernio/domain';
 import { RequestAuthenticator } from '../auth/request-authenticator';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantAccessService } from '../tenants/tenant-access.service';
 
 /** Tope de lectura. Si se alcanza, el resultado se marca como minimo en lugar de mentir. */
 const MAX_ROWS = 20000;
-
-/**
- * Cuando una respuesta de asesor deja de ser buena.
- *
- * Es politica del negocio, no una preferencia de la pantalla: viaja en la respuesta para que la
- * interfaz pinte los colores sin repetir el numero. `amberSeconds` es el limite de lo bueno y
- * `redSeconds` el de lo aceptable: por encima de el, rojo.
- */
-export const ADVISOR_RESPONSE_THRESHOLDS = { amberSeconds: 5 * 60, redSeconds: 10 * 60 };
 
 /**
  * Margen hacia atras al buscar respuestas.
@@ -93,7 +85,7 @@ export function summarizeResponseTimes(
     }
   }
 
-  const { amberSeconds, redSeconds } = ADVISOR_RESPONSE_THRESHOLDS;
+  const { amberSeconds, redSeconds } = ATTENTION_THRESHOLDS;
   const suma = esperas.reduce((total, segundos) => total + segundos, 0);
 
   return {
