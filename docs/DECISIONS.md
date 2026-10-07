@@ -805,3 +805,30 @@ Cómo se verifica: se restauró el cuerpo roto de 4.1 y la prueba falló con el 
 posición exacta (`Bad control character in string literal in JSON at position 79`); con el cuerpo
 arreglado, pasa. Los tres números de la prueba (flujos encontrados, nodos de salida y cuerpos
 revisados) están acotados: si la carpeta o el formato cambian, avisa en lugar de pasar en vacío.
+
+### El texto del agente entra escapado, y la regla se fija por posición
+
+La prueba anterior no podía ver este defecto, y por eso llegó a producción: sustituía **todas** las
+interpolaciones por un número, así que validaba la forma del cuerpo pero nunca un contenido hostil. El
+primer mensaje real con un salto de línea lo rompió —`Bad control character in string literal in JSON
+at position 189`— y el bot se quedó mudo **antes** de mandar nada: n8n sustituye cada `{{ … }}` por el
+valor tal cual, y el cuerpo es un JSON escrito a mano.
+
+Con ManyChat el problema no existía porque el texto no viajaba en el cuerpo: se guardaba en campos
+personalizados y el flujo los leía. Al migrar, el texto pasó a viajar en `text` y con él el defecto.
+
+La regla se fija **por posición, no por valor**: en el contrato de estas tools, `text` es el único
+miembro que lleva contenido arbitrario, así que todo lo que entra ahí se escapa con
+`JSON.stringify(String(<valor> ?? '')).slice(1, -1)`; los identificadores (`conversationId`,
+`idempotencyKey`) los genera nuestra plataforma, no pueden romper el JSON y se leen mejor tal cual. Se
+descartó pasar el cuerpo entero a la forma de objeto (`={{ { … } }}`, que n8n evalúa sin parsear)
+porque el mecanismo de texto con interpolaciones **ya estaba probado en producción** y no había forma
+de verificar el otro sin desplegar; queda como simplificación pendiente, no como arreglo necesario.
+
+El `String(… ?? '')` no es adorno: sin él, un valor numérico (`$execution.id`) sale de
+`JSON.stringify` sin comillas y `.slice(1, -1)` le come los dígitos. Hay una prueba del patrón con
+salto, comillas, barra invertida, vacío, `null` y número.
+
+Cómo se verifica: la prueba exige el escape en los seis flujos y falla **nombrando el nodo y la
+interpolación**; se deshizo el escape de un solo valor y falló, y al restaurarlo pasó. El primer turno
+real entregado es del 7 de octubre a las 20:08, con estado `read`.

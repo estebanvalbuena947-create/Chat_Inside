@@ -325,7 +325,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Entrada de un seguimiento').first().json.conversationId }}\",\n  \"idempotencyKey\": \"seguimiento-ig-is-{{ $execution.id }}\",\n  \"text\": \"{{ $('Entrada de un seguimiento').first().json.payload.mensaje }}\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Entrada de un seguimiento').first().json.conversationId }}\",\n  \"idempotencyKey\": \"seguimiento-ig-is-{{ $execution.id }}\",\n  \"text\": \"{{ JSON.stringify(String($('Entrada de un seguimiento').first().json.payload.mensaje ?? '')).slice(1, -1) }}\"\n}",
         "options": {
           "response": {
             "response": {

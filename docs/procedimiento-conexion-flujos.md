@@ -116,6 +116,27 @@ segundo mensaje distinto de la misma conversación chocaba con la idempotencia y
 Los dos de multimedia **no llevan texto**: mandan `media: [{ branchMediaId }]` y la clave sigue siendo
 obligatoria, porque es la que impide mandar la misma foto dos veces.
 
+**El texto tiene que entrar escapado, y esto rompió el bot una vez.** El cuerpo es un JSON escrito a
+mano, y n8n sustituye cada `{{ … }}` por el valor **tal cual**: si la respuesta del agente trae un
+salto de línea, una comilla o una barra invertida, el JSON deja de ser válido y el nodo falla con
+_«Bad control character in string literal»_ **antes** de mandar nada. Con ManyChat no pasaba porque el
+texto no viajaba en el cuerpo: se leía de campos personalizados. Así que el miembro `text` se arma
+siempre con el escape:
+
+```
+={
+  "conversationId": "{{ $('Detectar imagen ManyChat2').first().json.subscriber_id }}",
+  "idempotencyKey": "send-flow-{{ $execution.id }}",
+  "text": "{{ JSON.stringify(String($('Code in JavaScript').first().json.output.data[0].field_value ?? '')).slice(1, -1) }}\n\n{{ JSON.stringify(String($('Code in JavaScript').first().json.output.data[1].field_value ?? '')).slice(1, -1) }}"
+}
+```
+
+El `\n\n` de en medio va **fuera** de las interpolaciones: es el salto que separa las dos partes y la
+API lo usa para partirlas en dos mensajes. Los identificadores (`conversationId`, `idempotencyKey`) no
+se escapan: los genera nuestra plataforma y no pueden romper el JSON, así que se leen mejor tal cual.
+`apps/api/src/tools/flow-payloads.test.ts` exige este escape en los seis flujos y lo comprueba en cada
+`pnpm test`.
+
 ### Los verificadores: leen NUESTRA respuesta
 
 Los dos nodos de verificación venían del mundo ManyChat y esperaban `status: "success"` en la raíz. La

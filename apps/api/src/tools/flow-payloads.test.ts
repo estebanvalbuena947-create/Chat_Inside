@@ -110,6 +110,32 @@ function nodosConCuerpo(archivo: string): Nodo[] {
   );
 }
 
+/**
+ * Las interpolaciones que viven dentro del miembro `text` de un cuerpo que es texto JSON.
+ *
+ * `text` es el unico miembro del contrato que lleva contenido arbitrario: lo que escribio el agente.
+ * Los identificadores (`conversationId`, `idempotencyKey`) los generamos nosotros y no pueden romper
+ * el JSON, asi que no entran aqui.
+ */
+function interpolacionesDeTexto(cuerpo: string): string[] {
+  const texto = cuerpo.startsWith('=') ? cuerpo.slice(1) : cuerpo;
+  if (texto.trim().startsWith('{{')) return [];
+  const encontradas: string[] = [];
+  const miembros = /"text"\s*:\s*"([^"]*)"/g;
+  let coincidencia: RegExpExecArray | null;
+  while ((coincidencia = miembros.exec(texto)) !== null) {
+    for (const interpolacion of coincidencia[1].match(/\{\{[\s\S]*?\}\}/g) ?? []) {
+      encontradas.push(interpolacion.trim());
+    }
+  }
+  return encontradas;
+}
+
+/** El patron que exigimos en los flujos, para poder comprobarlo aqui tal cual. */
+function escaparParaJson(valor: unknown): string {
+  return JSON.stringify(String(valor ?? '')).slice(1, -1);
+}
+
 const archivos = readdirSync(CARPETA).filter((archivo) => archivo.endsWith('.json'));
 // Solo los flujos que mandan algo: los demas no tienen nada que comprobar aqui.
 const conCuerpo = archivos.filter((archivo) => nodosConCuerpo(archivo).length > 0);
@@ -141,5 +167,35 @@ describe('cuerpos de salida de los flujos', () => {
       }
     }
     expect(nodos.length).toBeGreaterThan(0);
+  });
+
+  it.each(conCuerpo)('%s: el contenido de `text` entra escapado', (archivo) => {
+    // Un texto crudo dentro de una cadena JSON la rompe en cuanto trae un salto de linea, una
+    // comilla o una barra invertida, y n8n falla antes de mandar nada. Con ManyChat no pasaba
+    // porque el texto no viajaba en el cuerpo. Aqui se exige el escape por construccion.
+    const pendientes: string[] = [];
+    for (const nodo of nodosConCuerpo(archivo)) {
+      for (const interpolacion of interpolacionesDeTexto(String(nodo.parameters?.jsonBody))) {
+        if (!interpolacion.startsWith('{{ JSON.stringify(')) {
+          pendientes.push(nodo.name + ' :: ' + interpolacion);
+        }
+      }
+    }
+    expect(pendientes, 'texto sin escapar: ' + pendientes.join(' | ')).toEqual([]);
+  });
+});
+
+describe('el patron de escape de los textos', () => {
+  it('aguanta saltos, comillas, barras, vacios y numeros', () => {
+    // Se comprueba el patron que exigen los flujos, no una copia de su implementacion: si alguien lo
+    // cambia por uno que no escape, o que pierda los numeros, esto lo dice.
+    const hostil = 'Linea 1\nLinea "2"\\ y tabulador\t';
+    const cuerpo = `{\n  "text": "${escaparParaJson(hostil)}\\n\\n${escaparParaJson('segunda')}"\n}`;
+
+    expect(JSON.parse(cuerpo)).toEqual({ text: `${hostil}\n\nsegunda` });
+    expect(JSON.parse(`{"text":"${escaparParaJson(undefined)}"}`)).toEqual({ text: '' });
+    expect(JSON.parse(`{"text":"${escaparParaJson(null)}"}`)).toEqual({ text: '' });
+    // Un numero no puede perder sus digitos: JSON.stringify devuelve `7` sin comillas.
+    expect(JSON.parse(`{"text":"${escaparParaJson(7)}"}`)).toEqual({ text: '7' });
   });
 });

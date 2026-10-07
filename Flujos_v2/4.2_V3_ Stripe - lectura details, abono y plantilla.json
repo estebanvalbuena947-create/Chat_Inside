@@ -1657,7 +1657,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-ig-isv-{{ $execution.id }}\",\n  \"text\": \"{{ $('Preparar campos plantilla confirmación').first().json.output.data[0].field_value }}\\n\\n{{ $('Preparar campos plantilla confirmación').first().json.output.data[1].field_value }}\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-ig-isv-{{ $execution.id }}\",\n  \"text\": \"{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[0].field_value ?? '')).slice(1, -1) }}\\n\\n{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[1].field_value ?? '')).slice(1, -1) }}\"\n}",
         "options": {
           "response": {
             "response": {
@@ -1743,7 +1743,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-ig-is-{{ $execution.id }}\",\n  \"text\": \"{{ $('Preparar campos plantilla confirmación').first().json.output.data[0].field_value }}\\n\\n{{ $('Preparar campos plantilla confirmación').first().json.output.data[1].field_value }}\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-ig-is-{{ $execution.id }}\",\n  \"text\": \"{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[0].field_value ?? '')).slice(1, -1) }}\\n\\n{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[1].field_value ?? '')).slice(1, -1) }}\"\n}",
         "options": {
           "response": {
             "response": {
@@ -1786,7 +1786,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-tiktok-isv-{{ $execution.id }}\",\n  \"text\": \"{{ $('Preparar campos plantilla confirmación').first().json.output.data[0].field_value }}\\n\\n{{ $('Preparar campos plantilla confirmación').first().json.output.data[1].field_value }}\"\n}",
+    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-tiktok-isv-{{ $execution.id }}\",\n  \"text\": \"{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[0].field_value ?? '')).slice(1, -1) }}\\n\\n{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[1].field_value ?? '')).slice(1, -1) }}\"\n}",
         "options": {
           "response": {
             "response": {
