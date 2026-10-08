@@ -3379,6 +3379,46 @@ h2 {
   height: 100%;
   min-width: 4px;
 }
+
+/*
+ * Movil: la fila de metricas pide 120 px + 200 px fijos y sus datos no parten, asi que a 360 px de
+ * ancho no cabe en la tarjeta y el valor se corta en el borde ("0 conversacione..."). En el telefono
+ * el nombre y el valor comparten linea (valor a la derecha) y la barra baja a la suya.
+ * Se aplica solo a pantallas estrechas: el escritorio no cambia.
+ */
+@media (max-width: 620px) {
+  .metrics-panel {
+    gap: 14px;
+    padding: 0 14px 32px;
+  }
+  .metrics-block {
+    padding: 14px 14px 6px;
+  }
+  .metrics-row {
+    gap: 4px 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .metrics-row-name {
+    grid-column: 1;
+    /* El nombre puede partirse: es lo que evita que empuje la fila mas alla del ancho. */
+    white-space: normal;
+  }
+  .metrics-row-values {
+    grid-column: 2;
+    grid-row: 1;
+    text-align: right;
+    white-space: normal;
+  }
+  .metrics-bar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin-bottom: 6px;
+  }
+  .metrics-detail-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
 .metrics-detail-button {
   background: #fff;
   border: 1px solid #cfc6b6;
