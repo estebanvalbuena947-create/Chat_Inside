@@ -3,7 +3,7 @@
 - **Estado:** implementada
 - **Responsable:** acceso y tenancy
 - **Fecha:** 2026-09-28
-- **Cierre:** implementada el 2026-09-28 sin migración, sobre `memberships`. La entrega del correo depende del SMTP del proyecto y no se verificó con una persona real: el enlace se muestra en pantalla para compartirlo.
+- **Cierre:** implementada el 2026-09-28 sin migración, sobre `memberships`. Corregida el 2026-10-08: el enlace se emite una sola vez y el callback canjea su código por sesión antes de crear la contraseña. El enlace se muestra en pantalla para que el administrador lo comparta; este flujo no envía correo automático.
 
 ## Resultado
 
@@ -33,7 +33,8 @@ El acceso a la interfaz se concede por invitación desde el propio producto y ca
 5. Un tenant conserva **siempre al menos un administrador**: no se puede degradar ni retirar al último. El intento responde conflicto, no un error genérico.
 6. Retirar una pertenencia no elimina la cuenta de la persona ni sus accesos a otros tenants. Las conversaciones que tuviera asignadas quedan sin asignar, porque la relación ya está definida con esa consecuencia.
 7. Solo se puede cambiar el rol o retirar a integrantes del mismo tenant del solicitante.
-8. El enlace de invitación es un secreto de un solo uso: se entrega únicamente al administrador que lo genera y nunca se registra en logs ni en la bitácora de eventos.
+8. El enlace de invitación es un secreto de un solo uso: cada operación emite exactamente uno, se entrega únicamente al administrador que lo genera y nunca se registra en logs ni en la bitácora de eventos.
+9. El código devuelto por Auth se canjea en el callback del servidor por una sesión en cookies antes de permitir crear una contraseña; un código inválido o vencido no concede sesión.
 
 ## Contrato
 
@@ -46,6 +47,6 @@ El acceso a la interfaz se concede por invitación desde el propio producto y ca
 ## Datos, seguridad y rollback
 
 - No hay migración: `memberships` ya existe con claves compuestas por tenant, que impiden pertenencias cruzadas.
-- El enlace se genera con la API de administración de Auth y la clave privada permanece en el servidor. El envío por correo depende del SMTP configurado en el proyecto, por eso el enlace se puede compartir manualmente desde la interfaz.
-- Si el correo no puede enviarse o la URL de retorno no está autorizada en el proyecto, la invitación no se pierde: el administrador conserva el enlace.
+- El enlace se genera con la API de administración de Auth y la clave privada permanece en el servidor. Este flujo no envía correo: el administrador recibe el enlace en pantalla para compartirlo manualmente.
+- Si la URL de callback no está autorizada en el proyecto, Auth no puede devolver la sesión a la aplicación. Debe registrarse `${APP_PUBLIC_URL}/auth/callback` entre las URLs de redirección autorizadas antes de desplegar.
 - Rollback: dejar de exponer los comandos de invitación y de gestionar integrantes. Las pertenencias y los roles existentes permanecen vigentes.

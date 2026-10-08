@@ -292,13 +292,11 @@ export class TenantAccessService {
     email: string
   ): Promise<{ inviteLink: string; requiresPassword: boolean; userId: string }> {
     // El enlace lleva a crear la contrasena: sin eso, la persona entra sin poder volver a entrar.
-    const appPublicUrl = (process.env.APP_PUBLIC_URL ?? '').replace(/\/$/, '');
-    const redirectTo = appPublicUrl ? appPublicUrl + '/auth/password' : undefined;
-    const options = redirectTo ? { redirectTo } : undefined;
+    const appPublicUrl = (process.env.APP_PUBLIC_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+    const options = { redirectTo: appPublicUrl + '/auth/callback' };
 
-    // El correo va aparte del enlace: inviteUserByEmail lo envia, generateLink solo lo devuelve.
-    await supabase.auth.admin.inviteUserByEmail(email, options).catch(() => undefined);
-
+    // Solo se emite un token por intento. Emitir uno para el correo y otro para la pantalla
+    // invalida uno de los dos, porque Auth trata estos enlaces como secretos de un solo uso.
     const invited = await supabase.auth.admin.generateLink({ email, options, type: 'invite' });
     const invitedUser = invited.data?.user;
     const invitedLink = invited.data?.properties?.action_link;
@@ -306,15 +304,7 @@ export class TenantAccessService {
       return { inviteLink: invitedLink, requiresPassword: true, userId: invitedUser.id };
     }
 
-    // Una cuenta existente no se invita de nuevo: se le entrega un enlace de acceso.
-    // Para quien ya tiene cuenta, inviteUserByEmail falla: aqui lo correcto es un enlace magico.
-    await supabase.auth
-      .signInWithOtp({
-        email,
-        options: { emailRedirectTo: redirectTo, shouldCreateUser: false }
-      })
-      .catch(() => undefined);
-
+    // Una cuenta existente no se invita de nuevo: se le entrega un unico enlace magico.
     const existing = await supabase.auth.admin.generateLink({ email, options, type: 'magiclink' });
     const existingUser = existing.data?.user;
     const existingLink = existing.data?.properties?.action_link;

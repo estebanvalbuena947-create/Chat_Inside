@@ -41,6 +41,12 @@ export function PasswordForm() {
 
     setGuardando(true);
     const supabase = createClient();
+    const { data: session, error: sessionError } = await supabase.auth.getUser();
+    if (sessionError || !session.user) {
+      setGuardando(false);
+      setErrorMessage('El enlace no es válido o ya caducó. Pide al administrador uno nuevo.');
+      return;
+    }
     const { error } = await supabase.auth.updateUser({
       data: { full_name: nombreLimpio },
       password
@@ -48,9 +54,7 @@ export function PasswordForm() {
     setGuardando(false);
 
     if (error) {
-      setErrorMessage(
-        'No fue posible guardar la contraseña. Puede que el enlace haya caducado: pide uno nuevo.'
-      );
+      setErrorMessage('No fue posible guardar la contraseña. Inténtalo de nuevo en unos minutos.');
       return;
     }
 

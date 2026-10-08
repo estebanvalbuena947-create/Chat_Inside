@@ -4,6 +4,17 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-046 - Un enlace de invitación se emite una vez y se canjea en el servidor
+
+- **Fecha:** 2026-10-08
+- **Estado:** aceptada
+- **Contexto:** La API emitía un enlace al intentar enviar correo y otro para mostrarlo al administrador. Auth trata los enlaces como secretos de un solo uso, por lo que esta duplicación podía invalidar el enlace compartido. Además, el destino era la página de contraseña sin una ruta que canjeara el código de Auth por sesión; al guardar, la interfaz informaba erróneamente que el enlace había caducado.
+- **Decisión:** Cada operación genera solo el enlace que se entrega al administrador. El destino es `/auth/callback`, que canjea el código en el servidor, persiste la sesión mediante cookies y redirige a `/auth/password`. Si el código falta, es inválido o venció, se vuelve al acceso sin sesión. La URL exacta del callback debe figurar en la lista de redirecciones autorizadas del proyecto Auth.
+- **Consecuencias:** Los enlaces anteriores no se pueden reparar y se reemplazan emitiendo uno nuevo. Se elimina el envío de correo duplicado desde esta operación; el administrador conserva el único enlace que debe compartir. La creación de contraseña recibe una sesión verificable y puede distinguir la falta de sesión de un error al guardar.
+- **Cómo se verifica:** Pruebas de API aseguran una sola generación para invitaciones nuevas y dos generaciones únicamente cuando el primer intento determina que la cuenta ya existe (invitación fallida y enlace mágico). La verificación manual abre el enlace nuevo, observa el callback y permite guardar la contraseña.
+
+---
+
 ## ADR-045 - La multimedia se copia al recibirla, porque el enlace del proveedor caduca
 
 - **Fecha:** 2026-09-29

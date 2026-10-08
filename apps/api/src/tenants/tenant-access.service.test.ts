@@ -75,8 +75,7 @@ describe('TenantAccessService invitations', () => {
     });
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink,
-        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+        generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
@@ -98,6 +97,7 @@ describe('TenantAccessService invitations', () => {
     expect(generateLink).toHaveBeenCalledWith(
       expect.objectContaining({ email: 'nueva.persona@example.com', type: 'invite' })
     );
+    expect(generateLink).toHaveBeenCalledTimes(1);
     expect(fake.callsIn('memberships', 'insert')).toContainEqual([
       { role: 'supervisor', tenant_id: tenantId, user_id: otherUserId }
     ]);
@@ -119,8 +119,7 @@ describe('TenantAccessService invitations', () => {
     });
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink,
-        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+        generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
@@ -161,8 +160,7 @@ describe('TenantAccessService invitations', () => {
       });
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink,
-        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+        generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
@@ -183,6 +181,7 @@ describe('TenantAccessService invitations', () => {
 
     expect(generateLink).toHaveBeenNthCalledWith(1, expect.objectContaining({ type: 'invite' }));
     expect(generateLink).toHaveBeenNthCalledWith(2, expect.objectContaining({ type: 'magiclink' }));
+    expect(generateLink).toHaveBeenCalledTimes(2);
   });
 
   it('refuses to invite when the caller is not an administrator', async () => {
@@ -190,8 +189,7 @@ describe('TenantAccessService invitations', () => {
     const generateLink = vi.fn();
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink,
-        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+        generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
@@ -212,8 +210,7 @@ describe('TenantAccessService invitations', () => {
     const generateLink = vi.fn().mockResolvedValue({ data: null, error: { message: 'nope' } });
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink,
-        inviteUserByEmail: vi.fn().mockResolvedValue({ data: {}, error: null })
+        generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
