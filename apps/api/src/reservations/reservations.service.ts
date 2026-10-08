@@ -89,6 +89,16 @@ async function fetchTable(
 
       if (respuesta.error) {
         fallo = respuesta.error;
+        // El motivo del proveedor no se puede perder: sin esto, un fallo de lectura solo dice «no fue
+        // posible leer» y obliga a adivinar. Queda en el registro del contenedor, no en la respuesta.
+        console.error(
+          JSON.stringify({
+            error: respuesta.error,
+            event: 'reservations.read_failed',
+            order: orderBy,
+            table
+          })
+        );
         break;
       }
 
