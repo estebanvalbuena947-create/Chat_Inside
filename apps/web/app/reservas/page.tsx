@@ -40,7 +40,11 @@ type Board = {
     porRevisar: number;
     proximas24h: number;
     rechazadas: number;
-    retencionesPorVencer: Array<{ borradorId: number | null; expiraEn: string; nombre: string | null }>;
+    retencionesPorVencer: Array<{
+      borradorId: number | null;
+      expiraEn: string;
+      nombre: string | null;
+    }>;
   };
   preReservas: Draft[];
 };
@@ -75,7 +79,9 @@ function fecha(valor: string | null): string {
   if (!valor) return '—';
   const fecha = new Date(valor);
   if (Number.isNaN(fecha.getTime())) return '—';
-  return new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(fecha);
+  return new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(
+    fecha
+  );
 }
 
 /** Cuando vence una retencion: si vence, se libera el horario y se pierde la reserva. */
