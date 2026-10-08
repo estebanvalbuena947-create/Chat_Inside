@@ -1,17 +1,20 @@
+import {
+  DECISION_ACTIONS,
+  RESERVATION_STATUSES,
+  type ReservationDecisionAction,
+  type ReservationStatus
+} from '@chat-zernio/contracts';
 import { firstValue, parseDate, toAmount } from './reservation-values';
 
-/* Vocabulario de las reservas del proyecto SPA.
+/* El vocabulario de las reservas vive en `@chat-zernio/contracts`, con el resto de los vocabularios
+ * que comparten la API y la interfaz, y se reexporta aqui para quien lo lea desde el dominio.
  *
- * Viene del dashboard que el equipo usa hoy (`js/domain.js`) y se muda aqui para que la API y la
- * interfaz compartan una sola definicion. No es una preferencia nuestra: los estados y las acciones
- * tienen que seguir coincidiendo con lo que la base de reservas espera, y las acciones con el SQL del
- * RPC que aplica la decision. Por eso hay pruebas que lo fijan.
+ * No son preferencias nuestras: los estados y las acciones tienen que seguir coincidiendo con lo que
+ * la base de reservas espera, y las acciones con el SQL del RPC que aplica la decision. Las pruebas
+ * de este paquete lo fijan.
  */
-
-/** Acciones de decision. Deben coincidir con el SQL del RPC del proyecto de reservas. */
-export const DECISION_ACTIONS = ['approved', 'rejected', 'needs_info'] as const;
-
-export type ReservationDecisionAction = (typeof DECISION_ACTIONS)[number];
+export { DECISION_ACTIONS, RESERVATION_STATUSES };
+export type { ReservationDecisionAction, ReservationStatus };
 
 /** Como se cuenta cada decision en pantalla. */
 export const DECISION_LABELS: Record<
@@ -39,17 +42,6 @@ export const DECISION_LABELS: Record<
 };
 
 /** Estados con los que se muestra una pre-reserva, en el orden de la barra de filtros. */
-export const RESERVATION_STATUSES = [
-  'pending',
-  'review',
-  'info',
-  'processing',
-  'confirmed',
-  'rejected'
-] as const;
-
-export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
-
 export const RESERVATION_STATUS_LABELS: Record<ReservationStatus, string> = {
   pending: 'Pendiente de pago',
   review: 'Por revisar',

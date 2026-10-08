@@ -49,6 +49,8 @@ import { ZernioWebhookService } from './zernio/zernio-webhook.service';
 import { ZernioApiClient } from './zernio/zernio-api.client';
 import { ZernioChannelService } from './zernio/zernio-channel.service';
 import { ZernioChannelsController } from './zernio/zernio-channels.controller';
+import { ReservationsController } from './reservations/reservations.controller';
+import { ReservationsService } from './reservations/reservations.service';
 
 @Module({
   controllers: [
@@ -70,6 +72,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     BranchMediaController,
     BranchController,
     MetricsController,
+    ReservationsController,
     MeController,
     RealtimeEventsController,
     TenantsController,
@@ -97,6 +100,7 @@ import { ZernioChannelsController } from './zernio/zernio-channels.controller';
     BranchService,
     ToolTokenService,
     MetricsService,
+    ReservationsService,
     TenantMessageService,
     CannedResponseService,
     InternalLabelService,

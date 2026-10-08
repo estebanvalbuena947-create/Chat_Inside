@@ -718,3 +718,151 @@ export const whatsappTemplateListResponseSchema = z.object({
 });
 
 export type WhatsappTemplateListResponse = z.infer<typeof whatsappTemplateListResponseSchema>;
+
+/* ------------------------------------------------------------------------------------------------
+   Vocabulario de las reservas del proyecto SPA.
+
+   Los estados y las acciones tienen que seguir coincidiendo con lo que esa base espera, y las
+   acciones con el SQL del RPC que aplica la decision. Viven aqui, con el resto de los vocabularios
+   que comparten la API y la interfaz.
+   ------------------------------------------------------------------------------------------------ */
+
+/** Acciones de decision. Deben coincidir con el SQL del RPC del proyecto de reservas. */
+export const DECISION_ACTIONS = ['approved', 'rejected', 'needs_info'] as const;
+
+export type ReservationDecisionAction = (typeof DECISION_ACTIONS)[number];
+
+/** Estados con los que se muestra una pre-reserva, en el orden de la barra de filtros. */
+export const RESERVATION_STATUSES = [
+  'pending',
+  'review',
+  'info',
+  'processing',
+  'confirmed',
+  'rejected'
+] as const;
+
+export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
+
+/* ------------------------------------------------------------------------------------------------
+   Tablero de reservas: lo que devuelve la lectura.
+
+   Copia la forma del modelo del dominio, pero con las fechas en **texto ISO**: un `Date` no viaja
+   bien en JSON, y el mapeo se hace en el servicio. Los estados que se muestran van aparte del estado
+   crudo de la base: uno es lo que escribio Postgres (`estado`) y el otro lo que el equipo ve.
+   ------------------------------------------------------------------------------------------------ */
+
+export const reservationStatusSchema = z.enum(RESERVATION_STATUSES);
+export const reservationDecisionActionSchema = z.enum(DECISION_ACTIONS);
+
+export const reservationEvidenceSchema = z.record(z.string(), z.unknown());
+
+export const reservationDraftSchema = z.object({
+  actualizadaEn: z.string().nullable(),
+  cerradaEn: z.string().nullable(),
+  confirmada: z.boolean(),
+  confirmadaEn: z.string().nullable(),
+  correo: z.string().nullable(),
+  creadaEn: z.string().nullable(),
+  entroEn: z.string().nullable(),
+  estado: z.string(),
+  estadoMostrado: reservationStatusSchema,
+  evidencia: reservationEvidenceSchema.nullable(),
+  horarioPendiente: z.boolean(),
+  horarioProgramado: z.string().nullable(),
+  id: z.number().int().nullable(),
+  intentosPago: z.number().int().nullable(),
+  motivoRevision: z.string().nullable(),
+  motivosPago: z.array(z.string()),
+  monto: z.number(),
+  montoEsperado: z.number(),
+  nombre: z.string().nullable(),
+  pagoRecibido: z.boolean(),
+  procesandoDesde: z.string().nullable(),
+  retencionExpiraEn: z.string().nullable(),
+  revisadaEn: z.string().nullable(),
+  servicio: z.string().nullable(),
+  servicioCodigo: z.string().nullable(),
+  telefono: z.string().nullable()
+});
+
+export const reservationConfirmedSchema = z.object({
+  confirmadaEn: z.string().nullable(),
+  correo: z.string().nullable(),
+  horarioProgramado: z.string().nullable(),
+  id: z.number().int().nullable(),
+  monto: z.number(),
+  nombre: z.string().nullable(),
+  servicio: z.string().nullable(),
+  sucursal: z.string().nullable(),
+  telefono: z.string().nullable()
+});
+
+export const reservationDecisionSchema = z.object({
+  accion: z.string(),
+  autor: z.string().nullable(),
+  borradorId: z.number().int().nullable(),
+  creadaEn: z.string().nullable(),
+  estadoAnterior: z.string().nullable(),
+  estadoResultante: z.string().nullable(),
+  id: z.number().int().nullable(),
+  nota: z.string().nullable()
+});
+
+export const reservationReceiptSchema = z.object({
+  actualizadoEn: z.string().nullable(),
+  banco: z.string().nullable(),
+  borradorId: z.number().int().nullable(),
+  confianza: z.number().nullable(),
+  cuenta: z.string().nullable(),
+  desdeEvidencia: z.boolean(),
+  estado: z.string(),
+  mediaUrl: z.string().nullable(),
+  metodo: z.string().nullable(),
+  monto: z.number(),
+  montoEsperado: z.number(),
+  motivos: z.array(z.string()),
+  pagadoEn: z.string().nullable(),
+  recibidoEn: z.string().nullable(),
+  referencia: z.string().nullable(),
+  titular: z.string().nullable()
+});
+
+/** Retencion de Pabau a punto de expirar: si vence, se libera el horario y se pierde la reserva. */
+export const expiringHoldSchema = z.object({
+  borradorId: z.number().int().nullable(),
+  expiraEn: z.string(),
+  nombre: z.string().nullable()
+});
+
+export const reservationKpisSchema = z.object({
+  confirmadasHoy: z.number().int(),
+  enConfirmacion: z.number().int(),
+  montoConfirmadoHoy: z.number(),
+  montoPendiente: z.number(),
+  porGestionar: z.number().int(),
+  porRevisar: z.number().int(),
+  pendientes: z.number().int(),
+  proximas24h: z.number().int(),
+  rechazadas: z.number().int(),
+  retencionesPorVencer: z.array(expiringHoldSchema),
+  ultimaConfirmacionEn: z.string().nullable(),
+  ultimaDecisionEn: z.string().nullable(),
+  comprobantesPorRevisar: z.number().int()
+});
+
+export const reservationsBoardResponseSchema = z.object({
+  actualizadoEn: z.string(),
+  confirmadas: z.array(reservationConfirmedSchema),
+  decisiones: z.array(reservationDecisionSchema),
+  kpis: reservationKpisSchema,
+  preReservas: z.array(reservationDraftSchema),
+  comprobantes: z.array(reservationReceiptSchema)
+});
+
+export type ReservationDraftView = z.infer<typeof reservationDraftSchema>;
+export type ReservationConfirmedView = z.infer<typeof reservationConfirmedSchema>;
+export type ReservationDecisionView = z.infer<typeof reservationDecisionSchema>;
+export type ReservationReceiptView = z.infer<typeof reservationReceiptSchema>;
+export type ReservationKpis = z.infer<typeof reservationKpisSchema>;
+export type ReservationsBoardResponse = z.infer<typeof reservationsBoardResponseSchema>;

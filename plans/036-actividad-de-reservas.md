@@ -4,20 +4,15 @@
 
 - `AGENTS.md`, `docs/ARCHITECTURE.md`, `specs/013-inbox-attention-and-continuation.md` (regla 10: la
   interfaz habla solo con su BFF)
-- `D:\Documents\JEYSON\CAESPY\WEPLASH\Dashboard Reservas`: `README.md`, `js/domain.js`, `js/data.js`
+- `D:\Documents\JEYSON\CAESPY\WEPLASH\Dashboard Reservas`: `README.md`, `js/core.js`, `js/domain.js`
 - `apps/api/src/metrics` y `apps/web/app/page.tsx` (el patrón de un apartado nuevo)
 
 ## Qué es hoy
 
 Un producto aparte, desplegado en `https://inside-spa-dashboard.vercel.app`, con su propio
 repositorio. Son ficheros estáticos que leen y **escriben** el proyecto Supabase **SPA**
-(`ncutewymymydclypuqlbfk`), que no es el nuestro: pre-reservas, comprobantes de pago, clientes,
-histórico y decisiones. Tiene su propio inicio de sesión con una lista de correos autorizados y usa
-la clave pública en el navegador.
-
-Sus reglas ya están escritas y probadas en `js/domain.js`: decisiones (`approved`, `rejected`,
-`needs_info`), estados (`pending`, `review`, `info`, `processing`, `confirmed`, `rejected`), KPIs,
-filtros y construcción de clientes y comprobantes. **No hay que inventarlas: hay que mudarlas.**
+(`ncutewymymydclypuqlbfk`), que no es el nuestro. Tiene su propio inicio de sesión con una lista de
+correos autorizados y usa la clave pública en el navegador.
 
 ## Clasificación
 
@@ -25,58 +20,70 @@ filtros y construcción de clientes y comprobantes. **No hay que inventarlas: ha
 - Motivo: fuente de datos externa nueva, **escrituras** sobre otra base, permisos por rol y un
   apartado nuevo en la interfaz.
 
-## Diseño propuesto
+## Lo que se comprobó leyendo el dashboard (y cambió el diseño)
 
-- **Propietario de la regla:** un módulo nuevo `apps/api/src/reservations`. Las reglas del dashboard
-  se mudan al paquete de dominio en TypeScript, con sus pruebas; la interfaz solo pinta.
-- **Acceso a los datos:** la API lee y escribe el proyecto SPA **desde el servidor**, con su clave en
-  el `.env` del servidor. El navegador **nunca** la ve: esa es la mejora de fondo frente a hoy.
-- **Permisos:** cada extremo exige membresía y rol `admin` o `supervisor`. Un agente no ve el
-  apartado ni puede llamar a los extremos.
-- **Contratos:** uno de lectura para el tablero (KPIs y filas con sus filtros) y uno de escritura para
-  la decisión. El comprobante se sirve con enlace que caduca, no con una dirección pública.
-- **Sin copia de datos:** se lee en vivo del proyecto SPA. Copiar sería una segunda verdad que puede
-  quedarse vieja justo en una decisión de pago.
-- **Autoría:** la decisión registra **quién** la tomó, dato que hoy no existe porque el dashboard
-  autentica por lista de correos.
-- **Riesgos:** (1) escribir en una base ajena → un único camino de escritura, con pruebas y
-  idempotencia; (2) la forma del esquema tolerante del dashboard (varios nombres para el mismo
-  estado) → se muda tal cual, no se «limpia» a la ligera; (3) los comprobantes son datos de pago →
-  enlaces firmados; (4) durante la transición pueden convivir el dashboard viejo y el nuevo apartado
-  → hay que decidir cuándo se retira el viejo para que no haya dos caminos decidiendo lo mismo.
+1. **Las decisiones se aplican por RPC**, no escribiendo tablas. Lo dice su propio código: las
+   acciones permitidas «deben coincidir con el SQL del RPC». Nuestro API llamará a ese RPC y la base
+   seguirá validando las transiciones: no duplicamos esa regla.
+2. **La autoría ya existe**: la tabla de decisiones guarda `decided_by_email`. No hay que inventar
+   quién decidió; hay que mostrarlo.
+3. **El comprobante puede no tener fila.** El dashboard lo reconstruye desde la evidencia guardada en
+   la pre-reserva; sin eso, el equipo vería reservas sin comprobante. Ya está mudado al dominio.
+4. **Los KPIs tienen reglas propias**: «hoy» se mide por la fecha de **confirmación**, no por la de la
+   cita; el aviso urgente son las retenciones de Pabau que expiran **en la próxima hora**; el monto
+   pendiente se resuelve por prioridad (reserva → comprobante → evidencia → esperado) y se informa de
+   dónde salió.
+5. **El vocabulario pertenece a `packages/contracts`**, como `AutomationMode` y `ConversationStatus`:
+   el dominio los importa. Hoy están en el dominio y hay que moverlos antes de escribir el contrato,
+   o quedarían dos definiciones del mismo vocabulario.
+
+## Diseño
+
+- **Propietario de la regla:** `apps/api/src/reservations`. Las reglas del dashboard viven ya en el
+  paquete de dominio, en TypeScript y con pruebas; la interfaz solo pinta.
+- **Acceso a los datos:** la API lee y escribe el proyecto SPA desde el servidor, con sus dos
+  variables (`SPA_SUPABASE_URL`, `SPA_SUPABASE_SECRET_KEY`) declaradas **solo** en el servicio `api`
+  del stack. El navegador nunca las ve: ésa es la mejora de fondo frente a hoy.
+- **Permisos:** cada extremo exige membresía y rol `admin` o `supervisor`.
+- **Contratos:** uno de lectura para el tablero (KPIs y filas con filtros) y uno de escritura para la
+  decisión. Las fechas viajan en texto ISO; los tipos del dominio usan `Date` y el mapeo ocurre en el
+  servicio.
+- **Sin copia de datos:** se lee en vivo del proyecto SPA. Una copia sería una segunda verdad que
+  puede quedarse vieja justo en una decisión de pago.
+- **Riesgos:** (1) escribir en una base ajena → un único camino de escritura, por RPC, con pruebas e
+  idempotencia; (2) el estado crudo de esa base es tolerante (varios nombres para el mismo hecho) → se
+  conserva tal cual, ya mudado; (3) los comprobantes son datos de pago → enlaces firmados, no
+  direcciones públicas; (4) durante la transición conviven el dashboard viejo y el apartado nuevo →
+  hay que acordar cuándo se retira el viejo para que no haya dos caminos decidiendo lo mismo.
 - **Rollback:** el apartado se oculta por rol y los extremos quedan sin uso; no hay migración en
   nuestra base.
 
 ## Cortes
 
-### Corte 1 — Lectura y reglas
+### Corte 1 — Reglas y lectura
 
-- Archivos: `packages/domain` (reglas mudadas + pruebas), `apps/api/src/reservations` (servicio de
-  lectura con rol), contrato del tablero, clave del proyecto SPA en el `.env` del servidor.
-- Resultado verificable: el tablero responde con KPIs y filas reales, y un agente recibe 403.
-- Pruebas: reglas de estado y KPIs del dashboard, tolerancia de esquema, permisos y caso sin datos.
+- Hecho: vocabulario, ayudantes de valores y los cuatro normalizadores en `packages/domain`, con sus
+  pruebas; y la lectura de las dos variables en `packages/config` (con «sin configurar» si faltan).
+- Falta: mover el vocabulario a contratos, escribir el contrato del tablero y el extremo de lectura
+  con rol.
 
 ### Corte 2 — El apartado
 
-- Archivos: `apps/web/app/page.tsx`, `globals.css`, ruta interna del BFF.
-- Resultado verificable: «Actividad de Reservas» aparece en el menú solo para admin y supervisor, y
-  muestra el mismo tablero.
-- Pruebas: tipos y contrato; la pantalla, como el resto del cliente, queda cubierta por tipos.
+- `apps/web/app/page.tsx`, `globals.css` y la ruta interna del BFF: «Actividad de Reservas» en el
+  menú, solo para admin y supervisor, con los KPIs, la lista y los filtros.
 
 ### Corte 3 — Decidir
 
-- Archivos: contrato y extremo de decisión, servicio de escritura, dominio de la decisión, interfaz.
-- Resultado verificable: aprobar, rechazar o pedir información desde nuestro apartado surte el mismo
-  efecto que hoy en el dashboard (los flujos de n8n siguen funcionando) y queda registrada la autoría.
-- Pruebas: transición válida, transición imposible, decisión repetida (idempotencia) y autoría.
+- Contrato y extremo de decisión llamando al RPC, con autoría registrada y el mismo efecto que hoy
+  (los flujos de n8n siguen funcionando). Pruebas: transición válida, imposible, decisión repetida.
 
 ### Corte 4 — Retirar el viejo y documentar
 
-- Decidir con el equipo cuándo se apaga `inside-spa-dashboard.vercel.app`, y anotarlo en
+- Acordar con el equipo cuándo se apaga `inside-spa-dashboard.vercel.app` y anotarlo en
   `docs/DECISIONS.md`.
 
 ## Condición de detención
 
-Detener y reportar si la escritura exigiera otra vía (RPC o disparadores), si no se puede disponer de
-la clave del proyecto SPA en el servidor, o si aparece un dato personal en claro que hoy viaje al
-navegador.
+Detener y reportar si el RPC exigiera credenciales que no tenemos, si apareciera un dato personal en
+claro que hoy viaje al navegador, o si el vocabulario no pudiera unificarse sin romper el contrato
+existente.
