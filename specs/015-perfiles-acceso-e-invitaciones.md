@@ -3,7 +3,7 @@
 - **Estado:** implementada
 - **Responsable:** acceso y tenancy
 - **Fecha:** 2026-09-28
-- **Cierre:** implementada el 2026-09-28 sin migración, sobre `memberships`. Corregida el 2026-10-08: el enlace se emite una sola vez y el callback canjea su código por sesión antes de crear la contraseña. El enlace se muestra en pantalla para que el administrador lo comparta; este flujo no envía correo automático.
+- **Cierre:** implementada el 2026-09-28 sin migración, sobre `memberships`. Corregida el 2026-10-08: el enlace se emite una sola vez y el callback del navegador guarda su sesión antes de crear la contraseña. El enlace se muestra en pantalla para que el administrador lo comparta; este flujo no envía correo automático.
 
 ## Resultado
 
@@ -34,7 +34,7 @@ El acceso a la interfaz se concede por invitación desde el propio producto y ca
 6. Retirar una pertenencia no elimina la cuenta de la persona ni sus accesos a otros tenants. Las conversaciones que tuviera asignadas quedan sin asignar, porque la relación ya está definida con esa consecuencia.
 7. Solo se puede cambiar el rol o retirar a integrantes del mismo tenant del solicitante.
 8. El enlace de invitación es un secreto de un solo uso: cada operación emite exactamente uno, se entrega únicamente al administrador que lo genera y nunca se registra en logs ni en la bitácora de eventos.
-9. El código devuelto por Auth se canjea en el callback del servidor por una sesión en cookies antes de permitir crear una contraseña; un código inválido o vencido no concede sesión.
+9. Los tokens de la invitación se reciben solo en el fragmento URL y el callback del navegador los guarda como sesión antes de permitir crear una contraseña; la navegación que sigue elimina el fragmento del historial y un enlace inválido o vencido no concede sesión.
 
 ## Contrato
 

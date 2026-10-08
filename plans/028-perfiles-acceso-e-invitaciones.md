@@ -3,7 +3,7 @@
 - **Estado:** implementado
 - **Fecha:** 2026-09-28
 - **Especificación:** `specs/015-perfiles-acceso-e-invitaciones.md`
-- **Cierre:** los siete pasos quedaron implementados. Corregido el 2026-10-08: el enlace se emite una sola vez y se canjea en `/auth/callback` antes de crear contraseña. Queda pendiente verificar el recorrido completo con una persona real (enlace compartido y URL de callback autorizada) y habilitar la protección contra contraseñas filtradas.
+- **Cierre:** los siete pasos quedaron implementados. Corregido el 2026-10-08: el enlace se emite una sola vez y `/auth/callback` guarda la sesión del fragmento de Auth antes de crear contraseña. Queda pendiente verificar el recorrido completo con una persona real (enlace compartido y URL de callback autorizada) y habilitar la protección contra contraseñas filtradas.
 
 1. Contratos: esquemas de invitación, cambio de rol y retiro, reutilizando el resumen de integrante existente.
 2. API: invitación con rol `admin` mediante la API de administración de Auth, con enlace de un solo uso y sin registrar el secreto; pertenencia idempotente que nunca cambia el rol existente por efecto secundario.
