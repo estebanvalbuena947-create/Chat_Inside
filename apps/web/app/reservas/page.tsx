@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 /**
@@ -90,7 +91,10 @@ function enPalabras(valor: string): string {
   return minutos <= 1 ? 'menos de 1 min' : `${minutos} min`;
 }
 
-export function ReservationsPanel({ onBack }: { onBack?: () => void }): React.ReactNode {
+export default function ReservationsPanel(): React.ReactNode {
+  const pathname = usePathname();
+  const router = useRouter();
+  const isIntegrated = pathname === '/';
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -132,10 +136,10 @@ export function ReservationsPanel({ onBack }: { onBack?: () => void }): React.Re
     : [];
 
   return (
-    <section className={`reservations-view${onBack ? ' reservations-view-integrated' : ''}`}>
+    <section className={`reservations-view${isIntegrated ? ' reservations-view-integrated' : ''}`}>
       <header style={{ alignItems: 'baseline', display: 'flex', gap: '16px', marginBottom: '8px' }}>
-        {onBack && (
-          <button className="metrics-back" onClick={onBack} type="button">
+        {isIntegrated && (
+          <button className="metrics-back" onClick={() => router.replace('/')} type="button">
             Volver a la bandeja
           </button>
         )}
@@ -267,10 +271,6 @@ export function ReservationsPanel({ onBack }: { onBack?: () => void }): React.Re
       )}
     </section>
   );
-}
-
-export default function ReservasPage(): React.ReactNode {
-  return <ReservationsPanel />;
 }
 
 const celda: React.CSSProperties = {

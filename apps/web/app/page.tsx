@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
-import { ReservationsPanel } from './reservas/page';
+import ReservationsPanel from './reservas/page';
 
 type Conversation = {
   assignmentVersion: number;
@@ -3534,7 +3534,7 @@ export default function HomePage(): React.ReactNode {
           <MetricsPanel days={metricsDays} onChangeDays={setMetricsDays} state={metrics} />
         </div>
       )}
-      {activeView === 'reservations' && <ReservationsPanel onBack={() => setActiveView('inbox')} />}
+      {activeView === 'reservations' && <ReservationsPanel />}
       {activeView === 'media' && (
         <section className="media-view" aria-label="Comprobantes de pago">
           <header className="media-view-header">
