@@ -1,3 +1,5 @@
+import { firstValue, parseDate, toAmount } from './reservation-values';
+
 /* Vocabulario de las reservas del proyecto SPA.
  *
  * Viene del dashboard que el equipo usa hoy (`js/domain.js`) y se muda aqui para que la API y la
@@ -135,4 +137,154 @@ export function matchesDatabaseState(state: unknown, states: readonly string[]):
     .trim()
     .toLowerCase();
   return texto !== '' && states.includes(texto);
+}
+
+/* ---------- La fila cruda, traducida ---------- */
+
+function asText(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+/** Fecha en que la pre-reserva entro al sistema (no la fecha de la cita). */
+export function enteredAtOf(row: Record<string, unknown>): unknown {
+  return firstValue(row.revisadaEn, row.creadaEn, row.actualizadaEn, row.comprobante_revision_at);
+}
+
+/** Fecha en que la reserva quedo confirmada, o en que fallo. */
+export function closedAtOf(row: Record<string, unknown>): unknown {
+  return firstValue(
+    row.confirmadaEn,
+    row.retencionExpiraEn,
+    row.actualizadaEn,
+    row.revisadaEn,
+    row.creadaEn
+  );
+}
+
+/**
+ * Pre-reserva leida de la base de reservas.
+ *
+ * Se declara campo por campo en lugar de arrastrar la fila entera: esto es un limite del sistema, y
+ * lo que entra se elige. Si alguna pantalla necesita otra columna, se anade aqui a proposito.
+ */
+export type ReservationDraft = {
+  cerradaEn: Date | null;
+  confirmada: boolean;
+  confirmadaEn: string | null;
+  correo: string | null;
+  creadaEn: string | null;
+  entroEn: Date | null;
+  estado: string;
+  evidencia: Record<string, unknown> | null;
+  horarioEn: unknown;
+  horarioPendiente: boolean;
+  horarioProgramado: Date | null;
+  id: number | null;
+  intentosPago: number | null;
+  motivoRevision: string | null;
+  motivosPago: string[];
+  monto: number;
+  montoEsperado: number;
+  nombre: string | null;
+  pagoRecibido: boolean;
+  procesandoDesde: Date | null;
+  retencionExpiraEn: Date | null;
+  revisadaEn: string | null;
+  servicio: string | null;
+  servicioCodigo: string | null;
+  telefono: string | null;
+  actualizadaEn: string | null;
+};
+
+/**
+ * Traduce una fila de pre-reserva.
+ *
+ * La base tiene el mismo dato en varias columnas segun quien lo escribio, asi que casi todo campo
+ * dice de donde puede venir, en orden de preferencia. Y el monto real casi siempre vive en la
+ * evidencia del comprobante, no en la columna de la reserva: por eso se mira ahi tambien.
+ */
+export function normalizeDraft(row: Record<string, unknown>): ReservationDraft {
+  const horarioEn = firstValue(
+    row.masaje_inicio,
+    row.jacuzzi_inicio,
+    row.fecha_reserva,
+    row.fecha_servicio,
+    row.inicio
+  );
+  const evidencia =
+    row.comprobante_revision_datos && typeof row.comprobante_revision_datos === 'object'
+      ? (row.comprobante_revision_datos as Record<string, unknown>)
+      : null;
+
+  const borrador: ReservationDraft = {
+    actualizadaEn:
+      (firstValue(row.updated_at, row.actualizado_at, row.comprobante_revision_at) as
+        | string
+        | null) ?? null,
+    cerradaEn: null,
+    confirmada: Boolean(row.reserva_confirmada),
+    confirmadaEn: (firstValue(row.pabau_confirmado_at, row.confirmado_at) as string | null) ?? null,
+    correo: (firstValue(row.email, row.correo, evidencia?.email) as string | null) ?? null,
+    creadaEn:
+      (firstValue(
+        row.created_at,
+        row.creado_at,
+        row.fecha_creacion,
+        row.comprobante_revision_at
+      ) as string | null) ?? null,
+    entroEn: null,
+    estado: asText(row.estado_reserva),
+    evidencia,
+    horarioEn: horarioEn ?? null,
+    horarioPendiente: Boolean(row.horario_pendiente),
+    horarioProgramado: parseDate(horarioEn),
+    id: Number.isFinite(Number(row.id)) ? Number(row.id) : null,
+    intentosPago: Number.isFinite(Number(row.intentos_pago)) ? Number(row.intentos_pago) : null,
+    motivoRevision:
+      (firstValue(row.motivo_revision, evidencia?.motivo_clasificacion) as string | null) ?? null,
+    motivosPago: Array.isArray(evidencia?.motivos_revision_pago)
+      ? (evidencia?.motivos_revision_pago as string[])
+      : [],
+    monto: toAmount(
+      firstValue(
+        row.monto_pagado,
+        evidencia?.monto_documento,
+        evidencia?.monto_pago,
+        row.monto,
+        row.valor,
+        row.total
+      )
+    ),
+    montoEsperado: toAmount(firstValue(evidencia?.monto_esperado, evidencia?.monto_documento)),
+    nombre:
+      (firstValue(
+        row.nombre,
+        row.cliente,
+        row.nombre_cliente,
+        evidencia?.nombre_reserva,
+        evidencia?.nombre_perfil
+      ) as string | null) ?? null,
+    pagoRecibido: Boolean(row.pago_recibido),
+    procesandoDesde: parseDate(row.procesando_desde),
+    retencionExpiraEn: parseDate(row.retencion_expira_at),
+    revisadaEn:
+      (firstValue(row.comprobante_revision_at, row.actualizado_at, row.updated_at) as
+        | string
+        | null) ?? null,
+    servicio:
+      (firstValue(row.nombre_servicio, row.servicio, row.servicios) as string | null) ?? null,
+    servicioCodigo: (firstValue(row.servicio, row.service_agua_id) as string | null) ?? null,
+    telefono:
+      (firstValue(row.phone, row.telefono, row.whatsapp, row.celular, evidencia?.phone) as
+        | string
+        | null) ?? null
+  };
+
+  /* entroEn: cuando llego la pre-reserva (la pantalla se rige por esta fecha, no por la de la cita).
+     cerradaEn: cuando se confirmo o cuando fallo. */
+  borrador.entroEn = parseDate(enteredAtOf(borrador as unknown as Record<string, unknown>));
+  borrador.cerradaEn = parseDate(closedAtOf(borrador as unknown as Record<string, unknown>));
+  return borrador;
 }

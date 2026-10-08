@@ -5,4 +5,6 @@ export * from './inbox';
 export * from './labels';
 export * from './media';
 export * from './messages';
+export * from './reservation-normalizers';
+export * from './reservation-values';
 export * from './reservations';
