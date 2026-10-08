@@ -26,6 +26,11 @@ services:
       ZERNIO_API_KEY: ${ZERNIO_API_KEY}
       ZERNIO_WEBHOOK_SECRET: ${ZERNIO_WEBHOOK_SECRET}
       ZERNIO_CONNECT_REDIRECT_URL: ${ZERNIO_CONNECT_REDIRECT_URL}
+      # Proyecto Supabase de reservas (SPA). Solo la API: la web nunca debe recibir esta clave, y el
+      # trabajador no la necesita. Si no se rellenan en el .env, llegan vacias y el apartado de
+      # reservas responde que no esta configurado, en lugar de impedir que arranque.
+      SPA_SUPABASE_URL: ${SPA_SUPABASE_URL:-}
+      SPA_SUPABASE_SECRET_KEY: ${SPA_SUPABASE_SECRET_KEY:-}
     networks:
       - global
     deploy:

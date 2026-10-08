@@ -46,3 +46,51 @@ export function createServerSupabaseClient(
     }
   });
 }
+
+/**
+ * Una variable que llega vacia equivale a no estar.
+ *
+ * El stack de Docker pasa `SPA_SUPABASE_URL=` cuando la variable no esta en el `.env` del servidor.
+ * Sin esto, ese vacio seria un valor invalido y la API no arrancaria por una integracion que quiza
+ * todavia no se ha configurado.
+ */
+function emptyAsAbsent(value: unknown): unknown {
+  return typeof value === 'string' && value.trim() === '' ? undefined : value;
+}
+
+/**
+ * Proyecto de reservas (SPA). Es **otra** base, distinta de la nuestra, y la clave es de servicio:
+ * solo la API la recibe, nunca la web.
+ */
+export const reservationsEnvironmentSchema = z.object({
+  SPA_SUPABASE_SECRET_KEY: z.preprocess(emptyAsAbsent, z.string().min(1).optional()),
+  SPA_SUPABASE_URL: z.preprocess(emptyAsAbsent, z.url().optional())
+});
+
+export type ReservationsEnvironment = z.infer<typeof reservationsEnvironmentSchema>;
+
+export function parseReservationsEnvironment(
+  environment: Record<string, string | undefined>
+): ReservationsEnvironment {
+  return reservationsEnvironmentSchema.parse(environment);
+}
+
+/**
+ * Cliente del proyecto de reservas, o nulo si no esta configurado.
+ *
+ * Devolver nulo y no lanzar es deliberado: el apartado de reservas tiene que poder responder «sin
+ * configurar» en lugar de impedir que la API arranque. Quien lo use decide que decir.
+ */
+export function createReservationsSupabaseClient(
+  environment: Record<string, string | undefined>
+): SupabaseClient | null {
+  const configuration = parseReservationsEnvironment(environment);
+  if (!configuration.SPA_SUPABASE_URL || !configuration.SPA_SUPABASE_SECRET_KEY) return null;
+
+  return createClient(configuration.SPA_SUPABASE_URL, configuration.SPA_SUPABASE_SECRET_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+}
