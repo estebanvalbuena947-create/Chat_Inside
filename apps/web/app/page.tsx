@@ -120,6 +120,7 @@ type ConversationNote = {
 };
 type ConnectedChannel = {
   createdAt: string;
+  disconnectedAt: string | null;
   displayName: string | null;
   id: string;
   platform: string | null;
@@ -477,6 +478,11 @@ export default function HomePage(): React.ReactNode {
   const [channelNameDraft, setChannelNameDraft] = useState('');
   const [channelRenameError, setChannelRenameError] = useState<string | null>(null);
   const [isRenamingChannel, setIsRenamingChannel] = useState(false);
+  // Retirar un canal es un efecto externo y no se deshace solo: se confirma antes.
+  const [removingChannelId, setRemovingChannelId] = useState<string | null>(null);
+  const [removingChannelError, setRemovingChannelError] = useState<string | null>(null);
+  const [isRemovingChannel, setIsRemovingChannel] = useState(false);
+  const [reconnectingChannelId, setReconnectingChannelId] = useState<string | null>(null);
   const [isTeamOpen, setIsTeamOpen] = useState(false);
   const [teamError, setTeamError] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -2124,6 +2130,66 @@ export default function HomePage(): React.ReactNode {
     }
   }
 
+  /**
+   * Retira el canal: la API lo desconecta en el proveedor y lo saca de la operacion.
+   *
+   * La historia de sus conversaciones se conserva; lo que deja de funcionar son los envios, y la API
+   * lo dice con su motivo si alguien intenta responder en ese hilo.
+   */
+  async function removeChannel(channel: ConnectedChannel): Promise<void> {
+    if (isRemovingChannel) return;
+    setIsRemovingChannel(true);
+    setRemovingChannelError(null);
+    try {
+      const response = await fetch(`/api/channels/${channel.id}`, { method: 'DELETE' });
+      const payload = response.headers.get('content-type')?.includes('application/json')
+        ? await response.json()
+        : {};
+      if (response.status === 401) {
+        window.location.assign('/login');
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'No fue posible retirar el canal.');
+      }
+      setConnectedChannels((current) => current.filter((item) => item.id !== channel.id));
+      setRemovingChannelId(null);
+    } catch (error) {
+      setRemovingChannelError(
+        error instanceof Error ? error.message : 'No fue posible retirar el canal.'
+      );
+    } finally {
+      setIsRemovingChannel(false);
+    }
+  }
+
+  /** Vuelve a autorizar el canal retirado: el proveedor devuelve la direccion de su flujo. */
+  async function reconnectChannel(channel: ConnectedChannel): Promise<void> {
+    if (reconnectingChannelId) return;
+    setReconnectingChannelId(channel.id);
+    setRemovingChannelError(null);
+    try {
+      const response = await fetch(`/api/channels/${channel.id}/reconnect`, { method: 'POST' });
+      const payload = response.headers.get('content-type')?.includes('application/json')
+        ? await response.json()
+        : {};
+      if (response.status === 401) {
+        window.location.assign('/login');
+        return;
+      }
+      if (!response.ok || !payload.authorizationUrl) {
+        throw new Error(payload.error ?? 'No fue posible reconectar el canal.');
+      }
+      window.location.assign(payload.authorizationUrl);
+    } catch (error) {
+      setRemovingChannelError(
+        error instanceof Error ? error.message : 'No fue posible reconectar el canal.'
+      );
+    } finally {
+      setReconnectingChannelId(null);
+    }
+  }
+
   async function renameChannel(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const displayName = channelNameDraft.trim();
@@ -3519,17 +3585,71 @@ export default function HomePage(): React.ReactNode {
                     <>
                       <strong>{channel.displayName ?? 'Cuenta sin nombre'}</strong>
                       {tenant?.role === 'admin' && (
-                        <button
-                          className="channel-rename-trigger"
-                          onClick={() => {
-                            setRenamingChannelId(channel.id);
-                            setChannelNameDraft(channel.displayName ?? '');
-                            setChannelRenameError(null);
-                          }}
-                          type="button"
-                        >
-                          {channel.displayName ? 'Renombrar' : 'Nombrar'}
-                        </button>
+                        <>
+                          <button
+                            className="channel-rename-trigger"
+                            onClick={() => {
+                              setRenamingChannelId(channel.id);
+                              setChannelNameDraft(channel.displayName ?? '');
+                              setChannelRenameError(null);
+                            }}
+                            type="button"
+                          >
+                            {channel.displayName ? 'Renombrar' : 'Nombrar'}
+                          </button>
+                          {removingChannelId === channel.id ? (
+                            <>
+                              <span>
+                                Se desconecta en Zernio y deja de usarse. Las conversaciones y los
+                                mensajes se conservan.
+                              </span>
+                              <button
+                                className="channel-rename-save"
+                                disabled={isRemovingChannel}
+                                onClick={() => void removeChannel(channel)}
+                                type="button"
+                              >
+                                {isRemovingChannel ? 'Retirando…' : 'Sí, remover'}
+                              </button>
+                              <button
+                                className="channel-rename-cancel"
+                                disabled={isRemovingChannel}
+                                onClick={() => {
+                                  setRemovingChannelId(null);
+                                  setRemovingChannelError(null);
+                                }}
+                                type="button"
+                              >
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                className="channel-rename-trigger"
+                                disabled={reconnectingChannelId === channel.id}
+                                onClick={() => {
+                                  setRemovingChannelError(null);
+                                  setRemovingChannelId(null);
+                                  void reconnectChannel(channel);
+                                }}
+                                type="button"
+                              >
+                                {reconnectingChannelId === channel.id ? 'Abriendo…' : 'Reconectar'}
+                              </button>
+                              <button
+                                className="channel-rename-trigger"
+                                onClick={() => {
+                                  setRemovingChannelError(null);
+                                  setRemovingChannelId(channel.id);
+                                }}
+                                type="button"
+                              >
+                                Remover
+                              </button>
+                            </>
+                          )}
+                        </>
                       )}
                     </>
                   )}
@@ -3538,6 +3658,11 @@ export default function HomePage(): React.ReactNode {
               {channelRenameError && (
                 <p className="channel-rename-error" role="alert">
                   {channelRenameError}
+                </p>
+              )}
+              {removingChannelError && (
+                <p className="channel-rename-error" role="alert">
+                  {removingChannelError}
                 </p>
               )}
             </section>

@@ -12,7 +12,7 @@ function createClientFake(responses: Array<{ data: unknown; error: unknown }>) {
   let index = 0;
   const from = vi.fn(() => {
     const builder: Record<string, unknown> = {};
-    for (const method of ['eq', 'order', 'select', 'update']) {
+    for (const method of ['eq', 'is', 'order', 'select', 'update']) {
       builder[method] = (...args: unknown[]) => {
         calls.push({ args, method });
         return builder;
@@ -65,6 +65,7 @@ describe('ZernioChannelService rename', () => {
     ).resolves.toEqual({
       item: {
         createdAt: '2026-09-28T20:00:00.000Z',
+        disconnectedAt: null,
         displayName: 'Instagram ventas',
         id: channelId,
         platform: 'instagram'
@@ -134,12 +135,14 @@ describe('ZernioChannelService list', () => {
       items: [
         {
           createdAt: '2026-09-28T20:00:00.000Z',
+          disconnectedAt: null,
           displayName: 'Instagram ventas',
           id: channelId,
           platform: 'instagram'
         },
         {
           createdAt: '2026-09-28T21:00:00.000Z',
+          disconnectedAt: null,
           displayName: null,
           id: '44444444-4444-4444-8444-444444444444',
           platform: null
@@ -185,5 +188,127 @@ describe('ZernioChannelService plantillas de WhatsApp', () => {
     await expect(service.listWhatsappTemplates('Bearer valid.jwt', tenantId)).resolves.toEqual({
       items: []
     });
+  });
+});
+
+describe('ZernioChannelService retirar y reconectar', () => {
+  const canalRetirado = {
+    created_at: '2026-09-28T20:00:00+00:00',
+    disconnected_at: '2026-10-08T20:00:00.000Z',
+    display_name: 'Inside Spa Mkt',
+    id: channelId,
+    platform: 'whatsapp'
+  };
+
+  it('desconecta en el proveedor y despues marca el canal', async () => {
+    const disconnectAccount = vi.fn(async () => undefined);
+    const { assertRole, service } = createService(
+      [
+        {
+          data: { disconnected_at: null, id: channelId, provider_account_id: 'cuenta-wa' },
+          error: null
+        },
+        { data: canalRetirado, error: null }
+      ],
+      { zernio: { disconnectAccount } }
+    );
+
+    await expect(service.disconnect('Bearer valid.jwt', tenantId, channelId)).resolves.toEqual({
+      item: {
+        createdAt: '2026-09-28T20:00:00.000Z',
+        disconnectedAt: '2026-10-08T20:00:00.000Z',
+        displayName: 'Inside Spa Mkt',
+        id: channelId,
+        platform: 'whatsapp'
+      }
+    });
+    // El efecto externo va ANTES de marcar: si el proveedor falla, no se miente sobre el estado.
+    expect(disconnectAccount).toHaveBeenCalledWith('cuenta-wa');
+    expect(assertRole).toHaveBeenCalledWith(userId, tenantId, ['admin']);
+  });
+
+  it('no marca nada si el proveedor no acepta la desconexion', async () => {
+    const disconnectAccount = vi.fn(async () => {
+      throw new Error('Zernio no está disponible');
+    });
+    const { calls, service } = createService(
+      [
+        {
+          data: { disconnected_at: null, id: channelId, provider_account_id: 'cuenta-wa' },
+          error: null
+        }
+      ],
+      { zernio: { disconnectAccount } }
+    );
+
+    await expect(service.disconnect('Bearer valid.jwt', tenantId, channelId)).rejects.toThrow(
+      'Zernio no está disponible'
+    );
+    expect(calls.filter((call) => call.method === 'update')).toEqual([]);
+  });
+
+  it('retirar un canal exige ser administrador', async () => {
+    const disconnectAccount = vi.fn();
+    const { service } = createService([], { canManage: false, zernio: { disconnectAccount } });
+
+    await expect(service.disconnect('Bearer valid.jwt', tenantId, channelId)).rejects.toThrow(
+      'forbidden'
+    );
+    expect(disconnectAccount).not.toHaveBeenCalled();
+  });
+
+  it('un canal de otro espacio no se retira', async () => {
+    const disconnectAccount = vi.fn();
+    const { service } = createService([{ data: null, error: null }], {
+      zernio: { disconnectAccount }
+    });
+
+    await expect(service.disconnect('Bearer valid.jwt', tenantId, channelId)).rejects.toThrow(
+      'El canal no existe en este tenant.'
+    );
+    expect(disconnectAccount).not.toHaveBeenCalled();
+  });
+
+  it('reconectar devuelve la autorizacion del proveedor para esa plataforma', async () => {
+    const getConnectUrl = vi.fn(async () => 'https://zernio.com/oauth/autorizar');
+    process.env.ZERNIO_CONNECT_REDIRECT_URL = 'https://chat.insidespa.com.mx/';
+    const { service } = createService(
+      [
+        { data: { id: channelId, platform: 'whatsapp' }, error: null },
+        { data: { id: tenantId, zernio_profile_id: 'perfil-1' }, error: null }
+      ],
+      { zernio: { getConnectUrl } }
+    );
+
+    try {
+      await expect(service.reconnect('Bearer valid.jwt', tenantId, channelId)).resolves.toEqual({
+        authorizationUrl: 'https://zernio.com/oauth/autorizar'
+      });
+      expect(getConnectUrl).toHaveBeenCalledWith({
+        platform: 'whatsapp',
+        profileId: 'perfil-1',
+        redirectUrl: 'https://chat.insidespa.com.mx/'
+      });
+    } finally {
+      delete process.env.ZERNIO_CONNECT_REDIRECT_URL;
+    }
+  });
+
+  it('una plataforma que el flujo de conexion no conoce no se reconecta', async () => {
+    const getConnectUrl = vi.fn();
+    process.env.ZERNIO_CONNECT_REDIRECT_URL = 'https://chat.insidespa.com.mx/';
+    const { service } = createService(
+      [{ data: { id: channelId, platform: 'metaads' }, error: null }],
+      { zernio: { getConnectUrl } }
+    );
+
+    try {
+      await expect(service.reconnect('Bearer valid.jwt', tenantId, channelId)).rejects.toThrow(
+        'Ese canal no se reconecta desde aquí.'
+      );
+      expect(getConnectUrl).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.ZERNIO_CONNECT_REDIRECT_URL;
+    }
   });
 });

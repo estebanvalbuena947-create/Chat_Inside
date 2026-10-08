@@ -10,6 +10,49 @@ function respuesta(status: number, body: unknown): Response {
   } as Response;
 }
 
+describe('cliente de Zernio: desconectar una cuenta', () => {
+  const cliente = new ZernioApiClient();
+  let fetchSimulado: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    process.env.ZERNIO_API_KEY = 'clave-de-prueba';
+    fetchSimulado = vi.fn();
+    vi.stubGlobal('fetch', fetchSimulado);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.ZERNIO_API_KEY;
+  });
+
+  it('pide la desconexion con DELETE y la acepta', async () => {
+    fetchSimulado.mockResolvedValue(respuesta(200, { success: true }));
+    await expect(cliente.disconnectAccount('cuenta-1')).resolves.toBeUndefined();
+
+    const [url, init] = fetchSimulado.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://zernio.com/api/v1/accounts/cuenta-1');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('un 404 significa que ya estaba desconectada, no un fallo', async () => {
+    // El proveedor responde 404 al repetir la desconexion: el resultado que se busca ya se cumplio.
+    fetchSimulado.mockResolvedValue(respuesta(404, { error: 'Account not found' }));
+    await expect(cliente.disconnectAccount('cuenta-1')).resolves.toBeUndefined();
+  });
+
+  it.each([500, 502, 503])('un %s se reporta como servicio no disponible', async (status) => {
+    fetchSimulado.mockResolvedValue(respuesta(status, {}));
+    await expect(cliente.disconnectAccount('cuenta-1')).rejects.toThrow(
+      'No fue posible desconectar la cuenta en Zernio.'
+    );
+  });
+
+  it('un 403 dice que el proveedor rechazo la desconexion', async () => {
+    fetchSimulado.mockResolvedValue(respuesta(403, {}));
+    await expect(cliente.disconnectAccount('cuenta-1')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
 describe('cliente de Zernio: acciones sobre comentarios', () => {
   const cliente = new ZernioApiClient();
   let fetchSimulado: ReturnType<typeof vi.fn>;

@@ -151,6 +151,23 @@ function hasZernioChannel(channel: unknown): boolean {
   );
 }
 
+/**
+ * Un canal retirado no envia.
+ *
+ * Es la misma fila de `channel_accounts` —la historia se conserva a proposito—, pero su cuenta ya no
+ * esta conectada en el proveedor. Enviar seria encolar un mensaje condenado.
+ */
+function isDisconnectedChannel(channel: unknown): boolean {
+  const relation = Array.isArray(channel) ? channel[0] : channel;
+  return Boolean(
+    relation &&
+      typeof relation === 'object' &&
+      'disconnected_at' in relation &&
+      typeof (relation as { disconnected_at?: unknown }).disconnected_at === 'string' &&
+      (relation as { disconnected_at: string }).disconnected_at
+  );
+}
+
 @Injectable()
 export class TenantMessageService {
   constructor(
@@ -238,7 +255,7 @@ export class TenantMessageService {
     const supabase = this.supabaseServerClientFactory.create();
     const { data: conversation, error: conversationError } = await supabase
       .from('conversations')
-      .select('id, channel_account_id, channel_account:channel_accounts(provider)')
+      .select('id, channel_account_id, channel_account:channel_accounts(provider, disconnected_at)')
       .eq('tenant_id', tenantId)
       .eq('id', conversationId)
       .maybeSingle();
@@ -248,6 +265,13 @@ export class TenantMessageService {
     if (!conversation.channel_account_id || !hasZernioChannel(conversation.channel_account)) {
       throw new UnprocessableEntityException(
         'La conversación no tiene un canal Zernio listo para enviar.'
+      );
+    }
+    // Un canal retirado no envia. Se dice con su motivo en lugar de intentarlo contra una cuenta que
+    // el proveedor ya no tiene conectada: el mensaje quedaria fallido minutos despues y sin contexto.
+    if (isDisconnectedChannel(conversation.channel_account)) {
+      throw new UnprocessableEntityException(
+        'El canal de esta conversación está retirado: reconéctalo para poder responder.'
       );
     }
 

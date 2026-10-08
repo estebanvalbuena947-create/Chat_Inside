@@ -211,6 +211,35 @@ describe('TenantMessageService envio con plantilla', () => {
     expect(insertados).toHaveLength(0);
   });
 
+  it('un canal retirado no envia, ni texto ni plantilla', async () => {
+    // La fila del canal se conserva (la historia la referencia), pero su cuenta ya no esta conectada:
+    // encolar seria un mensaje condenado.
+    const canalRetirado = {
+      channel_account: { disconnected_at: '2026-10-08T20:00:00.000Z', provider: 'zernio' },
+      channel_account_id: channelAccountId,
+      id: conversationId
+    };
+
+    for (const command of [
+      { body: 'Hola', idempotencyKey, kind: 'text' as const },
+      {
+        idempotencyKey,
+        kind: 'whatsapp_template' as const,
+        whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
+      }
+    ]) {
+      const { insertados, service } = createService({
+        catalog: catalogFake([plantillaAprobada]),
+        conversation: canalRetirado
+      });
+
+      await expect(
+        service.createOutbound('Bearer valid.jwt', tenantId, conversationId, command)
+      ).rejects.toThrow('El canal de esta conversación está retirado');
+      expect(insertados).toHaveLength(0);
+    }
+  });
+
   it('rechaza una plantilla con huecos, en cualquier componente', async () => {
     const { insertados, service } = createService({
       catalog: catalogFake([{ ...plantillaAprobada, variables: ['{{1}}', '{{nombre}}'] }]),

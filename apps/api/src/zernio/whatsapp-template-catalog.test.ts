@@ -22,7 +22,7 @@ function createSupabaseFake(responses: Array<{ data: unknown; error?: unknown }>
   let index = 0;
   const from = vi.fn(() => {
     const builder: Record<string, unknown> = {};
-    for (const method of ['eq', 'order', 'select']) {
+    for (const method of ['eq', 'is', 'order', 'select']) {
       builder[method] = () => builder;
     }
     const siguiente = () => responses[index++] ?? { data: [], error: null };

@@ -210,6 +210,24 @@ export class ZernioApiClient {
     return requireString(payload._id, 'Zernio no devolvió el perfil creado.');
   }
 
+  /**
+   * Desconecta y retira una cuenta en el proveedor.
+   *
+   * Repetir la llamada devuelve `404` («ya estaba desconectada») y eso **no** es un fallo: el
+   * resultado que se busca es que la cuenta deje de estar conectada. El proveedor la mantiene en una
+   * ventana de gracia de una hora, asi que reconectar enseguida sigue siendo posible.
+   */
+  async disconnectAccount(accountId: string): Promise<void> {
+    const response = await this.request(`/v1/accounts/${encodeURIComponent(accountId)}`, {
+      method: 'DELETE'
+    });
+    if (response.ok || response.status === 404) return;
+    if (response.status === 401 || response.status === 403) {
+      throw new ForbiddenException('Zernio rechazo la desconexion de la cuenta.');
+    }
+    throw new ServiceUnavailableException('No fue posible desconectar la cuenta en Zernio.');
+  }
+
   async getConnectUrl(input: {
     platform: ZernioConnectPlatform;
     profileId: string;

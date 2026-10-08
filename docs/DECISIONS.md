@@ -4,6 +4,18 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-050 - Retirar un canal es desconectar y marcar, nunca borrar
+
+- **Fecha:** 2026-10-08
+- **Estado:** aceptada
+- **Contexto:** Un canal solo se podía conectar y renombrar. Cuando la cuenta se desvincula en el proveedor, cuando el token caduca o cuando se conectó la cuenta equivocada —como ocurrió con las dos cuentas de WhatsApp homónimas— no había forma de retirarla desde la bandeja: seguía apareciendo como operativa y el catálogo de plantillas la seguía consultando. Borrar la fila era imposible por diseño: `conversations` y `messages` la referencian con `on delete restrict`, precisamente para que la historia no se pueda romper.
+- **Decisión:** Retirar un canal es **desconectar en el proveedor y marcar la fila** con `disconnected_at`. El efecto externo va **primero**: si el proveedor falla con un `5xx`, no se marca nada, porque marcar un canal como retirado cuando sigue conectado sería mentir sobre el estado. Un `404` del proveedor («ya estaba desconectada») se acepta como éxito, así que la operación es idempotente. El canal retirado desaparece del listado operativo y del catálogo de plantillas, y **cualquier envío hacia él falla con un motivo explícito** en lugar de encolarse contra una cuenta que ya no existe. Reconectar es volver a abrir la autorización del proveedor: el mismo camino de la conexión inicial, sin inventar uno nuevo; al registrarse la cuenta, el estado de retirado se limpia. Las dos rutas exigen rol de administrador. Y una decisión explícita: **las conversaciones y mensajes del canal retirado se conservan y se siguen viendo** — no se esconden datos por un cambio de configuración—, así que responder en esos hilos da un error claro hasta reconectar.
+- **Alternativas consideradas:** Borrar la fila, imposible sin romper la historia; ocultar también las conversaciones del canal retirado, que esconde datos que nadie pidió borrar; retirar automáticamente los canales con token caducado, que exige un diagnóstico de salud que todavía no existe; y liberar el número provisionado, que es otra decisión porque afecta a la facturación del proveedor.
+- **Consecuencias:** La lista de canales dice la verdad sobre lo que se puede usar, y un administrador puede deshacer una conexión equivocada sin perder nada. Queda pendiente que el compositor de la bandeja avise de que el canal está retirado **antes** de intentar enviar: hoy el envío falla con su motivo, visible en el hilo, pero no se anticipa.
+- **Cómo se verifica:** Pruebas del cliente del proveedor (`DELETE`, `404` como éxito, `403` y `5xx` como fallo); del servicio (marca después de desconectar, no marca si el proveedor falla, exige administrador, canal de otro espacio da `404`, reconectar devuelve la autorización y una plataforma no autorizable se rechaza); del encolado (texto y plantilla hacia un canal retirado se rechazan sin encolar); y del catálogo y el listado (excluyen los canales retirados). La interfaz no tiene pruebas automáticas: se verifican sus dos botones a mano.
+
+---
+
 ## ADR-049 - El bot sabe si la ventana de WhatsApp está abierta, y no escribe fuera de plazo
 
 - **Fecha:** 2026-10-08

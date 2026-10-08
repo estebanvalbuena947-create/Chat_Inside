@@ -31,6 +31,9 @@ export const tenantListResponseSchema = z.object({
 
 export const zernioChannelSchema = z.object({
   createdAt: z.string().datetime(),
+  // Instante en que el canal se retiro. Nulo mientras esta operativo. El listado solo devuelve los
+  // operativos; el campo viaja igual para que la interfaz pueda decir que un canal esta retirado.
+  disconnectedAt: z.string().datetime().nullable(),
   displayName: z.string().min(1).max(160).nullable(),
   id: z.uuid(),
   platform: z.string().trim().min(1).max(64).nullable()
@@ -55,6 +58,13 @@ export const attachZernioChannelSchema = z.object({
 export const attachZernioChannelResponseSchema = z.object({
   item: zernioChannelSchema
 });
+
+/** Retirar un canal devuelve el canal ya marcado; reconectar devuelve la autorizacion. */
+export const disconnectZernioChannelResponseSchema = z.object({
+  item: zernioChannelSchema
+});
+
+export type DisconnectZernioChannelResponse = z.infer<typeof disconnectZernioChannelResponseSchema>;
 
 export type AttachZernioChannel = z.infer<typeof attachZernioChannelSchema>;
 export type AttachZernioChannelResponse = z.infer<typeof attachZernioChannelResponseSchema>;

@@ -89,6 +89,8 @@ export class WhatsappTemplateCatalog {
       .eq('id', channelAccountId)
       .eq('provider', 'zernio')
       .eq('platform', 'whatsapp')
+      // Un canal retirado no tiene catalogo que mostrar: su cuenta ya no esta conectada.
+      .is('disconnected_at', null)
       .maybeSingle();
     if (error) {
       throw new InternalServerErrorException('No fue posible resolver la cuenta de WhatsApp.');
@@ -122,6 +124,8 @@ export class WhatsappTemplateCatalog {
       .eq('tenant_id', tenantId)
       .eq('provider', 'zernio')
       .eq('platform', 'whatsapp')
+      // Solo cuentas operativas: una retirada no se consulta al proveedor.
+      .is('disconnected_at', null)
       .order('created_at', { ascending: false });
     if (error) {
       throw new InternalServerErrorException('No fue posible resolver la cuenta de WhatsApp.');
