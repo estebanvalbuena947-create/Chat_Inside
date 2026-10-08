@@ -74,16 +74,18 @@ async function fetchTable(
 ): Promise<Record<string, unknown>[]> {
   const rows: Record<string, unknown>[] = [];
 
-  for (const orderBy of order) {
+  // El ultimo intento es SIN ordenar. Esa base no garantiza que exista la columna por la que se
+  // quiere ordenar, y el dashboard ya lee las reservas confirmadas sin orden: ordenar es una
+  // comodidad, no un requisito para poder mostrar los datos.
+  for (const orderBy of [...order, null]) {
     rows.length = 0;
     let fallo: unknown = null;
 
     for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
-      const respuesta = await supabase
-        .from(table)
-        .select(columns)
-        .order(orderBy, { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
+      const base = supabase.from(table).select(columns);
+      const respuesta = await (orderBy
+        ? base.order(orderBy, { ascending: true }).range(from, from + PAGE_SIZE - 1)
+        : base.range(from, from + PAGE_SIZE - 1));
 
       if (respuesta.error) {
         fallo = respuesta.error;
