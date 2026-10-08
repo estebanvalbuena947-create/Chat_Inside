@@ -3626,6 +3626,25 @@ h2 {
   text-align: left;
   text-transform: uppercase;
 }
+/*
+ * Movil: la fila de un canal conectado es un flex de una sola linea (chip, nombre, Renombrar,
+ * Reconectar, Remover). A 322 px de ancho del modal no caben cinco cosas y "Remover" se sale del
+ * recuadro. Aqui el nombre crece y consume su linea, asi que los tres botones bajan a la siguiente y
+ * quedan alineados a la derecha. El escritorio no cambia.
+ */
+@media (max-width: 620px) {
+  .connected-channel-list > div {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    justify-content: flex-end;
+  }
+  .connected-channel-list > div strong {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
 .reservations-table td,
 .reservations-table th {
   border-bottom: 1px solid #eee9e0;
