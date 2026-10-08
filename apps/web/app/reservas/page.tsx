@@ -206,10 +206,10 @@ export default function ReservationsPanel(): React.ReactNode {
                 <tbody>
                   {board.comprobantes.map((row, i) => (
                     <tr key={`${row.borradorId}-${i}`}>
-                      <td>#{row.borradorId ?? '—'}</td>
-                      <td>{row.referencia ?? '—'}</td>
-                      <td>{money(row.monto)}</td>
-                      <td>{row.estado}</td>
+                      <td data-label="Pre-reserva">#{row.borradorId ?? '—'}</td>
+                      <td data-label="Referencia">{row.referencia ?? '—'}</td>
+                      <td data-label="Monto">{money(row.monto)}</td>
+                      <td data-label="Estado">{row.estado}</td>
                       <td>
                         <button
                           onClick={() =>
@@ -283,11 +283,13 @@ function Table({
         <tbody>
           {rows.map((row) => (
             <tr key={row.id ?? row.nombre}>
-              <td>{row.nombre ?? 'Sin nombre'}</td>
-              <td>{row.servicio ?? '—'}</td>
-              <td>{date(row.horarioProgramado)}</td>
-              <td>{money(row.monto)}</td>
-              <td>
+              {/* `data-label` repite el encabezado en cada celda: en el telefono la tabla se convierte
+                  en tarjetas y cada dato necesita decir de que columna viene. */}
+              <td data-label="Cliente">{row.nombre ?? 'Sin nombre'}</td>
+              <td data-label="Servicio">{row.servicio ?? '—'}</td>
+              <td data-label="Cita">{date(row.horarioProgramado)}</td>
+              <td data-label="Valor">{money(row.monto)}</td>
+              <td data-label="Estado">
                 <span className={`reservation-status ${row.estadoMostrado}`}>
                   {label[row.estadoMostrado] ?? row.estado}
                 </span>

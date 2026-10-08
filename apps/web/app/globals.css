@@ -3622,6 +3622,55 @@ h2 {
   border-bottom: 1px solid #eee9e0;
   padding: 11px 8px;
 }
+
+/*
+ * Movil: la tabla de reservas tiene seis columnas y a 360 px no cabe —el boton "Gestionar" se sale
+ * por el borde derecho—. En pantallas estrechas el encabezado se oculta y cada fila pasa a ser una
+ * tarjeta, con cada celda diciendo su nombre desde `data-label`. La etiqueta la pone el marcado, el
+ * mismo texto del encabezado: no hay dos listas de nombres que puedan separarse.
+ */
+@media (max-width: 760px) {
+  .reservations-table {
+    padding: 12px;
+  }
+  .reservations-table table,
+  .reservations-table tbody,
+  .reservations-table tr,
+  .reservations-table td {
+    display: block;
+    width: 100%;
+  }
+  .reservations-table thead {
+    display: none;
+  }
+  .reservations-table tr {
+    border: 1px solid #eee9e0;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+  }
+  .reservations-table td {
+    align-items: center;
+    border-bottom: 0;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 5px 0;
+  }
+  .reservations-table td::before {
+    color: #766f63;
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .reservations-table td:last-child {
+    padding-top: 10px;
+  }
+  .reservations-table td button {
+    width: 100%;
+  }
+}
 .reservation-status {
   border-radius: 14px;
   font-size: 12px;
