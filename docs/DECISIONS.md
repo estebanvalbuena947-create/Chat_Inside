@@ -4,6 +4,18 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-049 - El bot sabe si la ventana de WhatsApp está abierta, y no escribe fuera de plazo
+
+- **Fecha:** 2026-10-08
+- **Estado:** aceptada
+- **Contexto:** El bot respondía siempre con texto libre. WhatsApp solo lo admite durante las **24 horas** siguientes al último mensaje del cliente; fuera de plazo exige una plantilla aprobada. El 2026-10-07 a las 19:28 una respuesta automática fue rechazada por Meta (`zernio_http_400`), el mensaje quedó `failed` en la cola y **el cliente no recibió nada**: el flujo creyó haber respondido y nadie mira la cola. El contrato de herramientas tampoco permitía enviar plantillas de Meta —solo texto, multimedia y la plantilla interna de `message_templates`, que se manda como texto—, así que no había forma correcta de escribir tarde.
+- **Decisión:** La ventana se calcula **en el servidor** (`whatsappServiceWindow`, con su umbral en el dominio) y se informa al leer la conversación como `whatsappWindow: { open, lastInboundAt, expiresAt }`. Devuelve `null` cuando no aplica (otro canal) o cuando **no se puede afirmar** (sin ningún mensaje entrante registrado, como un hilo que empezó desde un anuncio): se prefiere que decida el proveedor a inventar una ventana cerrada. La puerta del bot **rechaza con `422`** cualquier envío que no sea plantilla cuando la ventana está conocida y cerrada, y acepta `whatsappTemplate` (nombre + idioma exactos), que se encola por el camino de la bandeja ya probado: catálogo por cuenta de la conversación, sin variables, con idempotencia y cola. El bloqueo vive en la puerta del bot y no en el camino compartido, así que **una persona que escribe desde la bandeja no cambia de comportamiento**; la regla se aplica solo a WhatsApp.
+- **Alternativas consideradas:** Que cada flujo reste horas por su cuenta, que repite la política en decenas de nodos y se desincroniza en cuanto cambie; aplicar la regla también a Instagram o Messenger, cuya ventana no está verificada contra su documentación; bloquear también a las personas en el compositor, que cambia la interfaz y quedaba fuera de alcance; y dejar que Meta rechace, que es exactamente el fallo silencioso que se está corrigiendo.
+- **Consecuencias:** Un flujo que escriba texto o multimedia fuera de plazo recibe un `422` inmediato y legible en lugar de un fallo tardío y mudo; para escribir tarde tiene la plantilla aprobada. Los flujos deben leer `whatsappWindow` y elegir camino. Queda pendiente que el compositor de la bandeja avise de lo mismo a las personas: hoy su envío fuera de plazo sigue fallando en el mensaje, visible en el hilo pero no anticipado.
+- **Cómo se verifica:** Pruebas del dominio (abierta, cerrada, **en el límite exacto de 24 h se considera cerrada**, sin entrante, instante inválido con desplazamiento); de la lectura de conversación (la ventana sale del último entrante y no de la página de historial, `null` en otro canal y sin entrantes); y del envío (la plantilla se encola como tal, el texto fuera de plazo se rechaza sin encolar, la plantilla sí sale con la ventana cerrada, otro canal no se bloquea, y una referencia incompleta o mezclada con texto o multimedia se rechaza).
+
+---
+
 ## ADR-048 - El toque de un botón de plantilla se avisa a n8n por la cola, no dentro del webhook
 
 - **Fecha:** 2026-10-08

@@ -6,6 +6,9 @@ import {
 } from '@nestjs/common';
 import {
   reservationsBoardResponseSchema,
+  decideReservationResponseSchema,
+  type DecideReservation,
+  type DecideReservationResponse,
   type ReservationsBoardResponse,
   type ReservationDraftView,
   type ReservationConfirmedView,
@@ -194,6 +197,55 @@ export class ReservationsService {
       decisiones: decisionesNorm.map(toDecisionView),
       kpis,
       preReservas: borradores.map((draft) => toDraftView(draft, estados.get(draft.id) ?? 'pending'))
+    });
+  }
+
+  /**
+   * La autorización pertenece al Inbox; la transición y el historial pertenecen al proyecto SPA.
+   * No se escribe tabla por tabla desde aquí: el RPC externo bloquea el borrador y aplica todo junto.
+   */
+  async decide(
+    authorization: unknown,
+    tenantId: string,
+    draftId: number,
+    command: DecideReservation
+  ): Promise<DecideReservationResponse> {
+    const identity = await this.requestAuthenticator.authenticate(authorization);
+    await this.tenantAccessService.assertRole(identity.userId, tenantId, ['admin', 'supervisor']);
+    const profile = await this.tenantAccessService.getOwnProfile(authorization);
+    const actorEmail = profile.item.email?.trim().toLowerCase();
+    if (!actorEmail) {
+      throw new InternalServerErrorException(
+        'No fue posible identificar a quien revisa la reserva.'
+      );
+    }
+    const supabase = createReservationsSupabaseClient(process.env);
+    if (!supabase) {
+      throw new ServiceUnavailableException(
+        'El tablero de reservas todavía no está configurado en este servidor.'
+      );
+    }
+    const { data, error } = await supabase.rpc('process_chat_reservation_decision', {
+      p_action: command.action,
+      p_actor_email: actorEmail,
+      p_idempotency_key: command.idempotencyKey,
+      p_note: command.note ?? null,
+      p_reservation_draft_id: draftId
+    });
+    if (error || !data) {
+      console.error(JSON.stringify({ error, event: 'reservations.decision_failed', draftId }));
+      throw new ServiceUnavailableException('No fue posible guardar la decisión de la reserva.');
+    }
+    const result = data as Record<string, unknown>;
+    return decideReservationResponseSchema.parse({
+      item: {
+        action: String(result.action ?? command.action),
+        decidedByEmail: String(result.decided_by_email ?? actorEmail),
+        duplicate: Boolean(result.duplicate),
+        previousStatus: typeof result.previous_status === 'string' ? result.previous_status : null,
+        reservationDraftId: draftId,
+        resultingStatus: String(result.resulting_status ?? '')
+      }
     });
   }
 }

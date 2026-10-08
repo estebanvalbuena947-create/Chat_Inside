@@ -3,44 +3,37 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-/**
- * Actividad de Reservas.
- *
- * Lee el tablero por la ruta interna del propio sitio (`/api/reservations/board`), que resuelve la
- * sesion. Quien puede verlo lo decide la API: aqui solo se pinta, y si el rol no alcanza se dice con
- * las palabras que devuelve.
- *
- * Primera version: KPIs, el aviso de retenciones por vencer y la lista de pre-reservas. Los filtros y
- * las decisiones vienen en los cortes siguientes.
- */
-
 type Draft = {
-  actualizadaEn: string | null;
-  cerradaEn: string | null;
-  entroEn: string | null;
-  estado: string;
-  estadoMostrado: string;
-  horarioProgramado: string | null;
   id: number | null;
-  monto: number;
   nombre: string | null;
   servicio: string | null;
-  telefono: string | null;
+  estadoMostrado: string;
+  estado: string;
+  monto: number;
+  horarioProgramado: string | null;
 };
-
+type Receipt = {
+  borradorId: number | null;
+  estado: string;
+  mediaUrl: string | null;
+  monto: number;
+  referencia: string | null;
+};
+type Decision = {
+  id: number | null;
+  borradorId: number | null;
+  accion: string;
+  autor: string | null;
+  nota: string | null;
+  creadaEn: string | null;
+};
 type Board = {
   actualizadoEn: string;
   kpis: {
-    comprobantesPorRevisar: number;
-    confirmadasHoy: number;
-    enConfirmacion: number;
-    montoConfirmadoHoy: number;
-    montoPendiente: number;
-    pendientes: number;
     porGestionar: number;
-    porRevisar: number;
-    proximas24h: number;
-    rechazadas: number;
+    confirmadasHoy: number;
+    montoConfirmadoHoy: number;
+    comprobantesPorRevisar: number;
     retencionesPorVencer: Array<{
       borradorId: number | null;
       expiraEn: string;
@@ -48,241 +41,321 @@ type Board = {
     }>;
   };
   preReservas: Draft[];
+  comprobantes: Receipt[];
+  decisiones: Decision[];
 };
-
-const ESTADOS: Record<string, string> = {
+type Tab = 'summary' | 'drafts' | 'receipts' | 'history';
+const label: Record<string, string> = {
   confirmed: 'Confirmada',
   info: 'Información solicitada',
-  pending: 'Pendiente de pago',
+  pending: 'Pendiente',
   processing: 'En confirmación',
-  rejected: 'Comprobante rechazado',
+  rejected: 'Rechazada',
   review: 'Por revisar'
 };
-
-const COLORES: Record<string, string> = {
-  confirmed: '#1f7a4d',
-  info: '#946200',
-  pending: '#8a6d3b',
-  processing: '#2c6e9b',
-  rejected: '#b3261e',
-  review: '#946200'
-};
-
-function dinero(valor: number): string {
-  return new Intl.NumberFormat('es-MX', {
+const money = (value: number) =>
+  new Intl.NumberFormat('es-MX', {
+    style: 'currency',
     currency: 'MXN',
-    maximumFractionDigits: 0,
-    style: 'currency'
-  }).format(valor);
-}
-
-function fecha(valor: string | null): string {
-  if (!valor) return '—';
-  const fecha = new Date(valor);
-  if (Number.isNaN(fecha.getTime())) return '—';
-  return new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    fecha
-  );
-}
-
-/** Cuando vence una retencion: si vence, se libera el horario y se pierde la reserva. */
-function enPalabras(valor: string): string {
-  const minutos = Math.max(0, Math.round((new Date(valor).getTime() - Date.now()) / 60000));
-  return minutos <= 1 ? 'menos de 1 min' : `${minutos} min`;
-}
+    maximumFractionDigits: 0
+  }).format(value);
+const date = (value: string | null) =>
+  value
+    ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(
+        new Date(value)
+      )
+    : '—';
 
 export default function ReservationsPanel(): React.ReactNode {
   const pathname = usePathname();
   const router = useRouter();
-  const isIntegrated = pathname === '/';
+  const integrated = pathname === '/';
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cargando, setCargando] = useState(true);
-
-  const cargar = useCallback(async () => {
-    setCargando(true);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>('summary');
+  const [selected, setSelected] = useState<Draft | null>(null);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
     setError(null);
     try {
-      const respuesta = await fetch('/api/reservations/board', { cache: 'no-store' });
-      const payload = (await respuesta.json().catch(() => ({}))) as { error?: string } & Board;
-      if (!respuesta.ok) {
-        setError(payload.error ?? 'No fue posible cargar el tablero de reservas.');
-        return;
-      }
-      setBoard(payload);
+      const res = await fetch('/api/reservations/board', { cache: 'no-store' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) setError(payload.error ?? 'No fue posible cargar las reservas.');
+      else setBoard(payload as Board);
     } catch {
       setError('El tablero de reservas no está disponible.');
     } finally {
-      setCargando(false);
+      setLoading(false);
     }
   }, []);
-
   useEffect(() => {
-    void cargar();
-  }, [cargar]);
-
-  const tarjetas = board
-    ? [
-        { etiqueta: 'Por gestionar', valor: String(board.kpis.porGestionar) },
-        { etiqueta: 'Pendientes de pago', valor: String(board.kpis.pendientes) },
-        { etiqueta: 'Por revisar', valor: String(board.kpis.porRevisar) },
-        { etiqueta: 'En confirmación', valor: String(board.kpis.enConfirmacion) },
-        { etiqueta: 'Confirmadas hoy', valor: String(board.kpis.confirmadasHoy) },
-        { etiqueta: 'Cobrado hoy', valor: dinero(board.kpis.montoConfirmadoHoy) },
-        { etiqueta: 'Monto pendiente', valor: dinero(board.kpis.montoPendiente) },
-        { etiqueta: 'Comprobantes por revisar', valor: String(board.kpis.comprobantesPorRevisar) },
-        { etiqueta: 'Citas en 24 h', valor: String(board.kpis.proximas24h) }
-      ]
-    : [];
-
+    void load();
+  }, [load]);
+  function openDecision(draft: Draft | null): void {
+    setSelected(draft);
+    setIdempotencyKey(draft ? crypto.randomUUID() : null);
+  }
+  async function decide(action: 'approved' | 'rejected' | 'needs_info') {
+    if (!selected?.id) return;
+    const key = idempotencyKey ?? crypto.randomUUID();
+    setIdempotencyKey(key);
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/reservations/drafts/${selected.id}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, idempotencyKey: key, note: note || null })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) setError(payload.error ?? 'No fue posible guardar la decisión.');
+      else {
+        openDecision(null);
+        setNote('');
+        await load();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+  const visibleDrafts =
+    tab === 'summary'
+      ? board?.preReservas.filter((row) => row.estadoMostrado !== 'confirmed')
+      : board?.preReservas;
   return (
-    <section className={`reservations-view${isIntegrated ? ' reservations-view-integrated' : ''}`}>
-      <header style={{ alignItems: 'baseline', display: 'flex', gap: '16px', marginBottom: '8px' }}>
-        {isIntegrated && (
-          <button className="metrics-back" onClick={() => router.replace('/')} type="button">
-            Volver a la bandeja
-          </button>
-        )}
-        <h1 style={{ fontSize: '24px', margin: 0 }}>Actividad de Reservas</h1>
-        <button
-          onClick={() => void cargar()}
-          style={{
-            background: 'transparent',
-            border: '1px solid #d9d3c4',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            padding: '4px 10px'
-          }}
-          type="button"
-        >
+    <section className={`reservations-view${integrated ? ' reservations-view-integrated' : ''}`}>
+      <header className="reservations-header">
+        <div>
+          {integrated && (
+            <button className="metrics-back" onClick={() => router.replace('/')} type="button">
+              Volver a bandeja
+            </button>
+          )}
+          <p className="reservations-kicker">OPERACIÓN DE RESERVAS</p>
+          <h1>Buenos días</h1>
+        </div>
+        <button className="reservations-refresh" onClick={() => void load()} type="button">
           Actualizar
         </button>
-        {board && (
-          <span style={{ color: '#7a7466', fontSize: '13px' }}>
-            Leído {fecha(board.actualizadoEn)}
-          </span>
-        )}
       </header>
-
-      {cargando && <p style={{ color: '#7a7466' }}>Cargando el tablero…</p>}
+      <nav className="reservations-tabs" aria-label="Secciones de reservas">
+        {(
+          [
+            ['summary', 'Resumen'],
+            ['drafts', 'Pre-reservas'],
+            ['receipts', 'Comprobantes'],
+            ['history', 'Histórico']
+          ] as Array<[Tab, string]>
+        ).map(([key, text]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={tab === key ? 'active' : ''}
+            type="button"
+          >
+            {text}
+          </button>
+        ))}
+      </nav>
+      {loading && <p>Cargando el tablero…</p>}
       {error && (
-        <p role="alert" style={{ color: '#b3261e' }}>
+        <p role="alert" className="reservations-error">
           {error}
         </p>
       )}
-
-      {board && !cargando && (
+      {board && !loading && (
         <>
+          <div className="reservations-cards">
+            {[
+              ['Pre-reservas por gestionar', board.kpis.porGestionar],
+              ['Confirmadas hoy', board.kpis.confirmadasHoy],
+              ['Ingresos confirmados hoy', money(board.kpis.montoConfirmadoHoy)],
+              ['Comprobantes por revisar', board.kpis.comprobantesPorRevisar]
+            ].map(([text, value]) => (
+              <article key={String(text)}>
+                <span>{text}</span>
+                <strong>{value}</strong>
+              </article>
+            ))}
+          </div>
           {board.kpis.retencionesPorVencer.length > 0 && (
-            <section
-              style={{
-                background: '#fdf1ef',
-                border: '1px solid #d1453b',
-                borderRadius: '8px',
-                marginBottom: '20px',
-                padding: '12px 16px'
-              }}
-            >
-              <strong style={{ color: '#b3261e' }}>
-                {board.kpis.retencionesPorVencer.length === 1
-                  ? 'Una reserva está por liberarse'
-                  : `${board.kpis.retencionesPorVencer.length} reservas están por liberarse`}
-              </strong>
-              <ul style={{ margin: '8px 0 0', paddingLeft: '18px' }}>
-                {board.kpis.retencionesPorVencer.map((retencion) => (
-                  <li key={String(retencion.borradorId) + retencion.expiraEn}>
-                    {retencion.nombre ?? 'Sin nombre'} · vence en {enPalabras(retencion.expiraEn)}
-                  </li>
-                ))}
-              </ul>
+            <aside className="reservations-hold">
+              Hay retenciones próximas a vencer. Revísalas antes de que se libere el horario.
+            </aside>
+          )}
+          {(tab === 'summary' || tab === 'drafts') && (
+            <Table rows={visibleDrafts ?? []} onManage={openDecision} />
+          )}
+          {tab === 'receipts' && (
+            <section className="reservations-table">
+              <h2>Comprobantes</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pre-reserva</th>
+                    <th>Referencia</th>
+                    <th>Monto</th>
+                    <th>Estado</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {board.comprobantes.map((row, i) => (
+                    <tr key={`${row.borradorId}-${i}`}>
+                      <td>#{row.borradorId ?? '—'}</td>
+                      <td>{row.referencia ?? '—'}</td>
+                      <td>{money(row.monto)}</td>
+                      <td>{row.estado}</td>
+                      <td>
+                        <button
+                          onClick={() =>
+                            openDecision(
+                              board.preReservas.find((draft) => draft.id === row.borradorId) ?? null
+                            )
+                          }
+                          type="button"
+                        >
+                          Gestionar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </section>
           )}
-
-          <section
-            style={{
-              display: 'grid',
-              gap: '10px',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
-              marginBottom: '24px'
-            }}
-          >
-            {tarjetas.map((tarjeta) => (
-              <div
-                key={tarjeta.etiqueta}
-                style={{
-                  background: '#fff',
-                  border: '1px solid #e6e0d2',
-                  borderRadius: '8px',
-                  padding: '12px 14px'
-                }}
-              >
-                <p style={{ color: '#7a7466', fontSize: '12px', margin: 0 }}>{tarjeta.etiqueta}</p>
-                <p style={{ fontSize: '22px', margin: '4px 0 0' }}>{tarjeta.valor}</p>
-              </div>
-            ))}
-          </section>
-
-          <h2 style={{ fontSize: '18px', margin: '0 0 8px' }}>Pre-reservas</h2>
-          {board.preReservas.length === 0 ? (
-            <p style={{ color: '#7a7466' }}>No hay pre-reservas en el proyecto de reservas.</p>
-          ) : (
-            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-              <thead>
-                <tr style={{ textAlign: 'left' }}>
-                  <th style={celdaCabecera}>Cliente</th>
-                  <th style={celdaCabecera}>Servicio</th>
-                  <th style={celdaCabecera}>Cita</th>
-                  <th style={celdaCabecera}>Estado</th>
-                  <th style={{ ...celdaCabecera, textAlign: 'right' }}>Monto</th>
-                  <th style={celdaCabecera}>Entró</th>
-                </tr>
-              </thead>
-              <tbody>
-                {board.preReservas.map((fila) => (
-                  <tr key={String(fila.id)} style={{ borderTop: '1px solid #ece6d8' }}>
-                    <td style={celda}>
-                      {fila.nombre ?? 'Sin nombre'}
-                      {fila.telefono && (
-                        <span style={{ color: '#7a7466', display: 'block', fontSize: '12px' }}>
-                          {fila.telefono}
-                        </span>
-                      )}
-                    </td>
-                    <td style={celda}>{fila.servicio ?? '—'}</td>
-                    <td style={celda}>{fecha(fila.horarioProgramado)}</td>
-                    <td style={celda}>
-                      <span
-                        style={{
-                          color: COLORES[fila.estadoMostrado] ?? '#4a4a4a',
-                          fontWeight: 600
-                        }}
-                      >
-                        {ESTADOS[fila.estadoMostrado] ?? fila.estadoMostrado}
-                      </span>
-                    </td>
-                    <td style={{ ...celda, textAlign: 'right' }}>{dinero(fila.monto)}</td>
-                    <td style={celda}>{fecha(fila.entroEn)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {tab === 'history' && (
+            <section className="reservations-table">
+              <h2>Actividad reciente</h2>
+              {board.decisiones.map((row, i) => (
+                <article className="reservation-history" key={row.id ?? i}>
+                  <strong>{row.accion}</strong> · pre-reserva #{row.borradorId ?? '—'}
+                  <br />
+                  <small>
+                    {row.autor ?? 'Sistema'} · {date(row.creadaEn)}{' '}
+                    {row.nota ? `· ${row.nota}` : ''}
+                  </small>
+                </article>
+              ))}
+            </section>
           )}
         </>
+      )}
+      {selected && (
+        <DecisionModal
+          draft={selected}
+          receipt={board?.comprobantes.find((item) => item.borradorId === selected.id) ?? null}
+          note={note}
+          saving={saving}
+          onClose={() => openDecision(null)}
+          onNote={setNote}
+          onDecide={decide}
+        />
       )}
     </section>
   );
 }
-
-const celda: React.CSSProperties = {
-  fontSize: '14px',
-  padding: '8px 10px 8px 0',
-  verticalAlign: 'top'
-};
-
-const celdaCabecera: React.CSSProperties = {
-  color: '#7a7466',
-  fontSize: '12px',
-  fontWeight: 600,
-  padding: '0 10px 6px 0',
-  textTransform: 'uppercase'
-};
+function Table({
+  rows,
+  onManage
+}: {
+  rows: Draft[];
+  onManage: (row: Draft) => void;
+}): React.ReactNode {
+  return (
+    <section className="reservations-table">
+      <h2>Pre-reservas por gestionar</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Servicio</th>
+            <th>Cita</th>
+            <th>Valor</th>
+            <th>Estado</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id ?? row.nombre}>
+              <td>{row.nombre ?? 'Sin nombre'}</td>
+              <td>{row.servicio ?? '—'}</td>
+              <td>{date(row.horarioProgramado)}</td>
+              <td>{money(row.monto)}</td>
+              <td>
+                <span className={`reservation-status ${row.estadoMostrado}`}>
+                  {label[row.estadoMostrado] ?? row.estado}
+                </span>
+              </td>
+              <td>
+                <button onClick={() => onManage(row)} type="button">
+                  Gestionar
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+function DecisionModal({
+  draft,
+  receipt,
+  note,
+  saving,
+  onClose,
+  onNote,
+  onDecide
+}: {
+  draft: Draft;
+  receipt: Receipt | null;
+  note: string;
+  saving: boolean;
+  onClose: () => void;
+  onNote: (value: string) => void;
+  onDecide: (action: 'approved' | 'rejected' | 'needs_info') => void;
+}): React.ReactNode {
+  return (
+    <div className="reservations-modal" role="dialog" aria-modal="true">
+      <div>
+        <button className="modal-close" onClick={onClose} type="button">
+          ×
+        </button>
+        <h2>{draft.nombre ?? 'Pre-reserva'}</h2>
+        <p>
+          {draft.servicio ?? 'Servicio no indicado'} · {money(draft.monto)}
+        </p>
+        {receipt?.mediaUrl && (
+          <a href={receipt.mediaUrl} target="_blank" rel="noreferrer">
+            Abrir comprobante
+          </a>
+        )}
+        <label>
+          Nota para el historial
+          <textarea
+            value={note}
+            onChange={(event) => onNote(event.target.value)}
+            maxLength={1000}
+          />
+        </label>
+        <div className="reservation-actions">
+          <button disabled={saving} onClick={() => onDecide('approved')} type="button">
+            Aprobar
+          </button>
+          <button disabled={saving} onClick={() => onDecide('needs_info')} type="button">
+            Pedir información
+          </button>
+          <button disabled={saving} onClick={() => onDecide('rejected')} type="button">
+            Rechazar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -11,7 +11,7 @@
 
 Un producto aparte, desplegado en `https://inside-spa-dashboard.vercel.app`, con su propio
 repositorio. Son ficheros estáticos que leen y **escriben** el proyecto Supabase **SPA**
-(`ncutewymymydclypuqlbfk`), que no es el nuestro. Tiene su propio inicio de sesión con una lista de
+(`ncutewymydclypuqlbfk`), que no es el nuestro. Tiene su propio inicio de sesión con una lista de
 correos autorizados y usa la clave pública en el navegador.
 
 ## Clasificación
@@ -75,8 +75,9 @@ correos autorizados y usa la clave pública en el navegador.
 
 ### Corte 3 — Decidir
 
-- Contrato y extremo de decisión llamando al RPC, con autoría registrada y el mismo efecto que hoy
-  (los flujos de n8n siguen funcionando). Pruebas: transición válida, imposible, decisión repetida.
+- Hecho en código: contrato, BFF y extremo de decisión con rol, autoría e idempotencia.
+- Pendiente operativo: aplicar `integrations/reservations/20261008_chat_reservation_decisions.sql`
+  en el proyecto SPA antes de habilitar las decisiones en producción.
 
 ### Corte 4 — Retirar el viejo y documentar
 
