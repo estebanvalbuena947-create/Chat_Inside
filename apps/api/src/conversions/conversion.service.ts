@@ -11,10 +11,11 @@ import { buildWonConversionEvent } from './conversion-event';
  * Ver specs/019-zernio-meta-conversions-api.md y la migracion de conversion_integrations y
  * conversion_events.
  *
- * Pieza sin conectar: no la importa nadie, porque el camino de la conversacion ganada todavia no la
- * llama. La otra mitad del trabajo si esta viva -- el enviador del trabajador
- * (`apps/worker/src/conversion-sender.ts`) reclama la cola y entrega a Meta. Falta la decision de
- * negocio sobre que hecho cuenta como conversion, que la especificacion deja abierta a proposito.
+ * Pieza conectada a medias a proposito: hoy la usa el endpoint del bot (POST /v1/tools/conversions).
+ * El camino de la conversacion ganada de la bandeja todavia NO la llama, porque falta la decision de
+ * negocio sobre que hecho cuenta como conversion, que la especificacion deja abierta a proposito. La
+ * otra mitad si esta viva: el enviador del trabajador (`apps/worker/src/conversion-sender.ts`) drena
+ * la cola y entrega a Meta desde el bucle del proceso.
  */
 @Injectable()
 export class ConversionService {

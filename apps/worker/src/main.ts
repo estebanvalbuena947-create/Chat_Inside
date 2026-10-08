@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { createServerSupabaseClient, supabaseServerEnvironmentSchema } from '@chat-zernio/config';
 import { createBotTransport, sendPendingBotDeliveries } from './bot-notifier';
+import {
+  createZernioTransport as createConversionTransport,
+  sendPendingConversions
+} from './conversion-sender';
 import { createZernioInboxWorker } from './zernio-inbox-worker';
 import { createZernioOutboundWorker } from './zernio-outbound-worker';
 import { createTapNotificationWorker } from './tap-notification-worker';
@@ -11,6 +15,10 @@ const worker = createZernioInboxWorker();
 const outboundWorker = createZernioOutboundWorker();
 // Sin webhook configurado no hay despachador: los toques se guardan y el motivo queda registrado.
 const tapWorker = createTapNotificationWorker();
+// Sin llave del proveedor no hay a quien entregar las conversiones: se dejan en la cola, con su
+// motivo, en lugar de fallar en cada ciclo.
+const zernioApiKey = process.env.ZERNIO_API_KEY;
+const conversionTransport = zernioApiKey ? createConversionTransport(zernioApiKey) : null;
 const supabase = createServerSupabaseClient(supabaseServerEnvironmentSchema.parse(process.env));
 
 /**
@@ -32,6 +40,11 @@ async function drainInbox(): Promise<void> {
   await outboundWorker.drain();
   // Los avisos a n8n son un efecto distinto del envio: su cola se drena aparte.
   if (tapWorker) await tapWorker.drain();
+  // Las conversiones hacia Meta son otro efecto distinto y otra cola: se drenan aqui para que el
+  // hecho de negocio no espere nunca al proveedor, y su entrega no dependa de la bandeja.
+  if (conversionTransport) {
+    await sendPendingConversions({ supabase, transport: conversionTransport });
+  }
   ciclosCompletados += 1;
   if (ciclosCompletados % CICLOS_ENTRE_TAREAS_DE_MAQUINA === 0) {
     await sendPendingBotDeliveries({ deliver: createBotTransport(), supabase });

@@ -6,10 +6,14 @@
 
 **Cierre:** construida y revisada el 2026-10-06. Existen la configuracion por espacio con su validacion
 contra Zernio, la cola de eventos con `event_id` idempotente, el cliente contra
-`POST /v1/ads/conversions` y el entregador del trabajador (`apps/worker/src/conversion-sender.ts`, con
-sus pruebas). **Lo que falta no es codigo**: es la fuente de negocio -que hecho cuenta como
-conversion-, que esta especificacion declara como decision pendiente en su ultima seccion. Sin esa
-decision no hay nada que enviar, y por eso no se envia nada.
+`POST /v1/ads/conversions` y el entregador del trabajador (`apps/worker/src/conversion-sender.ts`).
+**Actualizado el 2026-10-08:** el entregador estaba escrito y probado pero **nadie lo llamaba**, asi que
+una conversion encolada se quedaba `pending` para siempre. Ya se drena en el bucle del trabajador
+(`apps/worker/src/main.ts`), junto a las otras colas, y solo si hay llave del proveedor. Configurado el
+espacio con la cuenta `metaads` y el Pixel/Dataset elegido por el equipo. **Lo que sigue faltando no es
+codigo**: es la fuente de negocio -que hecho cuenta como conversion-. Hoy la unica fuente es el endpoint
+del bot (`POST /v1/tools/conversions`); el camino de la conversacion ganada de la bandeja todavia no lo
+llama. Sin esa decision no hay nada que enviar, y por eso no se envia nada por si solo.
 
 ## 1. Problema
 
