@@ -3707,6 +3707,41 @@ h2 {
     margin-left: auto;
   }
 }
+
+/*
+ * Movil: en "Comprobantes" el buscador y el filtro de tipo van a la derecha del titulo, y a 360 px
+ * no caben —el campo se sale por el borde derecho—. En pantallas estrechas el encabezado se apila:
+ * titulo arriba y, debajo, cada campo a lo ancho con su etiqueta encima. Es lo que lo deja ordenado.
+ */
+@media (max-width: 760px) {
+  .media-view {
+    padding: 16px 14px 32px;
+  }
+  .media-view-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .media-view-actions {
+    align-items: stretch;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .media-view-actions label {
+    display: grid;
+    gap: 4px;
+    /* `min-width: 0` es lo que evita que el campo empuje el ancho de la pantalla. */
+    min-width: 0;
+    width: 100%;
+  }
+  .media-view-actions input,
+  .media-view-actions select {
+    max-width: 100%;
+    width: 100%;
+  }
+}
 .reservation-status {
   border-radius: 14px;
   font-size: 12px;
