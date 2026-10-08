@@ -3360,6 +3360,35 @@ h2 {
   height: 100%;
   min-width: 4px;
 }
+.metrics-detail-button {
+  background: #fff;
+  border: 1px solid #cfc6b6;
+  border-radius: 5px;
+  color: #315f52;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 7px;
+}
+.metrics-participant-detail {
+  background: #f7fbf8;
+  border: 1px solid #b9d5c9;
+  border-radius: 8px;
+  margin: 12px 0;
+  padding: 14px;
+  position: relative;
+}
+.metrics-participant-detail h3 {
+  margin-top: 0;
+}
+.metrics-participant-detail button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 20px;
+  position: absolute;
+  right: 8px;
+  top: 4px;
+}
 
 .metrics-note {
   color: var(--brand-tinta-suave);

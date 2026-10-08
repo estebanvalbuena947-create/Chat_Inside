@@ -4314,6 +4314,9 @@ function MetricsPanel({
     state.kind === 'ready'
       ? Math.max(1, ...state.data.messagesPerDay.map((dia) => dia.received + dia.sent))
       : 1;
+  const [selectedParticipant, setSelectedParticipant] = useState<
+    MetricsPayload['participants'][number] | null
+  >(null);
 
   return (
     <section className="metrics-panel">
@@ -4399,10 +4402,33 @@ function MetricsPanel({
                   <span className="metrics-row-values">
                     {participant.messagesSent} respuestas enviadas
                   </span>
+                  <button
+                    className="metrics-detail-button"
+                    onClick={() => setSelectedParticipant(participant)}
+                    type="button"
+                  >
+                    Detalles
+                  </button>
                 </div>
               ))
             )}
           </div>
+          {selectedParticipant && (
+            <div className="metrics-participant-detail">
+              <button onClick={() => setSelectedParticipant(null)} type="button">
+                ×
+              </button>
+              <h3>{selectedParticipant.label}</h3>
+              <p>
+                Tiempo promedio de primera respuesta:{' '}
+                <strong>{esperaEnPalabras(selectedParticipant.averageFirstResponseSeconds)}</strong>
+              </p>
+              <p>
+                {selectedParticipant.firstResponses} conversaciones medidas ·{' '}
+                {selectedParticipant.messagesSent} respuestas enviadas
+              </p>
+            </div>
+          )}
 
           <div className="metrics-block">
             <h3>Cuánto esperó el cliente</h3>

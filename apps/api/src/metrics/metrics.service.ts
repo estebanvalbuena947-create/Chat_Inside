@@ -58,12 +58,49 @@ export function summarizeParticipants(rows: ResponseRow[], labels = new Map<stri
     current.messagesSent += 1;
     values.set(key, current);
   }
-  return [...values.values()].map((value) => ({
-    ...value,
-    averageFirstResponseSeconds: null,
-    closedConversations: 0,
-    firstResponses: 0
-  }));
+  const waits = new Map<string, number[]>();
+  const byConversation = new Map<string, ResponseRow[]>();
+  for (const row of rows)
+    byConversation.set(row.conversationId, [
+      ...(byConversation.get(row.conversationId) ?? []),
+      row
+    ]);
+  for (const list of byConversation.values()) {
+    list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    let inboundAt: number | null = null;
+    for (const row of list) {
+      const at = Date.parse(row.createdAt);
+      if (row.direction === 'inbound') {
+        inboundAt = at;
+        continue;
+      }
+      if (
+        inboundAt === null ||
+        !Number.isFinite(at) ||
+        !['agent', 'automation'].includes(row.senderType)
+      )
+        continue;
+      const key =
+        row.senderType === 'automation'
+          ? 'bot'
+          : row.senderUserId
+            ? `advisor:${row.senderUserId}`
+            : 'advisor:unknown';
+      waits.set(key, [...(waits.get(key) ?? []), Math.max(0, Math.round((at - inboundAt) / 1000))]);
+      break;
+    }
+  }
+  return [...values.entries()].map(([key, value]) => {
+    const durations = waits.get(key) ?? [];
+    return {
+      ...value,
+      averageFirstResponseSeconds: durations.length
+        ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
+        : null,
+      closedConversations: 0,
+      firstResponses: durations.length
+    };
+  });
 }
 
 /** Reparte las conversaciones cerradas segun quien las atendio. */
