@@ -700,11 +700,24 @@ export const metricsResponseTimeSchema = z.object({
 
 export type MetricsResponseTime = z.infer<typeof metricsResponseTimeSchema>;
 
+/** Rendimiento atribuible al primer respondedor de cada interacción entrante. */
+export const metricsParticipantSchema = z.object({
+  averageFirstResponseSeconds: z.number().int().nullable(),
+  closedConversations: z.number().int(),
+  firstResponses: z.number().int(),
+  kind: z.enum(['advisor', 'bot']),
+  label: z.string(),
+  messagesSent: z.number().int()
+});
+
+export type MetricsParticipant = z.infer<typeof metricsParticipantSchema>;
+
 export const metricsSummarySchema = z.object({
   closedConversations: z.number().int(),
   closure: metricsClosureSchema,
   messagesByChannel: z.array(metricsChannelSchema),
   messagesPerDay: z.array(metricsDaySchema),
+  participants: z.array(metricsParticipantSchema),
   periodDays: z.number().int(),
   responseTime: metricsResponseTimeSchema,
   totalMessages: z.number().int(),

@@ -33,7 +33,38 @@ export type ResponseRow = {
   createdAt: string;
   direction: string;
   senderType: string;
+  senderUserId?: string | null;
 };
+
+/** Cuenta mensajes salientes por actor. El Bot es `automation`; la identidad humana llega de la fila. */
+export function summarizeParticipants(rows: ResponseRow[]) {
+  const values = new Map<
+    string,
+    { kind: 'advisor' | 'bot'; label: string; messagesSent: number }
+  >();
+  for (const row of rows) {
+    if (row.direction !== 'outbound' || !['agent', 'automation'].includes(row.senderType)) continue;
+    const isBot = row.senderType === 'automation';
+    const key = isBot
+      ? 'bot'
+      : row.senderUserId
+        ? `advisor:${row.senderUserId}`
+        : 'advisor:unknown';
+    const current = values.get(key) ?? {
+      kind: isBot ? 'bot' : 'advisor',
+      label: isBot ? 'Bot' : `Asesor ${row.senderUserId?.slice(0, 8) ?? 'sin identificar'}`,
+      messagesSent: 0
+    };
+    current.messagesSent += 1;
+    values.set(key, current);
+  }
+  return [...values.values()].map((value) => ({
+    ...value,
+    averageFirstResponseSeconds: null,
+    closedConversations: 0,
+    firstResponses: 0
+  }));
+}
 
 /** Reparte las conversaciones cerradas segun quien las atendio. */
 export function summarizeClosure(
@@ -110,6 +141,7 @@ export function summarizeMessages(
     closure: MetricsClosure;
     days: number;
     responseTime: MetricsResponseTime;
+    participants?: ReturnType<typeof summarizeParticipants>;
     truncated: boolean;
   }
 ): MetricsSummary {
@@ -141,6 +173,7 @@ export function summarizeMessages(
     messagesPerDay: [...porDia.entries()]
       .map(([date, conteo]) => ({ date, ...conteo }))
       .sort((a, b) => a.date.localeCompare(b.date)),
+    participants: options.participants ?? [],
     periodDays: options.days,
     responseTime: options.responseTime,
     totalMessages: rows.length,
@@ -217,7 +250,7 @@ export class MetricsService {
       (desdeFila, hastaFila) =>
         supabase
           .from('messages')
-          .select('conversation_id, created_at, direction, sender_type')
+          .select('conversation_id, created_at, direction, sender_type, sender_user_id')
           .eq('tenant_id', tenantId)
           .gte(
             'created_at',
@@ -285,11 +318,21 @@ export class MetricsService {
             conversationId: String(fila.conversation_id),
             createdAt: String(fila.created_at),
             direction: String(fila.direction),
-            senderType: String(fila.sender_type)
+            senderType: String(fila.sender_type),
+            senderUserId: typeof fila.sender_user_id === 'string' ? fila.sender_user_id : null
           })),
           { since: desde }
         ),
-        truncated: actividad.truncado || respuestas.truncado || cerradas.truncado
+        truncated: actividad.truncado || respuestas.truncado || cerradas.truncado,
+        participants: summarizeParticipants(
+          respuestas.filas.map((fila) => ({
+            conversationId: String(fila.conversation_id),
+            createdAt: String(fila.created_at),
+            direction: String(fila.direction),
+            senderType: String(fila.sender_type),
+            senderUserId: typeof fila.sender_user_id === 'string' ? fila.sender_user_id : null
+          }))
+        )
       }
     );
   }

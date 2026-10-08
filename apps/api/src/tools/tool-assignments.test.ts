@@ -42,10 +42,12 @@ function crearServicio(
   let indice = 0;
   const siguiente = () => cola[Math.min(indice++, cola.length - 1)];
   const update = vi.fn((_filas: unknown, _opciones?: unknown) => cadena());
+  const insert = vi.fn().mockResolvedValue({ error: null });
   const cadena = (): Record<string, unknown> => {
     const encadenable: Record<string, unknown> = {
       eq: () => encadenable,
       maybeSingle: () => Promise.resolve(siguiente()),
+      insert,
       select: () => encadenable,
       then: (resolver: (valor: unknown) => unknown) => Promise.resolve(siguiente()).then(resolver),
       update
@@ -89,7 +91,7 @@ function crearServicio(
     { create: () => supabase } as unknown as SupabaseServerClientFactory
   );
 
-  return { servicio, toolTokenService, update };
+  return { insert, servicio, toolTokenService, update };
 }
 
 /**
@@ -101,7 +103,7 @@ function crearServicio(
  */
 describe('derivar apaga el bot', () => {
   it('por defecto lo apaga, como fija el contrato', async () => {
-    const { servicio, update } = crearServicio();
+    const { insert, servicio, update } = crearServicio();
 
     await servicio.assign('Bearer token', { conversationId: 'conv-1', userId: 'user-1' });
 
@@ -111,6 +113,9 @@ describe('derivar apaga el bot', () => {
     // vez se pisarian en silencio: el ultimo en escribir ganaria sin que nadie lo note.
     expect(typeof filas.automation_version).toBe('number');
     expect(filas.automation_version as number).toBeGreaterThan(0);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ assigned_user_id: 'user-1', conversation_id: 'conv-1' })
+    );
   });
 
   it('con turnBotOff en false lo deja encendido', async () => {

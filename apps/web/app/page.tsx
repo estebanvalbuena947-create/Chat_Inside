@@ -4218,6 +4218,14 @@ type MetricsPayload = {
   error?: string;
   messagesByChannel: Array<{ platform: string; received: number; sent: number }>;
   messagesPerDay: Array<{ date: string; received: number; sent: number }>;
+  participants: Array<{
+    averageFirstResponseSeconds: number | null;
+    closedConversations: number;
+    firstResponses: number;
+    kind: 'advisor' | 'bot';
+    label: string;
+    messagesSent: number;
+  }>;
   periodDays: number;
   responseTime: {
     averageSeconds: number | null;
@@ -4365,6 +4373,35 @@ function MetricsPanel({
               <p className="metrics-card-label">Canales con actividad</p>
               <p className="metrics-card-value">{state.data.messagesByChannel.length}</p>
             </div>
+          </div>
+
+          <div className="metrics-block">
+            <h3>Actividad por asesor y Bot</h3>
+            {state.data.participants.length === 0 ? (
+              <p className="metrics-note">Sin respuestas del Bot ni de asesores en este periodo.</p>
+            ) : (
+              state.data.participants.map((participant) => (
+                <div className="metrics-row" key={participant.label}>
+                  <span className="metrics-row-name">
+                    <span
+                      className={'metrics-dot ' + (participant.kind === 'bot' ? 'aviso' : 'ok')}
+                    />
+                    {participant.label}
+                  </span>
+                  <span
+                    className="metrics-bar"
+                    style={{
+                      width: String(Math.max(8, Math.min(100, participant.messagesSent * 10))) + '%'
+                    }}
+                  >
+                    <span />
+                  </span>
+                  <span className="metrics-row-values">
+                    {participant.messagesSent} respuestas enviadas
+                  </span>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="metrics-block">

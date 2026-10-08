@@ -108,6 +108,21 @@ export class ToolAssignmentsService {
       );
     }
 
+    // La transferencia es un hecho histórico: el modo actual no permite saber cuándo ni a quién
+    // derivó el Bot. Se registra sólo cuando el propio Bot pide apagar la automatización.
+    if (apagarBot) {
+      const { error: handoffError } = await supabase.from('bot_handoffs').insert({
+        assigned_user_id: userId,
+        conversation_id: conversationId,
+        tenant_id: identity.tenantId
+      });
+      if (handoffError) {
+        throw new InternalServerErrorException(
+          'No fue posible registrar la transferencia del Bot.'
+        );
+      }
+    }
+
     const asignado = (actualizada as { assigned_user_id?: unknown }).assigned_user_id ?? null;
     return {
       assignedUserId: asignado,
