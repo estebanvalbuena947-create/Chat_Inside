@@ -39,12 +39,13 @@ const TABLAS = {
 } as const;
 
 const COLUMNAS = {
-  comprobantes: 'huella,reserva_draft_id,subscriber_id,estado,datos,creado_at,actualizado_at',
+  // Se leen todas las columnas a proposito, como hace el dashboard cuando su lista explicita falla:
+  // esa base no tiene garantizado el mismo esquema, y pedir una columna que no existe tumba la
+  // lectura entera. La lista precisa se puede recuperar cuando el esquema este confirmado.
+  comprobantes: '*',
   confirmadas: '*',
-  decisiones:
-    'id,reservation_draft_id,action,note,previous_status,resulting_status,decided_by_email,created_at',
-  preReservas:
-    'id,nombre,email,phone,nombre_servicio,servicio,masaje_inicio,jacuzzi_inicio,monto_pagado,moneda_pago,estado_reserva,reserva_confirmada,pago_recibido,horario_pendiente,motivo_revision,comprobante_revision_at,comprobante_revision_datos,retencion_expira_at,intentos_pago,procesando_desde'
+  decisiones: '*',
+  preReservas: '*'
 } as const;
 
 /** Orden de lectura, con respaldo: si una columna no existe, se prueba la siguiente. */

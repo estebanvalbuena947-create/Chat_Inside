@@ -45,8 +45,16 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     });
     const payload = (await response.json().catch(() => ({}))) as unknown;
     if (!response.ok) {
+      // Se reenvia el motivo tal como lo dio la API: «sin configurar», «el rol no alcanza» o el fallo
+      // concreto. Taparlo con un mensaje generico obliga a adivinar.
+      const mensaje = (payload as { message?: unknown } | null)?.message;
       return NextResponse.json(
-        { error: 'No fue posible leer el tablero de reservas.' },
+        {
+          error:
+            typeof mensaje === 'string' && mensaje.trim()
+              ? mensaje
+              : 'No fue posible leer el tablero de reservas.'
+        },
         { status: response.status }
       );
     }
