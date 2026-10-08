@@ -1761,7 +1761,9 @@ h2 {
 }
 .channel-rename-save,
 .channel-rename-cancel,
-.channel-rename-trigger {
+.channel-rename-trigger,
+.channel-reconnect-trigger,
+.channel-remove-trigger {
   padding: 5px 9px;
   border-radius: 6px;
   background: #3b6fd4;
@@ -3144,6 +3146,23 @@ h2 {
 .workspace .channel-rename-cancel,
 .workspace .channel-rename-trigger {
   color: #ffffff !important;
+}
+
+/*
+ * Reconectar y remover no son acciones de marca: su color dice QUE HACEN, asi que se mantiene igual
+ * en cualquier tema. Rojo = destructivo (se desconecta la cuenta); azul = volver a autorizar.
+ */
+.channel-reconnect-trigger {
+  background: #2f6fed !important;
+  color: #ffffff !important;
+}
+.channel-remove-trigger {
+  background: #c0392b !important;
+  color: #ffffff !important;
+}
+.channel-reconnect-trigger:disabled,
+.channel-remove-trigger:disabled {
+  opacity: 0.6;
 }
 
 /* La barra lateral: todo su texto en crema, y el desplegable sobre fondo claro. */

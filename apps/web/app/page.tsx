@@ -3604,7 +3604,7 @@ export default function HomePage(): React.ReactNode {
                                 mensajes se conservan.
                               </span>
                               <button
-                                className="channel-rename-save"
+                                className="channel-remove-trigger"
                                 disabled={isRemovingChannel}
                                 onClick={() => void removeChannel(channel)}
                                 type="button"
@@ -3626,7 +3626,7 @@ export default function HomePage(): React.ReactNode {
                           ) : (
                             <>
                               <button
-                                className="channel-rename-trigger"
+                                className="channel-reconnect-trigger"
                                 disabled={reconnectingChannelId === channel.id}
                                 onClick={() => {
                                   setRemovingChannelError(null);
@@ -3638,7 +3638,7 @@ export default function HomePage(): React.ReactNode {
                                 {reconnectingChannelId === channel.id ? 'Abriendo…' : 'Reconectar'}
                               </button>
                               <button
-                                className="channel-rename-trigger"
+                                className="channel-remove-trigger"
                                 onClick={() => {
                                   setRemovingChannelError(null);
                                   setRemovingChannelId(channel.id);
