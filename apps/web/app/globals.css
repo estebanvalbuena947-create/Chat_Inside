@@ -3422,6 +3422,20 @@ h2 {
   z-index: 18;
 }
 
+/* El tablero se abre sobre el workspace, conservando la barra lateral como las demás vistas. */
+.reservations-view {
+  background: #fcfbf6;
+  min-height: 100vh;
+  overflow: auto;
+  padding: 28px;
+}
+
+.reservations-view-integrated {
+  inset: 0 0 0 var(--nav-width, 56px);
+  position: fixed;
+  z-index: 18;
+}
+
 .metrics-view-header {
   align-items: center;
   background: #fcfbf6;

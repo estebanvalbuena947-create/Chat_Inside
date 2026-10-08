@@ -69,8 +69,9 @@ correos autorizados y usa la clave pública en el navegador.
 
 ### Corte 2 — El apartado
 
-- `apps/web/app/page.tsx`, `globals.css` y la ruta interna del BFF: «Actividad de Reservas» en el
-  menú, solo para admin y supervisor, con los KPIs, la lista y los filtros.
+- Hecho: `apps/web/app/page.tsx`, `globals.css` y la ruta interna del BFF muestran «Reservas» en el
+  menú, solo para admin y supervisor. El panel integrado reutiliza los KPIs y la lista existentes;
+  filtros y decisiones permanecen en los siguientes cortes.
 
 ### Corte 3 — Decidir
 

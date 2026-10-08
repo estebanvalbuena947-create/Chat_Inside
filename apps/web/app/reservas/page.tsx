@@ -90,7 +90,7 @@ function enPalabras(valor: string): string {
   return minutos <= 1 ? 'menos de 1 min' : `${minutos} min`;
 }
 
-export default function ReservasPage() {
+export function ReservationsPanel({ onBack }: { onBack?: () => void }): React.ReactNode {
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -132,8 +132,13 @@ export default function ReservasPage() {
     : [];
 
   return (
-    <main style={{ background: '#fcfbf6', minHeight: '100vh', padding: '28px' }}>
+    <section className={`reservations-view${onBack ? ' reservations-view-integrated' : ''}`}>
       <header style={{ alignItems: 'baseline', display: 'flex', gap: '16px', marginBottom: '8px' }}>
+        {onBack && (
+          <button className="metrics-back" onClick={onBack} type="button">
+            Volver a la bandeja
+          </button>
+        )}
         <h1 style={{ fontSize: '24px', margin: 0 }}>Actividad de Reservas</h1>
         <button
           onClick={() => void cargar()}
@@ -260,8 +265,12 @@ export default function ReservasPage() {
           )}
         </>
       )}
-    </main>
+    </section>
   );
+}
+
+export default function ReservasPage(): React.ReactNode {
+  return <ReservationsPanel />;
 }
 
 const celda: React.CSSProperties = {

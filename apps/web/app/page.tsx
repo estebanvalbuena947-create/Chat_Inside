@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
+import { ReservationsPanel } from './reservas/page';
 
 type Conversation = {
   assignmentVersion: number;
@@ -263,7 +264,9 @@ function SidebarIcon({ paths }: { paths: string[] }) {
 export default function HomePage(): React.ReactNode {
   const [inbox, setInbox] = useState<InboxState>({ kind: 'loading' });
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'inbox' | 'media' | 'metrics'>('inbox');
+  const [activeView, setActiveView] = useState<'inbox' | 'media' | 'metrics' | 'reservations'>(
+    'inbox'
+  );
   const [metricsDays, setMetricsDays] = useState<number>(30);
   const [metrics, setMetrics] = useState<MetricsState>({ kind: 'loading' });
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
@@ -2168,6 +2171,20 @@ export default function HomePage(): React.ReactNode {
             </span>
             <span className="nav-label">Dashboard</span>
           </button>
+          {tenant?.role !== 'agent' && (
+            <button
+              aria-current={activeView === 'reservations' ? 'page' : undefined}
+              className={'nav-item ' + (activeView === 'reservations' ? 'active' : '')}
+              onClick={() => {
+                closeOverlays();
+                setActiveView('reservations');
+              }}
+              type="button"
+            >
+              <SidebarIcon paths={['M4 5h16v15H4z', 'M8 3v4M16 3v4M4 10h16', 'M8 14h3M8 17h6']} />
+              <span className="nav-label">Reservas</span>
+            </button>
+          )}
           <button
             aria-current={activeView === 'inbox' ? 'page' : undefined}
             aria-label="Bandeja"
@@ -3517,6 +3534,7 @@ export default function HomePage(): React.ReactNode {
           <MetricsPanel days={metricsDays} onChangeDays={setMetricsDays} state={metrics} />
         </div>
       )}
+      {activeView === 'reservations' && <ReservationsPanel onBack={() => setActiveView('inbox')} />}
       {activeView === 'media' && (
         <section className="media-view" aria-label="Comprobantes de pago">
           <header className="media-view-header">
