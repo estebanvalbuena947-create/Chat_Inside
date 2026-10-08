@@ -80,7 +80,12 @@ function createSupabaseFake(queues: Record<string, FakeResponse[]>) {
 
 function createService(
   queues: Record<string, FakeResponse[]>,
-  options: { assertRole?: boolean; canAccess?: boolean; members?: boolean } = {}
+  options: {
+    assertRole?: boolean;
+    canAccess?: boolean;
+    conversionError?: Error;
+    members?: boolean;
+  } = {}
 ) {
   const fake = createSupabaseFake(queues);
   const assertMembership = vi.fn(async () => {
@@ -90,14 +95,19 @@ function createService(
     if (options.assertRole === false) throw new Error('forbidden');
   });
   const memberExists = vi.fn(async () => options.members !== false);
+  const enqueueWonConversion = vi.fn(async () => {
+    if (options.conversionError) throw options.conversionError;
+    return { queued: true };
+  });
 
   const service = new TenantConversationService(
     { authenticate: async () => ({ userId }) } as never,
     { assertMembership, assertRole, memberExists } as never,
-    { create: () => fake.client } as never
+    { create: () => fake.client } as never,
+    { enqueueWonConversion } as never
   );
 
-  return { assertMembership, assertRole, fake, memberExists, service };
+  return { assertMembership, assertRole, enqueueWonConversion, fake, memberExists, service };
 }
 
 function conversationRow(overrides: Record<string, unknown> = {}) {
@@ -522,6 +532,65 @@ describe('TenantConversationService list', () => {
     await expect(
       service.list('Bearer valid.jwt', tenantId, { assignmentScope: 'all', limit: 1 })
     ).rejects.toThrow('No fue posible cargar las conversaciones.');
+  });
+});
+
+describe('TenantConversationService conversacion ganada', () => {
+  const ganada = {
+    id: conversationId,
+    outcome: 'ganado',
+    outcome_amount: 1500,
+    outcome_currency: 'MXN',
+    outcome_set_at: '2026-10-08T20:00:00+00:00'
+  };
+
+  it('al marcarla ganada encola la conversion con su importe y su moneda', async () => {
+    const { enqueueWonConversion, service } = createService({
+      conversations: [{ data: ganada, error: null }]
+    });
+
+    await expect(
+      service.markWon('Bearer valid.jwt', tenantId, conversationId, {
+        amount: 1500,
+        currency: 'MXN'
+      })
+    ).resolves.toMatchObject({ amount: 1500, conversationId, currency: 'MXN', outcome: 'ganado' });
+
+    // El hecho de negocio se ENCOLA: la entrega a Meta es del trabajador, no de esta peticion.
+    expect(enqueueWonConversion).toHaveBeenCalledWith({
+      amount: 1500,
+      conversationId,
+      currency: 'MXN',
+      occurredAt: expect.any(String),
+      tenantId
+    });
+  });
+
+  it('si encolar la conversion falla, la conversacion queda ganada igual', async () => {
+    // Un fallo del proveedor no puede deshacer el trabajo de la asesora: la conversion es un efecto
+    // secundario, y su cola es idempotente por conversacion.
+    const { service } = createService(
+      { conversations: [{ data: ganada, error: null }] },
+      { conversionError: new Error('Zernio no responde') }
+    );
+
+    await expect(
+      service.markWon('Bearer valid.jwt', tenantId, conversationId, {
+        amount: 1500,
+        currency: 'MXN'
+      })
+    ).resolves.toMatchObject({ outcome: 'ganado' });
+  });
+
+  it('rechaza una conversacion ganada sin importe valido', async () => {
+    const { enqueueWonConversion, service } = createService({
+      conversations: [{ data: ganada, error: null }]
+    });
+
+    await expect(
+      service.markWon('Bearer valid.jwt', tenantId, conversationId, { amount: -5, currency: 'MXN' })
+    ).rejects.toThrow();
+    expect(enqueueWonConversion).not.toHaveBeenCalled();
   });
 });
 

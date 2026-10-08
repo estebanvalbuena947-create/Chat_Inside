@@ -1,4 +1,9 @@
 import type { SupabaseServerClient } from '@chat-zernio/config';
+import {
+  hasMetaUserIdentifiers,
+  metaUserIdentifiers,
+  SIN_IDENTIFICADORES_DEL_CLIENTE
+} from '@chat-zernio/domain';
 /**
  * Envio de conversiones a Meta.
  *
@@ -121,28 +126,34 @@ export async function sendPendingConversions(input: {
 
     const { data: contacto } = await input.supabase
       .from('conversations')
-      .select('contact:contacts(email, phone_e164, platform_user_id)')
+      .select('contact:contacts(email, external_reference, phone_e164, platform_user_id)')
       .eq('id', fila.conversation_id ?? '')
       .maybeSingle();
 
     const datos = (contacto?.contact ?? null) as {
       email?: string | null;
+      external_reference?: string | null;
       phone_e164?: string | null;
       platform_user_id?: string | null;
     } | null;
 
-    const user: Record<string, string> = {};
-    if (datos?.platform_user_id) user.externalId = datos.platform_user_id;
-    if (integracion.include_contact_data === true) {
-      if (datos?.email) user.email = datos.email;
-      if (datos?.phone_e164) user.phone = datos.phone_e164;
-    }
+    // El identificador se resuelve con la misma funcion que usa la API al encolar: una sola regla
+    // para los dos caminos, y lee la columna que el sistema SI rellena (`external_reference`).
+    const user = metaUserIdentifiers(
+      {
+        email: datos?.email,
+        externalReference: datos?.external_reference,
+        phoneE164: datos?.phone_e164,
+        platformUserId: datos?.platform_user_id
+      },
+      { includeContactData: integracion.include_contact_data === true }
+    );
 
-    if (Object.keys(user).length === 0) {
+    if (!hasMetaUserIdentifiers(user)) {
       await input.supabase
         .from('conversion_events')
         .update({
-          last_error: 'Sin identificadores del cliente.',
+          last_error: SIN_IDENTIFICADORES_DEL_CLIENTE,
           status: 'skipped',
           updated_at: new Date().toISOString()
         })
@@ -150,7 +161,7 @@ export async function sendPendingConversions(input: {
       resultados.push({
         eventId: fila.event_id,
         kind: 'skipped',
-        reason: 'Sin identificadores del cliente.'
+        reason: SIN_IDENTIFICADORES_DEL_CLIENTE
       });
       continue;
     }

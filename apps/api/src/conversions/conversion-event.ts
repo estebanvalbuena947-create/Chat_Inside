@@ -1,3 +1,4 @@
+import { hasMetaUserIdentifiers, metaUserIdentifiers } from '@chat-zernio/domain';
 import type { ZernioConversionEvent } from '../zernio/zernio-api.client';
 
 /**
@@ -15,6 +16,8 @@ import type { ZernioConversionEvent } from '../zernio/zernio-api.client';
 
 export type WonConversionContact = {
   email: string | null;
+  /** Referencia del contacto en el sistema de origen: es la que SI se rellena. */
+  externalReference: string | null;
   phoneE164: string | null;
   platformUserId: string | null;
 };
@@ -48,19 +51,21 @@ export function wonConversionEventId(tenantId: string, conversationId: string): 
 }
 
 export function buildWonConversionEvent(input: WonConversionInput): BuiltConversionResult {
-  const user: NonNullable<ZernioConversionEvent['user']> = {};
-
-  if (input.contact.platformUserId) {
-    user.externalId = input.contact.platformUserId;
-  }
-  if (input.includeContactData) {
-    if (input.contact.email) user.email = input.contact.email;
-    if (input.contact.phoneE164) user.phone = input.contact.phoneE164;
-  }
+  // Los identificadores los resuelve una sola funcion del dominio, compartida con el enviador del
+  // trabajador: tener dos copias de esta regla fue el fallo que dejo las conversiones sin enviar.
+  const user = metaUserIdentifiers(
+    {
+      email: input.contact.email,
+      externalReference: input.contact.externalReference,
+      phoneE164: input.contact.phoneE164,
+      platformUserId: input.contact.platformUserId
+    },
+    { includeContactData: input.includeContactData }
+  );
 
   // Sin ningun identificador, Meta no puede atribuir la conversion: enviarla no aporta nada y
   // ensuciaria el registro con un evento inutil.
-  if (Object.keys(user).length === 0) {
+  if (!hasMetaUserIdentifiers(user)) {
     return {
       ok: false,
       reason:

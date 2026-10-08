@@ -6,6 +6,7 @@ export * from './inbox';
 export * from './labels';
 export * from './media';
 export * from './messages';
+export * from './meta-user-identifiers';
 export * from './n8n-notification';
 export * from './reservation-board';
 export * from './reservation-normalizers';

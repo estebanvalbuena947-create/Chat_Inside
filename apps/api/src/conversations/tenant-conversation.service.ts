@@ -43,6 +43,7 @@ import {
   type ConversationWonResponse
 } from '@chat-zernio/contracts';
 import { RequestAuthenticator } from '../auth/request-authenticator';
+import { ConversionService } from '../conversions/conversion.service';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantAccessService } from '../tenants/tenant-access.service';
 
@@ -304,7 +305,8 @@ export class TenantConversationService {
     @Inject(RequestAuthenticator) private readonly requestAuthenticator: RequestAuthenticator,
     @Inject(TenantAccessService) private readonly tenantAccessService: TenantAccessService,
     @Inject(SupabaseServerClientFactory)
-    private readonly supabaseServerClientFactory: SupabaseServerClientFactory
+    private readonly supabaseServerClientFactory: SupabaseServerClientFactory,
+    @Inject(ConversionService) private readonly conversionService: ConversionService
   ) {}
 
   async list(
@@ -643,6 +645,17 @@ export class TenantConversationService {
       throw new NotFoundException('La conversacion no existe en este espacio.');
     }
 
+    // El hecho de negocio ya esta guardado: la conversion se ENCOLA, no se envia aqui. Si Meta
+    // fallara no puede deshacer la accion de la asesora, y encolar es idempotente por conversacion,
+    // asi que volver a marcarla como ganada no cuenta dos veces.
+    await this.queueWonConversion({
+      amount: parsed.data.amount,
+      conversationId,
+      currency: parsed.data.currency,
+      occurredAt: ahora,
+      tenantId
+    });
+
     return conversationWonResponseSchema.parse({
       amount: Number(data.outcome_amount),
       conversationId: String(data.id),
@@ -650,6 +663,33 @@ export class TenantConversationService {
       outcome: 'ganado',
       setAt: String(data.outcome_set_at)
     });
+  }
+
+  /**
+   * Encola la conversion de una conversacion ganada, sin que un fallo suyo tumbe la accion.
+   *
+   * Un espacio sin la integracion activa no es un error: devuelve el motivo y la conversacion queda
+   * ganada igual. Que la conversion no salga es un dato operativo, no un fallo de la asesora.
+   */
+  private async queueWonConversion(input: {
+    amount: number;
+    conversationId: string;
+    currency: string;
+    occurredAt: string;
+    tenantId: string;
+  }): Promise<void> {
+    try {
+      await this.conversionService.enqueueWonConversion(input);
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          conversationId: input.conversationId,
+          error: error instanceof Error ? error.message : 'desconocido',
+          event: 'conversations.won_conversion_failed',
+          tenantId: input.tenantId
+        })
+      );
+    }
   }
 
   async changeStatus(

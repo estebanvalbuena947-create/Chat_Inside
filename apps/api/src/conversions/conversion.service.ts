@@ -54,7 +54,7 @@ export class ConversionService {
 
     const { data: conversacion, error: conversacionError } = await supabase
       .from('conversations')
-      .select('id, contact:contacts(email, phone_e164, platform_user_id)')
+      .select('id, contact:contacts(email, external_reference, phone_e164, platform_user_id)')
       .eq('tenant_id', input.tenantId)
       .eq('id', input.conversationId)
       .maybeSingle();
@@ -64,6 +64,7 @@ export class ConversionService {
     }
     const contacto = (conversacion?.contact ?? null) as {
       email?: string | null;
+      external_reference?: string | null;
       phone_e164?: string | null;
       platform_user_id?: string | null;
     } | null;
@@ -72,6 +73,7 @@ export class ConversionService {
       amount: input.amount,
       contact: {
         email: contacto?.email ?? null,
+        externalReference: contacto?.external_reference ?? null,
         phoneE164: contacto?.phone_e164 ?? null,
         platformUserId: contacto?.platform_user_id ?? null
       },

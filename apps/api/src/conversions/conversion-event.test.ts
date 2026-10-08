@@ -3,7 +3,12 @@ import { buildWonConversionEvent, wonConversionEventId } from './conversion-even
 
 const base = {
   amount: 1500,
-  contact: { email: 'Cliente@Ejemplo.com', phoneE164: '+5215512345678', platformUserId: 'psid-1' },
+  contact: {
+    email: 'Cliente@Ejemplo.com',
+    externalReference: null,
+    phoneE164: '+5215512345678',
+    platformUserId: 'psid-1'
+  },
   conversationId: 'conv-1',
   currency: 'MXN',
   includeContactData: false,
@@ -22,6 +27,18 @@ describe('evento de conversion de una conversacion ganada', () => {
       expect(r.value.event.value).toBe(1500);
       expect(r.value.event.currency).toBe('MXN');
     }
+  });
+
+  it('con la referencia externa rellena la usa a ella: es la columna que el sistema escribe', () => {
+    // El caso real medido el 2026-10-08: `platform_user_id` vacio en 300 de 300 contactos, y
+    // `external_reference` lleno en los 300. Sin esto, toda conversion se descartaba.
+    const r = buildWonConversionEvent({
+      ...base,
+      contact: { ...base.contact, externalReference: 'ref-del-crm', platformUserId: null }
+    });
+
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.event.user.externalId).toBe('ref-del-crm');
   });
 
   it('no envia correo ni telefono cuando el interruptor esta apagado', () => {
@@ -62,7 +79,7 @@ describe('evento de conversion de una conversacion ganada', () => {
   it('rechaza la conversion sin ningun identificador del cliente', () => {
     const r = buildWonConversionEvent({
       ...base,
-      contact: { email: null, phoneE164: null, platformUserId: null }
+      contact: { email: null, externalReference: null, phoneE164: null, platformUserId: null }
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toContain('identificador');

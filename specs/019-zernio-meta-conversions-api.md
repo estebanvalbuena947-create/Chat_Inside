@@ -15,6 +15,13 @@ codigo**: es la fuente de negocio -que hecho cuenta como conversion-. Hoy la uni
 del bot (`POST /v1/tools/conversions`); el camino de la conversacion ganada de la bandeja todavia no lo
 llama. Sin esa decision no hay nada que enviar, y por eso no se envia nada por si solo.
 
+**Actualizado el 2026-10-08 (cierre de la fuente y de la identidad):** la decision quedo tomada —
+**marcar una conversacion como «Ganado» con importe cuenta como `Purchase`**— y ya la llama el propio
+camino de la conversacion ganada. Ademas se corrigio el fallo que impedia atribuir cualquier evento: la
+regla de que identificador del cliente se envia estaba duplicada y las dos copias leian columnas que el
+sistema nunca escribe; ahora vive en una sola funcion del dominio y usa `external_reference`, que es la
+que si se rellena. Ver ADR-051 en `docs/DECISIONS.md`.
+
 ## 1. Problema
 
 El equipo necesita atribuir a campañas de Meta conversiones que ocurren después de una interacción atendida en Chat Zernio, sin otorgar a la aplicación un token de Conversions API de Meta ni exponer credenciales o datos de contacto en el navegador.
