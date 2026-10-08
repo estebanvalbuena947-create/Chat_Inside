@@ -3,11 +3,14 @@ import { createServerSupabaseClient, supabaseServerEnvironmentSchema } from '@ch
 import { createBotTransport, sendPendingBotDeliveries } from './bot-notifier';
 import { createZernioInboxWorker } from './zernio-inbox-worker';
 import { createZernioOutboundWorker } from './zernio-outbound-worker';
+import { createTapNotificationWorker } from './tap-notification-worker';
 import { startWorkerLoop } from './worker-loop';
 
 const startedAt = new Date().toISOString();
 const worker = createZernioInboxWorker();
 const outboundWorker = createZernioOutboundWorker();
+// Sin webhook configurado no hay despachador: los toques se guardan y el motivo queda registrado.
+const tapWorker = createTapNotificationWorker();
 const supabase = createServerSupabaseClient(supabaseServerEnvironmentSchema.parse(process.env));
 
 /**
@@ -27,6 +30,8 @@ let ciclosCompletados = 0;
 async function drainInbox(): Promise<void> {
   await worker.drain();
   await outboundWorker.drain();
+  // Los avisos a n8n son un efecto distinto del envio: su cola se drena aparte.
+  if (tapWorker) await tapWorker.drain();
   ciclosCompletados += 1;
   if (ciclosCompletados % CICLOS_ENTRE_TAREAS_DE_MAQUINA === 0) {
     await sendPendingBotDeliveries({ deliver: createBotTransport(), supabase });

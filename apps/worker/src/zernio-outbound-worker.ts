@@ -5,15 +5,17 @@ import {
 } from '@chat-zernio/config';
 import { signMediaPaths } from '@chat-zernio/media';
 import { whatsappTemplateReferenceFrom } from '@chat-zernio/domain';
-import { abandonedBefore, isReclaimDue } from './abandoned-claims';
+import { isReclaimDue } from './abandoned-claims';
+import {
+  claimEvent,
+  completeEvent,
+  failEvent,
+  listPendingEvents,
+  OUTBOX_MESSAGE_EVENT,
+  reclaimAbandonedEvents,
+  type OutboxEvent
+} from './outbox-claim';
 import { z } from 'zod';
-
-type OutboxEvent = {
-  attempts: number;
-  id: string;
-  payload: unknown;
-  tenant_id: string;
-};
 
 type DispatchInput = {
   accountId: string;
@@ -166,10 +168,6 @@ function messageReference(providerAccountId: string, providerMessageId: string):
   return `zernio:${providerAccountId}:message:${providerMessageId}`;
 }
 
-function retryAt(attempt: number): string {
-  return new Date(Date.now() + Math.min(60_000, 1_000 * 2 ** attempt)).toISOString();
-}
-
 export class ZernioOutboundWorker {
   private isRunning = false;
   private lastReclaimAt = 0;
@@ -186,25 +184,15 @@ export class ZernioOutboundWorker {
     try {
       const supabase = this.createClient();
       await this.reclaimAbandonedDispatches(supabase);
-      const { data: events, error } = await supabase
-        .from('outbox_events')
-        .select('id, tenant_id, payload, attempts')
-        .eq('state', 'pending')
-        .is('processing_started_at', null)
-        .lte('available_at', new Date().toISOString())
-        .order('available_at', { ascending: true })
-        .limit(limit);
-      if (error) {
+      // Solo los mensajes: los avisos a n8n tienen su propio despachador, con su event_type.
+      const { errorCode, events } = await listPendingEvents(supabase, OUTBOX_MESSAGE_EVENT, limit);
+      if (errorCode) {
         console.error(
-          JSON.stringify({
-            event: 'worker.outbox_list_failed',
-            failureCode: error.code ?? 'unknown'
-          })
+          JSON.stringify({ event: 'worker.outbox_list_failed', failureCode: errorCode })
         );
         return;
       }
-      for (const event of (events ?? []) as OutboxEvent[])
-        await this.claimAndProcess(supabase, event);
+      for (const event of events) await this.claimAndProcess(supabase, event);
     } finally {
       this.isRunning = false;
     }
@@ -220,58 +208,25 @@ export class ZernioOutboundWorker {
     if (!isReclaimDue(this.lastReclaimAt, now)) return;
     this.lastReclaimAt = now;
 
-    try {
-      const { data, error } = await supabase
-        .from('outbox_events')
-        .update({
-          available_at: new Date(now).toISOString(),
-          processing_started_at: null,
-          state: 'pending'
-        })
-        .eq('state', 'processing')
-        .lt('processing_started_at', abandonedBefore(now))
-        .select('id');
-
-      if (error) {
-        console.error(
-          JSON.stringify({
-            event: 'worker.outbox_dispatch_reclaim_failed',
-            databaseCode: error.code ?? 'unknown'
-          })
-        );
-        return;
-      }
-
-      const reclaimed = Array.isArray(data) ? data.length : 0;
-      if (reclaimed > 0) {
-        console.info(JSON.stringify({ event: 'worker.outbox_dispatch_reclaimed', reclaimed }));
-      }
-    } catch {
-      // Recuperar reclamos es una red de seguridad: su fallo nunca debe detener el drenaje.
+    // Recuperar reclamos es una red de seguridad: su fallo nunca debe detener el drenaje.
+    const { errorCode, reclaimed } = await reclaimAbandonedEvents(supabase, now);
+    if (errorCode) {
       console.error(
         JSON.stringify({
           event: 'worker.outbox_dispatch_reclaim_failed',
-          databaseCode: 'unexpected'
+          databaseCode: errorCode
         })
       );
+      return;
+    }
+    if (reclaimed > 0) {
+      console.info(JSON.stringify({ event: 'worker.outbox_dispatch_reclaimed', reclaimed }));
     }
   }
 
   private async claimAndProcess(supabase: SupabaseServerClient, event: OutboxEvent): Promise<void> {
-    const attempt = event.attempts + 1;
-    const { data: claimed, error: claimError } = await supabase
-      .from('outbox_events')
-      .update({
-        attempts: attempt,
-        processing_started_at: new Date().toISOString(),
-        state: 'processing'
-      })
-      .eq('id', event.id)
-      .eq('state', 'pending')
-      .is('processing_started_at', null)
-      .select('id')
-      .maybeSingle();
-    if (claimError || !claimed) return;
+    const { attempt, claimed } = await claimEvent(supabase, event);
+    if (!claimed) return;
 
     const messageId = readMessageId(event.payload);
     if (!messageId)
@@ -362,12 +317,8 @@ export class ZernioOutboundWorker {
         .eq('tenant_id', event.tenant_id);
       if (messageUpdateError)
         throw new ZernioDispatchError(true, 'outbox_message_sent_update_failed');
-      const { error: completedError } = await supabase
-        .from('outbox_events')
-        .update({ processed_at: acknowledgedAt, processing_started_at: null, state: 'completed' })
-        .eq('id', event.id)
-        .eq('state', 'processing');
-      if (completedError) throw new ZernioDispatchError(true, 'outbox_completion_failed');
+      const completed = await completeEvent(supabase, event.id);
+      if (!completed) throw new ZernioDispatchError(true, 'outbox_completion_failed');
     } catch (error) {
       await this.fail(supabase, event, attempt, messageId, error);
     }
@@ -427,30 +378,16 @@ export class ZernioOutboundWorker {
       error instanceof ZernioDispatchError
         ? error
         : new ZernioDispatchError(true, 'zernio_dispatch_failed');
-    const retry = providerError.retryable && attempt < 3;
-    await supabase
-      .from('outbox_events')
-      .update(
-        retry
-          ? {
-              available_at: retryAt(attempt),
-              failure_code: providerError.code,
-              processing_started_at: null,
-              state: 'pending'
-            }
-          : {
-              failure_code: providerError.code,
-              processed_at: new Date().toISOString(),
-              processing_started_at: null,
-              state: 'failed'
-            }
-      )
-      .eq('id', event.id)
-      .eq('state', 'processing');
+    const { retried } = await failEvent(
+      supabase,
+      event,
+      { attempt, code: providerError.code, retryable: providerError.retryable },
+      this.now
+    );
     if (messageId) {
       await supabase
         .from('messages')
-        .update({ status: retry ? 'queued' : 'failed' })
+        .update({ status: retried ? 'queued' : 'failed' })
         .eq('id', messageId)
         .eq('tenant_id', event.tenant_id);
     }

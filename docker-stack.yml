@@ -59,6 +59,10 @@ services:
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
       ZERNIO_API_KEY: ${ZERNIO_API_KEY}
       ZERNIO_WEBHOOK_SECRET: ${ZERNIO_WEBHOOK_SECRET}
+      # Aviso al agente: a donde se manda el toque de un boton de plantilla y con que secreto.
+      # Sin las dos, el toque se guarda en la bandeja y no se avisa a nadie.
+      N8N_AGENT_WEBHOOK_URL: ${N8N_AGENT_WEBHOOK_URL:-}
+      N8N_AGENT_AUTH_SECRET: ${N8N_AGENT_AUTH_SECRET:-}
     networks:
       - global
     deploy:

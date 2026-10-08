@@ -41,6 +41,27 @@ const zernioInboundPayloadSchema = z.object({
     // adjunto con una forma inesperada nunca puede rechazar el mensaje ni perderlo.
     attachments: z.unknown().transform((value) => (Array.isArray(value) ? value : []))
   }),
+  /**
+   * Metadatos del evento.
+   *
+   * Un toque de boton de plantilla llega como un mensaje normal, y lo que lo distingue es
+   * `buttonPayload`. `quotedMessage` dice a que mensaje nuestro responde, que es como se sabe QUE
+   * plantilla pregunto sin adivinar por el texto. Se leen de forma tolerante: el proveedor puede
+   * agregar campos, y eso no puede rechazar el mensaje del cliente.
+   */
+  metadata: z
+    .object({
+      // Sin tope estrecho a proposito: un valor raro en un campo opcional no puede rechazar el
+      // mensaje del cliente. Lo que cuenta como toque se decide despues, en `readButtonTap`.
+      buttonPayload: z.string().max(4000).nullish(),
+      quotedMessage: z
+        .object({
+          messageId: identifierSchema.nullish(),
+          platformMessageId: identifierSchema.nullish()
+        })
+        .nullish()
+    })
+    .nullish(),
   post: z
     .object({
       content: z.string().max(4000).nullish(),
@@ -62,6 +83,13 @@ export type NormalizedInboundMessage = {
   }>;
   avatarSourceUrl: string | null;
   body: string;
+  /**
+   * El toque de un boton de plantilla, o nada.
+   *
+   * `payload` es lo que el cliente pulso y `quotedMessageReference` es la referencia con la que
+   * guardamos el mensaje que hizo la pregunta: con ella se sabe si salio con plantilla y cual.
+   */
+  buttonTap: { payload: string; quotedMessageReference: string } | null;
   contactDisplayName: string;
   contactReference: string;
   contactUsername: string | null;
@@ -81,6 +109,47 @@ function externalReference(accountId: string, kind: string, providerId: string):
   return `zernio:${accountId}:${kind}:${providerId}`;
 }
 
+/**
+ * La referencia con la que guardamos un mensaje del proveedor.
+ *
+ * Un solo sitio decide su forma: quien la escribe (el mensaje entrante) y quien la busca (el aviso
+ * de un toque, que necesita resolver el mensaje citado) tienen que coincidir exactamente.
+ */
+export function providerMessageReference(accountId: string, providerMessageId: string): string {
+  return externalReference(accountId, 'message', providerMessageId);
+}
+
+/**
+ * Un toque de boton, o nada.
+ *
+ * Hacen falta las dos mitades: lo que se pulso y a que mensaje responde. Un `buttonPayload` sin
+ * mensaje citado no permite saber si la pregunta salio de una plantilla nuestra, asi que no se
+ * considera un toque. Un contenido mas largo que el de un boton tampoco lo es: el mensaje se guarda
+ * igual, simplemente no se avisa de algo que no puede ser una respuesta.
+ */
+const MAX_BUTTON_PAYLOAD_LENGTH = 200;
+
+function readButtonTap(
+  accountId: string,
+  metadata:
+    | {
+        buttonPayload?: string | null;
+        quotedMessage?: { platformMessageId?: string | null } | null;
+      }
+    | null
+    | undefined
+): { payload: string; quotedMessageReference: string } | null {
+  const payload = metadata?.buttonPayload?.trim() ?? '';
+  const quotedProviderMessageId = metadata?.quotedMessage?.platformMessageId?.trim() ?? '';
+  if (!payload || payload.length > MAX_BUTTON_PAYLOAD_LENGTH || !quotedProviderMessageId) {
+    return null;
+  }
+  return {
+    payload,
+    quotedMessageReference: providerMessageReference(accountId, quotedProviderMessageId)
+  };
+}
+
 function normalizeAvatarSourceUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
@@ -98,7 +167,7 @@ export function normalizeInboundMessage(payload: unknown): NormalizedInboundMess
     throw new InboundPayloadError();
   }
 
-  const { account, conversation, message, post, timestamp } = parsed.data;
+  const { account, conversation, message, metadata, post, timestamp } = parsed.data;
   const contactId = message.sender.contactId ?? message.sender.id;
   const contactDisplayName =
     message.sender.name ??
@@ -170,11 +239,12 @@ export function normalizeInboundMessage(payload: unknown): NormalizedInboundMess
       ),
     avatarSourceUrl: normalizeAvatarSourceUrl(message.sender.picture),
     body: message.text,
+    buttonTap: readButtonTap(account.id, metadata),
     contactDisplayName,
     contactReference: externalReference(account.id, 'contact', contactId),
     contactUsername: message.sender.username ?? null,
     conversationReference: externalReference(account.id, 'conversation', conversation.id),
-    messageReference: externalReference(account.id, 'message', message.id),
+    messageReference: providerMessageReference(account.id, message.id),
     platform: message.platform ?? null,
     receivedAt: timestamp
   };
@@ -225,12 +295,14 @@ export function normalizeSentMessage(payload: unknown): NormalizedSentMessage {
     attachments: [],
     avatarSourceUrl: normalizeAvatarSourceUrl(conversation.participantPicture),
     body: message.text,
+    // Un mensaje de la automatizacion no es un toque del cliente: aqui nunca hay boton.
+    buttonTap: null,
     contactDisplayName:
       conversation.participantName ?? conversation.participantUsername ?? contactId,
     contactReference: externalReference(account.id, 'contact', contactId),
     contactUsername: conversation.participantUsername ?? null,
     conversationReference: externalReference(account.id, 'conversation', conversation.id),
-    messageReference: externalReference(account.id, 'message', message.id),
+    messageReference: providerMessageReference(account.id, message.id),
     platform: null,
     receivedAt: message.sentAt ?? timestamp
   };

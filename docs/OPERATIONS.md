@@ -55,11 +55,12 @@ limit 5;
 
 ## Pasos manuales pendientes
 
-| Paso                                                                     | Por qué                                                                      |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| Aplicar `supabase/migrations/20260929220000_add_message_attachments.sql` | Sin ella no se registra ni se copia la multimedia recibida                   |
-| Configurar `ZERNIO_CONNECT_REDIRECT_URL` en `apps/api/.env`              | Sin ella, "Conectar canales" responde 503                                    |
-| Configurar SMTP y las URLs de retorno en Supabase                        | Las invitaciones por correo dependen de eso; el enlace manual funciona igual |
-| Habilitar la protección contra contraseñas filtradas                     | Recomendado antes de sumar integrantes                                       |
+| Paso                                                                          | Por qué                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Aplicar `supabase/migrations/20260929220000_add_message_attachments.sql`      | Sin ella no se registra ni se copia la multimedia recibida                                                                                                                                          |
+| Configurar `ZERNIO_CONNECT_REDIRECT_URL` en `apps/api/.env`                   | Sin ella, "Conectar canales" responde 503                                                                                                                                                           |
+| Configurar `N8N_AGENT_WEBHOOK_URL` y `N8N_AGENT_AUTH_SECRET` en el trabajador | Sin ellas, el toque de un botón de plantilla se guarda en la bandeja y **no se avisa a n8n**; el motivo queda en el registro (`worker.n8n_notification_skipped`) y ese aviso no se recupera después |
+| Configurar SMTP y las URLs de retorno en Supabase                             | Las invitaciones por correo dependen de eso; el enlace manual funciona igual                                                                                                                        |
+| Habilitar la protección contra contraseñas filtradas                          | Recomendado antes de sumar integrantes                                                                                                                                                              |
 
 La migración `20260928215601_fix_membership_removal` **ya está aplicada** en el proyecto remoto: se verificó que las notas aceptan autoría vacía y que la clave foránea de autoría rechaza un autor inexistente. Con eso, retirar a un integrante con actividad deja de fallar.

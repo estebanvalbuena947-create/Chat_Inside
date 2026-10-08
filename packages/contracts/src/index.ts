@@ -778,6 +778,32 @@ export const whatsappTemplateListResponseSchema = z.object({
 export type WhatsappTemplateListResponse = z.infer<typeof whatsappTemplateListResponseSchema>;
 
 /* ------------------------------------------------------------------------------------------------
+   Aviso a n8n: el cliente pulso un boton de una plantilla aprobada.
+
+   Es un contrato de SALIDA: lo que nuestro trabajador envia al webhook del agente. Lleva solo
+   identificadores internos, el contenido del boton y la plantilla que pregunto. Nada de telefonos,
+   nombres, correos ni cuerpos de conversacion: n8n consulta lo que necesite con su credencial de
+   maquina. El esquema es estricto a proposito: un campo de mas —un telefono que alguien agregue por
+   descuido— falla al validar en lugar de salir del sistema.
+   ------------------------------------------------------------------------------------------------ */
+
+export const WHATSAPP_BUTTON_TAP_EVENT = 'whatsapp.button_tap';
+
+export const whatsappButtonTapNotificationSchema = z
+  .object({
+    buttonPayload: z.string().trim().min(1).max(200),
+    contactId: z.uuid(),
+    conversationId: z.uuid(),
+    event: z.literal(WHATSAPP_BUTTON_TAP_EVENT),
+    messageId: z.uuid(),
+    occurredAt: z.string().datetime(),
+    template: whatsappTemplateReferenceSchema
+  })
+  .strict();
+
+export type WhatsappButtonTapNotification = z.infer<typeof whatsappButtonTapNotificationSchema>;
+
+/* ------------------------------------------------------------------------------------------------
    Vocabulario de las reservas del proyecto SPA.
 
    Los estados y las acciones tienen que seguir coincidiendo con lo que esa base espera, y las

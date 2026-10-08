@@ -3,6 +3,7 @@ import {
   supabaseServerEnvironmentSchema,
   type SupabaseServerClient
 } from '@chat-zernio/config';
+import { createHash } from 'node:crypto';
 import {
   InboundPayloadError,
   inboundConversationStatus,
@@ -13,8 +14,14 @@ import {
   type NormalizedInboundMessage
 } from './zernio-inbound-normalizer';
 import { storeConversationMedia } from './conversation-media-storage';
-import { advanceMessageStatus } from '@chat-zernio/domain';
+import {
+  advanceMessageStatus,
+  parseWhatsappButtonTapNotification,
+  uuidDesdeHash,
+  WHATSAPP_BUTTON_TAP_EVENT
+} from '@chat-zernio/domain';
 import { abandonedBefore, isReclaimDue } from './abandoned-claims';
+import { OUTBOX_TAP_EVENT } from './outbox-claim';
 import { isMediaRepairDue, repairPendingMedia } from './media-repair';
 import { avatarSourceHash, storeContactAvatar } from './contact-avatar-storage';
 import {
@@ -230,6 +237,91 @@ export async function createOrAdoptConversation(
   return raced ?? null;
 }
 
+/**
+ * La clave del aviso sale del mensaje entrante, no del intento.
+ *
+ * El mismo toque reenviado por el proveedor produce la misma clave, asi que choca con la que ya
+ * existe en la cola y no se avisa dos veces.
+ */
+function tapNotificationIdempotencyKey(tenantId: string, messageReference: string): string {
+  return uuidDesdeHash(
+    createHash('sha256').update(`tap|${tenantId}|${messageReference}`).digest('hex')
+  );
+}
+
+/**
+ * Encola el aviso a n8n de un toque de boton de plantilla.
+ *
+ * Solo se avisa de un toque que responde a una plantilla NUESTRA. El mensaje citado se busca por su
+ * referencia de proveedor, nunca por el texto que pulso el cliente: asi el mismo boton en otra
+ * plantilla, o un texto escrito a mano que diga lo mismo, no se confunden con una respuesta.
+ */
+export async function enqueueButtonTapNotification(
+  supabase: SupabaseServerClient,
+  input: {
+    channelAccountId: string;
+    contactId: string;
+    conversationId: string;
+    incoming: NormalizedInboundMessage;
+    messageId: string;
+    n8nConfigured: boolean;
+    tenantId: string;
+  }
+): Promise<void> {
+  const tap = input.incoming.buttonTap;
+  if (!tap) return;
+
+  if (!input.n8nConfigured) {
+    // Sin webhook no hay a donde avisar, y encolar un aviso condenado solo ensucia la cola. Queda
+    // registrado para que el silencio no se confunda con «no paso nada».
+    console.info(
+      JSON.stringify({ event: 'worker.n8n_notification_skipped', reason: 'n8n_not_configured' })
+    );
+    return;
+  }
+
+  const { data: quoted, error: quotedError } = await supabase
+    .from('messages')
+    .select('whatsapp_template_language, whatsapp_template_name')
+    .eq('tenant_id', input.tenantId)
+    .eq('provider_message_id', tap.quotedMessageReference)
+    .maybeSingle();
+  if (quotedError) throw new ProcessingFailure('tap_quoted_message_lookup_failed');
+  if (
+    typeof quoted?.whatsapp_template_name !== 'string' ||
+    typeof quoted.whatsapp_template_language !== 'string'
+  ) {
+    // El citado no es un mensaje nuestro enviado con plantilla: no hay nada que avisar.
+    return;
+  }
+
+  const notification = parseWhatsappButtonTapNotification({
+    buttonPayload: tap.payload,
+    contactId: input.contactId,
+    conversationId: input.conversationId,
+    event: WHATSAPP_BUTTON_TAP_EVENT,
+    messageId: input.messageId,
+    occurredAt: new Date(input.incoming.receivedAt).toISOString(),
+    template: {
+      language: quoted.whatsapp_template_language,
+      name: quoted.whatsapp_template_name
+    }
+  });
+
+  const { error: enqueueError } = await supabase.from('outbox_events').insert({
+    aggregate_id: input.conversationId,
+    aggregate_type: 'conversation',
+    event_type: OUTBOX_TAP_EVENT,
+    idempotency_key: tapNotificationIdempotencyKey(input.tenantId, input.incoming.messageReference),
+    payload: notification,
+    tenant_id: input.tenantId
+  });
+  // El reenvio del mismo toque choca con la clave unica: es el resultado esperado, no un fallo.
+  if (enqueueError && enqueueError.code !== '23505') {
+    throw new ProcessingFailure('tap_notification_enqueue_failed');
+  }
+}
+
 export class ZernioInboxWorker {
   private isRunning = false;
   private isReconcilingLifecycle = false;
@@ -238,7 +330,12 @@ export class ZernioInboxWorker {
 
   constructor(
     private readonly createClient: () => SupabaseServerClient,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    /**
+     * Si hay a donde avisar. Se decide al arrancar y no en cada toque: sin webhook configurado no
+     * se encola nada, y el motivo queda registrado en lugar de acumular fallos en la cola.
+     */
+    private readonly n8nConfigured: boolean = false
   ) {}
 
   async drain(limit = 10): Promise<void> {
@@ -584,6 +681,17 @@ export class ZernioInboxWorker {
           existingMessage.id,
           incoming
         );
+        // El reintento del proveedor entra por aqui. Si el intento anterior alcanzo a guardar el
+        // mensaje y cayo antes de avisar, este es el unico sitio donde el aviso se puede recuperar:
+        // por eso se encola tambien en esta rama, y la clave determinista evita el aviso doble.
+        await this.enqueueButtonTapNotification(supabase, {
+          channelAccountId: String(channelAccount.id),
+          contactId: String(contact.id),
+          conversationId: String(conversation.id),
+          incoming,
+          messageId: String(existingMessage.id),
+          tenantId: String(event.tenant_id)
+        });
       }
       return;
     }
@@ -596,6 +704,15 @@ export class ZernioInboxWorker {
       insertedMessage.id,
       incoming
     );
+
+    await this.enqueueButtonTapNotification(supabase, {
+      channelAccountId: String(channelAccount.id),
+      contactId: String(contact.id),
+      conversationId: String(conversation.id),
+      incoming,
+      messageId: String(insertedMessage.id),
+      tenantId: String(event.tenant_id)
+    });
 
     const lastMessageAt = conversation.last_message_at;
     const shouldAdvanceTimestamp = !lastMessageAt || incoming.receivedAt > lastMessageAt;
@@ -621,6 +738,29 @@ export class ZernioInboxWorker {
 
       if (updateError) throw new ProcessingFailure('conversation_update_failed');
     }
+  }
+
+  /**
+   * Encola el aviso a n8n de un toque de boton de plantilla.
+   *
+   * Se encola en lugar de llamar a n8n aqui: una caida del agente no puede impedir que el mensaje
+   * del cliente quede guardado, y el aviso merece sus propios reintentos y su propio rastro.
+   */
+  private async enqueueButtonTapNotification(
+    supabase: SupabaseServerClient,
+    context: {
+      channelAccountId: string;
+      contactId: string;
+      conversationId: string;
+      incoming: NormalizedInboundMessage;
+      messageId: string;
+      tenantId: string;
+    }
+  ): Promise<void> {
+    await enqueueButtonTapNotification(supabase, {
+      ...context,
+      n8nConfigured: this.n8nConfigured
+    });
   }
 
   /**
@@ -681,7 +821,12 @@ export function createZernioInboxWorker(
   environment: Record<string, string | undefined> = process.env
 ): ZernioInboxWorker {
   const configuration = supabaseServerEnvironmentSchema.parse(environment);
-  return new ZernioInboxWorker(() => createServerSupabaseClient(configuration));
+  return new ZernioInboxWorker(
+    () => createServerSupabaseClient(configuration),
+    Date.now,
+    // El aviso a n8n solo tiene sentido si hay direccion y secreto; se decide una vez, al arrancar.
+    Boolean(environment.N8N_AGENT_WEBHOOK_URL?.trim() && environment.N8N_AGENT_AUTH_SECRET?.trim())
+  );
 }
 
 /**

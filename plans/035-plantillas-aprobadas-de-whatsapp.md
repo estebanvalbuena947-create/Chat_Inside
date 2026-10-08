@@ -60,8 +60,10 @@
   canal de la conversación. El texto guardado es la copia visible, no la carga.
 - Las plantillas que declaran huecos `{{...}}` se rechazan en este corte, con el motivo a la vista:
   capturar valores es un corte aparte.
-- Pendiente derivado: las respuestas de botón («Asistiré») llegan como texto normal y no como
-  decisión de la reserva.
+- Pendiente derivado: las respuestas de botón («Asistiré») llegaban como texto normal y no como
+  decisión de la reserva. Resuelta su mitad de sistema en
+  `specs/024-aviso-de-toque-de-plantilla-a-n8n.md` y `plans/038-...`: el toque se avisa a n8n. Queda
+  fuera de este repositorio el workflow de n8n que aplica la decisión sobre la reserva.
 
 ## Condición de detención
 

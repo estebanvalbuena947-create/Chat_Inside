@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { tieneFormaDeUuid, uuidDesdeHash } from '@chat-zernio/domain';
 
 /**
  * Claves de idempotencia de las tools.
@@ -13,21 +14,12 @@ import { createHash } from 'node:crypto';
  *
  * El UUID derivado depende del espacio y de la conversacion: dos conversaciones distintas pueden usar
  * la misma clave legible sin chocar entre si ni con el resto del espacio.
+ *
+ * La forma del UUID es de `@chat-zernio/domain` (`uuidDesdeHash`): el trabajador deriva claves con
+ * la misma forma y tenerla dos veces solo servia para que se separaran con el tiempo.
  */
 
-/** La forma que exige el contrato: version 1-8 y variante 8/9/a/b. */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-/** Da forma de UUID a un hash hexadecimal, descartando los bits que el formato reserva. */
-export function uuidDesdeHash(hash: string): string {
-  return [
-    hash.slice(0, 8),
-    hash.slice(8, 12),
-    `4${hash.slice(13, 16)}`,
-    `${((parseInt(hash.slice(16, 17), 16) & 0x3) | 0x8).toString(16)}${hash.slice(17, 20)}`,
-    hash.slice(20, 32)
-  ].join('-');
-}
+export { uuidDesdeHash };
 
 /**
  * Convierte la clave que manda un flujo en la clave que se guarda.
@@ -40,7 +32,7 @@ export function claveIdempotencia(espacio: string, conversacion: string, valor: 
   if (typeof valor !== 'string') return valor;
   const limpia = valor.trim();
   if (limpia.length === 0) return valor;
-  if (UUID.test(limpia)) return limpia;
+  if (tieneFormaDeUuid(limpia)) return limpia;
   const hash = createHash('sha256').update(`${espacio}|${conversacion}|${limpia}`).digest('hex');
   return uuidDesdeHash(hash);
 }

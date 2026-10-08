@@ -30,6 +30,7 @@ describe('normalizeInboundMessage', () => {
       accountName: null,
       avatarSourceUrl: 'https://cdn.example.test/avatar.jpg',
       body: 'Hola',
+      buttonTap: null,
       contactDisplayName: 'inside.client',
       contactReference: 'zernio:account-1:contact:sender-1',
       contactUsername: 'inside.client',
