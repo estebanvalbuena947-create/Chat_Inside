@@ -84,12 +84,18 @@ function createEnqueueFake(options: {
   conversation?: unknown;
   existing?: unknown;
   inserted?: (row: Record<string, unknown>) => { data: unknown; error: unknown };
+  ultimoEntrante?: string | null;
 }) {
   const insertados: Array<Record<string, unknown>> = [];
   const client = {
     from: (table: string) => {
       const builder: Record<string, unknown> = {};
-      for (const method of ['eq', 'select']) builder[method] = () => builder;
+      const eqs: unknown[][] = [];
+      for (const method of ['limit', 'order', 'select']) builder[method] = () => builder;
+      builder.eq = (...args: unknown[]) => {
+        eqs.push(args);
+        return builder;
+      };
       if (table !== 'conversations') {
         builder.insert = (row: Record<string, unknown>) => {
           insertados.push(row);
@@ -100,11 +106,20 @@ function createEnqueueFake(options: {
           return insertBuilder;
         };
       }
-      builder.maybeSingle = async () => ({
-        data:
-          table === 'conversations' ? (options.conversation ?? null) : (options.existing ?? null),
-        error: null
-      });
+      builder.maybeSingle = async () => {
+        if (table === 'conversations') return { data: options.conversation ?? null, error: null };
+        // La misma tabla responde a dos preguntas distintas: la ventana filtra por `direction` y la
+        // idempotencia por su clave. Distinguirlas evita que un doble comodo esconda el error que
+        // estas pruebas buscan.
+        const preguntaPorEntrante = eqs.some(([campo]) => campo === 'direction');
+        if (preguntaPorEntrante) {
+          return {
+            data: options.ultimoEntrante ? { created_at: options.ultimoEntrante } : null,
+            error: null
+          };
+        }
+        return { data: options.existing ?? null, error: null };
+      };
       return builder;
     }
   };
@@ -116,6 +131,7 @@ function createService(options: {
   conversation?: unknown;
   existing?: unknown;
   inserted?: (row: Record<string, unknown>) => { data: unknown; error: unknown };
+  ultimoEntrante?: string | null;
 }) {
   const fake = createEnqueueFake(options);
   const service = new TenantMessageService(
@@ -142,13 +158,116 @@ function catalogFake(templates: unknown[]) {
   };
 }
 
-function conversationRow() {
+function conversationRow(plataforma = 'whatsapp') {
   return {
-    channel_account: { provider: 'zernio' },
+    channel_account: { platform: plataforma, provider: 'zernio' },
     channel_account_id: channelAccountId,
     id: conversationId
   };
 }
+
+describe('TenantMessageService ventana de WhatsApp', () => {
+  const hace = (horas: number) => new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
+
+  /** La fila que devuelve la base al insertar: sin ella, el servicio no tiene nada que responder. */
+  const insertada = () => ({
+    data: {
+      attachments: [],
+      body: 'Hola',
+      created_at: '2026-10-09T00:00:00+00',
+      direction: 'outbound',
+      id: messageId,
+      sender_type: 'agent',
+      sent_at: '2026-10-09T00:00:00+00',
+      source: 'dm',
+      status: 'queued',
+      whatsapp_template_language: null,
+      whatsapp_template_name: null
+    },
+    error: null
+  });
+
+  it('no deja escribir texto si la ventana esta cerrada, y no encola nada', async () => {
+    const { insertados, service } = createService({
+      catalog: catalogFake([]),
+      conversation: conversationRow(),
+      ultimoEntrante: hace(25)
+    });
+
+    await expect(
+      service.createOutbound('Bearer valid.jwt', tenantId, conversationId, {
+        body: 'Hola',
+        idempotencyKey,
+        kind: 'text'
+      })
+    ).rejects.toThrow(/ventana de 24 horas de WhatsApp está cerrada/);
+    expect(insertados).toHaveLength(0);
+  });
+
+  it('con la ventana abierta el texto sale como siempre', async () => {
+    const { insertados, service } = createService({
+      catalog: catalogFake([]),
+      conversation: conversationRow(),
+      inserted: insertada,
+      ultimoEntrante: hace(1)
+    });
+
+    await service.createOutbound('Bearer valid.jwt', tenantId, conversationId, {
+      body: 'Hola',
+      idempotencyKey,
+      kind: 'text'
+    });
+    expect(insertados).toHaveLength(1);
+  });
+
+  it('la plantilla si sale con la ventana cerrada: es justo para eso', async () => {
+    const { insertados, service } = createService({
+      catalog: catalogFake([plantillaAprobada]),
+      conversation: conversationRow(),
+      inserted: insertada,
+      ultimoEntrante: hace(48)
+    });
+
+    await service.createOutbound('Bearer valid.jwt', tenantId, conversationId, {
+      idempotencyKey,
+      kind: 'whatsapp_template',
+      whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
+    });
+    expect(insertados).toHaveLength(1);
+  });
+
+  it('sin entrantes registrados no se inventa una ventana cerrada', async () => {
+    const { insertados, service } = createService({
+      catalog: catalogFake([]),
+      conversation: conversationRow(),
+      inserted: insertada,
+      ultimoEntrante: null
+    });
+
+    await service.createOutbound('Bearer valid.jwt', tenantId, conversationId, {
+      body: 'Hola',
+      idempotencyKey,
+      kind: 'text'
+    });
+    expect(insertados).toHaveLength(1);
+  });
+
+  it('en un canal que no es WhatsApp la ventana no interviene', async () => {
+    const { insertados, service } = createService({
+      catalog: catalogFake([]),
+      conversation: conversationRow('instagram'),
+      inserted: insertada,
+      ultimoEntrante: hace(72)
+    });
+
+    await service.createOutbound('Bearer valid.jwt', tenantId, conversationId, {
+      body: 'Hola',
+      idempotencyKey,
+      kind: 'text'
+    });
+    expect(insertados).toHaveLength(1);
+  });
+});
 
 describe('TenantMessageService envio con plantilla', () => {
   it('encola la plantilla aprobada de la cuenta con su copia visible y su referencia', async () => {

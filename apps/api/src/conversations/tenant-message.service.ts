@@ -19,6 +19,7 @@ import {
 } from '@chat-zernio/contracts';
 import {
   findWhatsappTemplateByReference,
+  whatsappServiceWindow,
   whatsappTemplateReferenceFrom,
   whatsappTemplateSendability
 } from '@chat-zernio/domain';
@@ -168,6 +169,14 @@ function isDisconnectedChannel(channel: unknown): boolean {
   );
 }
 
+/** La plataforma la entrega el proveedor y se guarda tal cual: se compara normalizada. */
+function isWhatsappChannel(channel: unknown): boolean {
+  const relation = Array.isArray(channel) ? channel[0] : channel;
+  if (!relation || typeof relation !== 'object' || !('platform' in relation)) return false;
+  const platform = (relation as { platform?: unknown }).platform;
+  return typeof platform === 'string' && platform.trim().toLowerCase() === 'whatsapp';
+}
+
 @Injectable()
 export class TenantMessageService {
   constructor(
@@ -255,7 +264,9 @@ export class TenantMessageService {
     const supabase = this.supabaseServerClientFactory.create();
     const { data: conversation, error: conversationError } = await supabase
       .from('conversations')
-      .select('id, channel_account_id, channel_account:channel_accounts(provider, disconnected_at)')
+      .select(
+        'id, channel_account_id, channel_account:channel_accounts(provider, platform, disconnected_at)'
+      )
       .eq('tenant_id', tenantId)
       .eq('id', conversationId)
       .maybeSingle();
@@ -274,6 +285,17 @@ export class TenantMessageService {
         'El canal de esta conversación está retirado: reconéctalo para poder responder.'
       );
     }
+
+    // Fuera de la ventana de 24 horas, WhatsApp solo admite plantillas aprobadas. La regla vive aqui,
+    // en el camino compartido, para que valga igual para una persona en la bandeja y para el bot: si
+    // estuviera solo en la puerta del bot, la bandeja seguiria encolando mensajes que Meta rechaza.
+    await this.assertMessagingWindow(
+      supabase,
+      tenantId,
+      conversationId,
+      command,
+      conversation.channel_account
+    );
 
     const existing = await this.findByIdempotencyKey(supabase, tenantId, command.idempotencyKey);
     if (existing) return this.resolveIdempotentResult(existing, conversationId, command);
@@ -312,6 +334,51 @@ export class TenantMessageService {
       if (raced) return this.resolveIdempotentResult(raced, conversationId, command);
     }
     throw new InternalServerErrorException('No fue posible preparar el mensaje para envío.');
+  }
+
+  /**
+   * Fuera de la ventana de 24 horas, WhatsApp solo admite plantillas aprobadas.
+   *
+   * Se aplica a todo lo que no sea plantilla: un texto o una foto fuera de plazo tambien los rechaza
+   * Meta, y ese rechazo llega minutos despues como un mensaje fallido. Fallar aqui es inmediato y
+   * operable.
+   *
+   * No se bloquea cuando la ventana no se puede afirmar (otro canal, o un hilo sin mensajes
+   * entrantes registrados): en ese caso decide el proveedor, que es quien tiene la ultima palabra.
+   */
+  private async assertMessagingWindow(
+    supabase: ReturnType<SupabaseServerClientFactory['create']>,
+    tenantId: string,
+    conversationId: string,
+    command: CreateOutboundMessage,
+    channelAccount: unknown
+  ): Promise<void> {
+    // Una plantilla aprobada es justo lo que se puede enviar siempre: no se le aplica la ventana.
+    if (command.kind === 'whatsapp_template') return;
+    if (!isWhatsappChannel(channelAccount)) return;
+
+    const { data: entrante, error } = await supabase
+      .from('messages')
+      .select('created_at')
+      .eq('tenant_id', tenantId)
+      .eq('conversation_id', conversationId)
+      .eq('direction', 'inbound')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      throw new InternalServerErrorException('No fue posible comprobar la ventana de mensajería.');
+    }
+
+    const ventana = whatsappServiceWindow(
+      typeof entrante?.created_at === 'string' ? entrante.created_at : null,
+      Date.now()
+    );
+    if (ventana && !ventana.open) {
+      throw new UnprocessableEntityException(
+        `La ventana de 24 horas de WhatsApp está cerrada desde ${ventana.expiresAt}: envía una plantilla aprobada, o espera a que el cliente escriba.`
+      );
+    }
   }
 
   private async findByIdempotencyKey(

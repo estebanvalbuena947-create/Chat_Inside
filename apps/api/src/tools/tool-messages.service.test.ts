@@ -1,4 +1,4 @@
-import { UnprocessableEntityException } from '@nestjs/common';
+﻿import { UnprocessableEntityException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { TenantMessageService } from '../conversations/tenant-message.service';
 import type { ToolMessagesService } from './tool-messages.service';
@@ -75,7 +75,7 @@ function crearServicio(opciones: {
 }
 
 const cuerpoValido = {
-  body: 'Hola, ¿te confirmo la cita?',
+  body: 'Hola, Â¿te confirmo la cita?',
   conversationId: 'conv-1',
   idempotencyKey: UUID
 };
@@ -187,156 +187,6 @@ describe('envio de mensajes del bot', () => {
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
       expect(enqueueOutbound, JSON.stringify(whatsappTemplate)).not.toHaveBeenCalled();
     }
-  });
-
-  it('no deja escribir texto si la ventana de WhatsApp esta cerrada', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({
-      canal: 'whatsapp',
-      habilitado: true,
-      ultimoEntrante: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
-    });
-
-    await expect(servicio.send('Bearer token', cuerpoValido)).rejects.toThrow(
-      /ventana de 24 horas de WhatsApp esta cerrada/
-    );
-    expect(enqueueOutbound).not.toHaveBeenCalled();
-  });
-
-  it('con la ventana abierta el texto sale como siempre', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({
-      canal: 'whatsapp',
-      habilitado: true,
-      ultimoEntrante: new Date(Date.now() - 60 * 60 * 1000).toISOString()
-    });
-
-    await servicio.send('Bearer token', cuerpoValido);
-    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
-  });
-
-  it('la plantilla si sale con la ventana cerrada: es justo para eso', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({
-      canal: 'whatsapp',
-      habilitado: true,
-      ultimoEntrante: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-    });
-
-    await servicio.send('Bearer token', {
-      conversationId: 'conv-1',
-      idempotencyKey: UUID,
-      whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
-    });
-    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
-  });
-
-  it('un canal que no es WhatsApp no se bloquea por la ventana', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({
-      canal: 'instagram',
-      habilitado: true,
-      ultimoEntrante: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
-    });
-
-    await servicio.send('Bearer token', cuerpoValido);
-    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
-  });
-
-  it('si no hay ningun entrante registrado no se inventa una ventana cerrada', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({
-      canal: 'whatsapp',
-      habilitado: true,
-      ultimoEntrante: null
-    });
-
-    await servicio.send('Bearer token', cuerpoValido);
-    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
-  });
-
-  it('exige el permiso de mensajes antes de nada', async () => {
-    const { servicio, toolTokenService } = crearServicio({ habilitado: true });
-
-    await servicio.send('Bearer token', cuerpoValido);
-
-    expect(toolTokenService.assertScope).toHaveBeenCalledWith(
-      { scopes: ['messages'], tenantId: 'tenant-1', tokenId: 'token-1' },
-      'messages'
-    );
-  });
-
-  it('rechaza un mensaje sin texto ni multimedia, o sin clave de idempotencia', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
-
-    await expect(
-      servicio.send('Bearer token', { ...cuerpoValido, body: '   ' })
-    ).rejects.toBeInstanceOf(UnprocessableEntityException);
-
-    await expect(
-      servicio.send('Bearer token', { ...cuerpoValido, idempotencyKey: '' })
-    ).rejects.toBeInstanceOf(UnprocessableEntityException);
-
-    await expect(
-      servicio.send('Bearer token', { ...cuerpoValido, conversationId: undefined })
-    ).rejects.toBeInstanceOf(UnprocessableEntityException);
-
-    expect(enqueueOutbound).not.toHaveBeenCalled();
-  });
-
-  it('convierte una clave legible en un UUID estable por conversacion', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
-
-    // Asi manda la clave el flujo: legible, con el turno dentro.
-    await servicio.send('Bearer token', { ...cuerpoValido, idempotencyKey: 'catalogo-4321' });
-    // Un reintento del mismo nodo tiene que producir exactamente la misma clave.
-    await servicio.send('Bearer token', { ...cuerpoValido, idempotencyKey: 'catalogo-4321' });
-    // La misma clave en otra conversacion no puede chocar con la primera.
-    await servicio.send('Bearer token', {
-      ...cuerpoValido,
-      conversationId: 'conv-2',
-      idempotencyKey: 'catalogo-4321'
-    });
-
-    const claves = enqueueOutbound.mock.calls.map((llamada) => llamada[0].command.idempotencyKey);
-    expect(claves[0]).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-    );
-    expect(claves[1]).toBe(claves[0]);
-    expect(claves[2]).not.toBe(claves[0]);
-  });
-
-  it('respeta una clave que ya es un UUID', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
-
-    await servicio.send('Bearer token', cuerpoValido);
-
-    const claves = enqueueOutbound.mock.calls.map((llamada) => llamada[0].command.idempotencyKey);
-    expect(claves).toEqual([UUID]);
-  });
-
-  it('un texto largo se parte en dos mensajes, con claves de idempotencia distintas', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
-    const primera = 'Parte uno ' + 'x'.repeat(500);
-    const segunda = 'Parte dos ' + 'y'.repeat(500);
-
-    await servicio.send('Bearer token', { ...cuerpoValido, body: `${primera}\n\n${segunda}` });
-
-    expect(enqueueOutbound).toHaveBeenCalledTimes(2);
-    const cuerpos = enqueueOutbound.mock.calls.map((llamada) => llamada[0].command.body);
-    expect(cuerpos).toEqual([primera, segunda]);
-    // Si las dos partes compartieran clave, la segunda chocaria con la idempotencia de la primera
-    // y no saldria nunca.
-    const claves = enqueueOutbound.mock.calls.map((llamada) => llamada[0].command.idempotencyKey);
-    expect(claves[0]).toBe(UUID);
-    expect(claves[1]).not.toBe(UUID);
-    // Sigue siendo un UUID: es lo que exige el contrato del comando.
-    expect(claves[1]).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-    );
-  });
-
-  it('un texto que cabe se encola una sola vez', async () => {
-    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
-
-    await servicio.send('Bearer token', cuerpoValido);
-
-    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -1307,6 +1307,18 @@ export default function HomePage(): React.ReactNode {
   }
 
   /**
+   * La cuenta de esta conversación, si sigue entre las conectadas.
+   *
+   * Devuelve nulo cuando la conversación no tiene cuenta o cuando la suya está retirada: el listado
+   * solo trae las operativas, así que su ausencia es justo lo que hay que decir en pantalla.
+   */
+  function conversationChannel(): ConnectedChannel | null {
+    const accountId = selectedConversation?.channelAccountId;
+    if (!accountId) return null;
+    return connectedChannels.find((channel) => channel.id === accountId) ?? null;
+  }
+
+  /**
    * Las plantillas del catálogo que pertenecen a la cuenta de esta conversación.
    *
    * Una plantilla de otra cuenta del espacio se vería, pero el proveedor no podría resolverla: solo
@@ -2992,7 +3004,10 @@ export default function HomePage(): React.ReactNode {
                 >
                   Respuestas rápidas
                 </button>
-                {selectedConversation?.channelPlatform === 'whatsapp' && (
+                {/* La plataforma la entrega el proveedor: se compara normalizada, como en el resto de
+                    la pantalla. Comparar en crudo hacia desaparecer el panel si llega 'WhatsApp'. */}
+                {channelPlatformClass(selectedConversation?.channelPlatform ?? null) ===
+                  'whatsapp' && (
                   <button
                     aria-expanded={isWhatsappTemplatesOpen}
                     className="canned-response-trigger"
@@ -3042,7 +3057,11 @@ export default function HomePage(): React.ReactNode {
                 >
                   {isWhatsappTemplatesLoading && <p>Cargando plantillas…</p>}
                   {!isWhatsappTemplatesLoading && whatsappTemplatesForSelection().length === 0 && (
-                    <p>Esta conversación no tiene plantillas aprobadas en su cuenta de WhatsApp.</p>
+                    <p>
+                      {conversationChannel()
+                        ? `La cuenta “${conversationChannel()?.displayName ?? 'sin nombre'}” no tiene plantillas aprobadas.`
+                        : 'La cuenta de esta conversación no está conectada, así que no hay plantillas que ofrecer.'}
+                    </p>
                   )}
                   {whatsappTemplatesForSelection().map((plantilla) => (
                     <button

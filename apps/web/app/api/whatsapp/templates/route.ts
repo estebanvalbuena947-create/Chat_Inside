@@ -34,6 +34,14 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'No fue posible resolver tu espacio.' }, { status: 502 });
     }
     const tenantsPayload = (await tenantsResponse.json()) as { items: Array<{ id: string }> };
+    // La misma regla que el resto de rutas del espacio: si hay más de uno, no se elige por su cuenta.
+    // Tomar el primero mostraría el catálogo de otro negocio sin que nadie lo note.
+    if (tenantsPayload.items.length !== 1) {
+      return NextResponse.json(
+        { error: 'Debes seleccionar un espacio antes de ver sus plantillas.' },
+        { status: 409 }
+      );
+    }
     const [tenant] = tenantsPayload.items;
     if (!tenant) {
       return NextResponse.json({ error: 'No perteneces a ningun espacio.' }, { status: 403 });

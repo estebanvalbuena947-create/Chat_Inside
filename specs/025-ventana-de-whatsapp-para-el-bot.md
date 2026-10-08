@@ -24,8 +24,8 @@ perdido y pasa a ser un error inmediato y accionable. El bot además puede envia
 - Decidir por el bot **qué** plantilla mandar: eso es del flujo, no de la plataforma.
 - Aplicar la regla a Instagram, Messenger o TikTok: no se ha verificado su ventana, así que no se
   supone.
-- Cambiar el compositor de la bandeja (una persona que escribe fuera de plazo sigue viendo el fallo
-  del mensaje, como hoy).
+- Anticipar el aviso **antes** de intentar el envío: la API lo rechaza con su motivo y el compositor lo
+  muestra; deshabilitar el botón con su explicación es un corte de presentación, no de regla.
 - Soportar plantillas con variables: sigue rechazado en este corte.
 - Retirar las plantillas internas (`message_templates`), que sirven para responder dentro de plazo.
 

@@ -27,13 +27,11 @@ function crearServicio(opciones: { mediaIds?: number } = {}) {
 
   const respuestas: unknown[] = [
     { data: { sending_enabled: true }, error: null }, // 1) interruptor
-    // 2) canal de la conversacion: no es WhatsApp, asi que la ventana de 24 h no interviene
-    { data: { channel_account: { platform: 'instagram' }, id: 'conv-1' }, error: null },
     {
       data: opciones.mediaIds === 0 ? [] : [MEDIA],
       error: null
-    }, // 3) multimedia
-    { data: null, error: null } // 4) adjuntos
+    }, // 2) multimedia
+    { data: null, error: null } // 3) adjuntos
   ];
 
   const siguiente = () => {

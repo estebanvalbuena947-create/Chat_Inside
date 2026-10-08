@@ -7,8 +7,12 @@
 # Cada despliegue construye la imagen con una etiqueta nueva (fecha y hora). Asi Swarm ve que la
 # imagen cambio y recrea las tareas por si solo: no hace falta acordarse de ningun --force.
 #
-# Si algo sale mal, se vuelve a la version anterior indicando su etiqueta:
-#   WEPFLASH_TAG=20260930-1830 bash deploy.sh
+# Para VOLVER a la version anterior hay que desplegar su etiqueta SIN reconstruir: este script
+# siempre construye, asi que con `WEPFLASH_TAG=<vieja> bash deploy.sh` se sobrescribiria esa etiqueta
+# con el codigo actual. La vuelta atras es:
+#   set -a; . ./.env; set +a
+#   WEPFLASH_TAG=<etiqueta-anterior> docker stack deploy --resolve-image never -c docker-stack.yml wepflash
+# Las tres imagenes mas recientes se conservan, asi que la anterior sigue disponible.
 
 set -euo pipefail
 cd "$(dirname "$0")"
