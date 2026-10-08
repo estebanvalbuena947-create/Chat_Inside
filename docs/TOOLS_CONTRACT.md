@@ -28,17 +28,43 @@ Sustituye a los **38 nodos** que hoy llaman a `api.manychat.com` para enviar.
   "idempotencyKey": "catalogo-1729",
   "text": "Hola, tu cita quedó confirmada",
   "media": [{ "branchMediaId": "uuid" }],
-  "templateName": "confirmacion_ig_is"
+  "templateName": "confirmacion_ig_is",
+  "whatsappTemplate": { "name": "notificacion_48h", "language": "es_MX" }
 }
 ```
 
-| Campo            | Obligatorio    | Nota                                                                      |
-| ---------------- | -------------- | ------------------------------------------------------------------------- |
-| `conversationId` | sí             | la conversación de nuestra base                                           |
-| `idempotencyKey` | sí             | **legible**: la API la convierte en UUID. Si n8n reintenta, no se duplica |
-| `text`           | uno de los dos | el texto a enviar                                                         |
-| `media`          | uno de los dos | por `branchMediaId` (nuestra multimedia); **una** por mensaje             |
-| `templateName`   | no             | plantilla guardada en nuestra base                                        |
+| Campo              | Obligatorio    | Nota                                                                      |
+| ------------------ | -------------- | ------------------------------------------------------------------------- |
+| `conversationId`   | sí             | la conversación de nuestra base                                           |
+| `idempotencyKey`   | sí             | **legible**: la API la convierte en UUID. Si n8n reintenta, no se duplica |
+| `text`             | uno de los dos | el texto a enviar                                                         |
+| `media`            | uno de los dos | por `branchMediaId` (nuestra multimedia); **una** por mensaje             |
+| `templateName`     | no             | plantilla guardada en nuestra base (se envía como **texto**)              |
+| `whatsappTemplate` | no             | plantilla **aprobada por Meta**: nombre e idioma exactos                  |
+
+### Escribir fuera de las 24 horas: `whatsappTemplate`
+
+WhatsApp solo admite texto o multimedia durante las **24 horas** siguientes al último mensaje del
+cliente. Fuera de ese plazo la única forma de escribir es una plantilla **aprobada por Meta**, y para
+eso está `whatsappTemplate`:
+
+```json
+{
+  "conversationId": "uuid",
+  "idempotencyKey": "recordatorio-{{ $execution.id }}",
+  "whatsappTemplate": { "name": "notificacion_48h", "language": "es_MX" }
+}
+```
+
+Es un envío **completo y de otra clase**: no lleva `text`, ni `media`, ni `templateName`, y no se
+parte en dos mensajes. La API comprueba que esa plantilla pertenece a la cuenta de WhatsApp de la
+conversación y que Meta la tiene aprobada; una plantilla con variables (`{{1}}`) se rechaza.
+
+Fuera de plazo, un envío con `text` o `media` se rechaza con `422` y este motivo: _la ventana de 24
+horas de WhatsApp está cerrada: envía una plantilla aprobada con `whatsappTemplate`_. Antes ese envío
+lo rechazaba Meta minutos después y quedaba como un mensaje fallido que nadie miraba.
+
+Para saber cuál de los dos caminos usar, lee `whatsappWindow` de la conversación (sección 6).
 
 La `idempotencyKey` identifica **un envío**, no un contacto: una clave fija por conversación hace que
 el segundo mensaje distinto responda `409`. Lo natural en n8n es `<propósito>-{{ $execution.id }}`.
@@ -62,8 +88,9 @@ Los verificadores de n8n tienen que leer `item.status`, no un `status` en la ra�
 mensaje.
 
 Errores: `404` conversación o multimedia inexistente · `409` la clave ya se usó para otro mensaje de
-esa conversación · `422` falta la conversación o la clave, no hay ni texto ni multimedia, o el envío
-del bot está apagado en el espacio.
+esa conversación · `422` falta la conversación o la clave, no hay ni texto ni multimedia, el envío
+del bot está apagado en el espacio, la ventana de 24 horas de WhatsApp está cerrada, o `whatsappTemplate`
+viene mezclado con texto, multimedia o `templateName`.
 
 ## 2. Sedes — `GET /v1/tools/branches`
 
@@ -131,9 +158,25 @@ Sustituye a las **16 lecturas** que hoy van a ManyChat (`Buscar contacto`, `Leer
     "platform": "instagram"
   },
   "labels": ["pago_pendiente"],
-  "lastMessageAt": "2026-09-30T12:28:00.000Z"
+  "lastMessageAt": "2026-09-30T12:28:00.000Z",
+  "whatsappWindow": {
+    "open": false,
+    "lastInboundAt": "2026-10-07T18:00:00.000Z",
+    "expiresAt": "2026-10-08T18:00:00.000Z"
+  }
 }
 ```
+
+### `whatsappWindow`: si puedes escribir o tienes que usar plantilla
+
+- `open: true` → el cliente escribió hace menos de 24 horas: puedes mandar `text` o `media`.
+- `open: false` → la ventana está cerrada: manda `whatsappTemplate` (sección 1). Un `text` o un
+  `media` en ese momento se rechaza con `422`.
+- `null` → **no aplica o no se puede afirmar**: la conversación no es de WhatsApp, o no hay ningún
+  mensaje entrante registrado (por ejemplo un hilo que empezó desde un anuncio). Ahí decide el
+  proveedor, así que inténtalo por el camino normal.
+
+El dato lo calcula el servidor; los flujos no tienen que restar horas ni conocer el plazo.
 
 ## 6. Sede de la conversación — `POST /v1/tools/conversations/{id}/branch`
 

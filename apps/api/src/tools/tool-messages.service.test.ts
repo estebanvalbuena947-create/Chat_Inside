@@ -15,22 +15,45 @@ import type { ToolTokenService } from './tool-token.service';
 
 const UUID = '6b1f4c2e-9d3a-4f58-8b7c-1e2d3f4a5b6c';
 
-function crearServicio(opciones: { habilitado: boolean | null; errorIntegracion?: boolean }) {
+function crearServicio(opciones: {
+  habilitado: boolean | null;
+  errorIntegracion?: boolean;
+  canal?: string | null;
+  ultimoEntrante?: string | null;
+}) {
   const enqueueOutbound = vi.fn().mockResolvedValue({ item: { id: 'msg-1' } });
   const integracion =
     opciones.habilitado === null ? null : { sending_enabled: opciones.habilitado };
 
   const supabase = {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: integracion,
-            error: opciones.errorIntegracion ? { message: 'fallo' } : null
-          })
-        }))
-      }))
-    }))
+    from: vi.fn((tabla: string) => {
+      const builder: Record<string, unknown> = {};
+      for (const metodo of ['eq', 'order', 'limit', 'select']) builder[metodo] = () => builder;
+
+      if (tabla === 'conversations') {
+        builder.maybeSingle = vi.fn().mockResolvedValue({
+          data:
+            opciones.canal === undefined
+              ? null
+              : { channel_account: { platform: opciones.canal }, id: 'conv-1' },
+          error: null
+        });
+        return builder;
+      }
+      if (tabla === 'messages') {
+        builder.maybeSingle = vi.fn().mockResolvedValue({
+          data: opciones.ultimoEntrante ? { created_at: opciones.ultimoEntrante } : null,
+          error: null
+        });
+        return builder;
+      }
+
+      builder.maybeSingle = vi.fn().mockResolvedValue({
+        data: integracion,
+        error: opciones.errorIntegracion ? { message: 'fallo' } : null
+      });
+      return builder;
+    })
   };
 
   const toolTokenService = {
@@ -102,6 +125,129 @@ describe('envio de mensajes del bot', () => {
       tenantId: 'tenant-1'
     });
     expect(resultado).toMatchObject({ tenantId: 'tenant-1' });
+  });
+
+  it('envia una plantilla aprobada y la encola como tal, no como texto', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
+
+    const resultado = await servicio.send('Bearer token', {
+      conversationId: 'conv-1',
+      idempotencyKey: UUID,
+      whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
+    });
+
+    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
+    expect(enqueueOutbound).toHaveBeenCalledWith({
+      command: {
+        idempotencyKey: UUID,
+        kind: 'whatsapp_template',
+        whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
+      },
+      conversationId: 'conv-1',
+      senderType: 'automation',
+      senderUserId: null,
+      tenantId: 'tenant-1'
+    });
+    expect(resultado).toMatchObject({ tenantId: 'tenant-1' });
+  });
+
+  it('una plantilla aprobada no admite texto, multimedia ni plantilla interna', async () => {
+    for (const extra of [
+      { body: 'Hola' },
+      { media: [{ id: 'media-1' }] },
+      { templateName: 'confirmacion_ig_is' }
+    ]) {
+      const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
+      await expect(
+        servicio.send('Bearer token', {
+          conversationId: 'conv-1',
+          idempotencyKey: UUID,
+          whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' },
+          ...extra
+        })
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(enqueueOutbound, JSON.stringify(extra)).not.toHaveBeenCalled();
+    }
+  });
+
+  it('una referencia de plantilla incompleta no se encola', async () => {
+    for (const whatsappTemplate of [
+      { name: 'notificacion_48h' },
+      { language: 'es_MX', name: '' },
+      { language: '', name: 'notificacion_48h' },
+      'notificacion_48h'
+    ]) {
+      const { enqueueOutbound, servicio } = crearServicio({ habilitado: true });
+      await expect(
+        servicio.send('Bearer token', {
+          conversationId: 'conv-1',
+          idempotencyKey: UUID,
+          whatsappTemplate
+        })
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(enqueueOutbound, JSON.stringify(whatsappTemplate)).not.toHaveBeenCalled();
+    }
+  });
+
+  it('no deja escribir texto si la ventana de WhatsApp esta cerrada', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({
+      canal: 'whatsapp',
+      habilitado: true,
+      ultimoEntrante: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
+    });
+
+    await expect(servicio.send('Bearer token', cuerpoValido)).rejects.toThrow(
+      /ventana de 24 horas de WhatsApp esta cerrada/
+    );
+    expect(enqueueOutbound).not.toHaveBeenCalled();
+  });
+
+  it('con la ventana abierta el texto sale como siempre', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({
+      canal: 'whatsapp',
+      habilitado: true,
+      ultimoEntrante: new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    });
+
+    await servicio.send('Bearer token', cuerpoValido);
+    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
+  });
+
+  it('la plantilla si sale con la ventana cerrada: es justo para eso', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({
+      canal: 'whatsapp',
+      habilitado: true,
+      ultimoEntrante: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+    });
+
+    await servicio.send('Bearer token', {
+      conversationId: 'conv-1',
+      idempotencyKey: UUID,
+      whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
+    });
+    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
+  });
+
+  it('un canal que no es WhatsApp no se bloquea por la ventana', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({
+      canal: 'instagram',
+      habilitado: true,
+      ultimoEntrante: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
+    });
+
+    await servicio.send('Bearer token', cuerpoValido);
+    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
+  });
+
+  it('si no hay ningun entrante registrado no se inventa una ventana cerrada', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({
+      canal: 'whatsapp',
+      habilitado: true,
+      ultimoEntrante: null
+    });
+
+    await servicio.send('Bearer token', cuerpoValido);
+    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
   });
 
   it('exige el permiso de mensajes antes de nada', async () => {

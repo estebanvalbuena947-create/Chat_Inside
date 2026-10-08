@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException
 } from '@nestjs/common';
+import { whatsappServiceWindow } from '@chat-zernio/domain';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { ToolTokenService, type ToolIdentity } from './tool-token.service';
 
@@ -118,6 +119,20 @@ export class ToolConversationService {
 
     if (mensajesError) throw new InternalServerErrorException('No fue posible leer el historial.');
 
+    // La ventana se consulta aparte y no se deduce del historial: la pagina trae los ultimos 50
+    // mensajes, y en un hilo con muchos salientes el ultimo entrante puede quedar fuera de ella.
+    const { data: ultimoEntrante, error: entranteError } = await supabase
+      .from('messages')
+      .select('created_at')
+      .eq('tenant_id', identity.tenantId)
+      .eq('conversation_id', conversationId)
+      .eq('direction', 'inbound')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (entranteError)
+      throw new InternalServerErrorException('No fue posible leer la ventana de mensajeria.');
+
     // Las etiquetas van en su propia consulta: la relacion anidada devuelve la forma que el contrato
     // pide (una lista de nombres) sin tener que aplanarla aqui.
     const { data: etiquetas, error: etiquetasError } = await supabase
@@ -176,7 +191,19 @@ export class ToolConversationService {
       outcomeAmount: fila.outcome_amount ?? null,
       outcomeCurrency: fila.outcome_currency ?? null,
       status: String(fila.status ?? ''),
-      tenantId: identity.tenantId
+      tenantId: identity.tenantId,
+      // Si la ventana esta abierta, el bot puede escribir; si esta cerrada, tiene que usar una
+      // plantilla aprobada. `null` significa que no aplica o que no se puede afirmar (otro canal, o
+      // un hilo sin mensajes entrantes): quien envia decide, y decide el proveedor.
+      whatsappWindow:
+        String(canal?.platform ?? '')
+          .trim()
+          .toLowerCase() === 'whatsapp'
+          ? whatsappServiceWindow(
+              typeof ultimoEntrante?.created_at === 'string' ? ultimoEntrante.created_at : null,
+              Date.now()
+            )
+          : null
     };
   }
 }

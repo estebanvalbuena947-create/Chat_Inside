@@ -7,8 +7,10 @@ import {
 import {
   createOutboundTextMessageSchema,
   outboundIdempotencyKeySchema,
+  whatsappTemplateReferenceSchema,
   type CreateOutboundMessage
 } from '@chat-zernio/contracts';
+import { whatsappServiceWindow } from '@chat-zernio/domain';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantMessageService } from '../conversations/tenant-message.service';
 import { claveIdempotencia } from './idempotency-key';
@@ -102,6 +104,46 @@ export class ToolMessagesService {
     );
     const clave = outboundIdempotencyKeySchema.safeParse(claveResuelta);
 
+    // Una plantilla aprobada de Meta es un envio completo y de otra clase: no lleva texto, ni
+    // multimedia, ni plantilla interna, no se parte en trozos y no se le resuelven huecos.
+    if (cuerpo.whatsappTemplate !== undefined) {
+      const aprobada = whatsappTemplateReferenceSchema.safeParse(cuerpo.whatsappTemplate);
+      const tienePlantillaInterna =
+        typeof cuerpo.templateName === 'string' && cuerpo.templateName.trim().length > 0;
+      if (!aprobada.success) {
+        throw new UnprocessableEntityException(
+          'La plantilla aprobada necesita un nombre y un idioma validos.'
+        );
+      }
+      if (!clave.success) {
+        throw new UnprocessableEntityException(
+          'Hace falta una clave de idempotencia valida para enviar la plantilla.'
+        );
+      }
+      if ((texto ?? '').trim() || tienePlantillaInterna || tieneMultimedia) {
+        throw new UnprocessableEntityException(
+          'Una plantilla aprobada no lleva texto, multimedia ni plantilla interna: envia solo whatsappTemplate.'
+        );
+      }
+      const encolado = await this.tenantMessageService.enqueueOutbound({
+        command: {
+          idempotencyKey: clave.data,
+          kind: 'whatsapp_template',
+          whatsappTemplate: aprobada.data
+        },
+        conversationId,
+        senderType: 'automation',
+        senderUserId: null,
+        tenantId: identity.tenantId
+      });
+      return { ...encolado, tenantId: identity.tenantId };
+    }
+
+    // Fuera de la ventana de 24 horas, WhatsApp solo admite plantillas aprobadas. Se comprueba aqui,
+    // en la puerta del bot, y no en el camino compartido: una persona que escribe desde la bandeja
+    // no se bloquea (su fallo se ve en el mensaje), y asi la regla del bot no cambia la interfaz.
+    await this.assertMessagingAllowed(supabase, identity.tenantId, conversationId);
+
     const comandos: Array<CreateOutboundMessage> = [];
     for (let indice = 0; indice < partes.length; indice++) {
       const command = createOutboundTextMessageSchema.safeParse({
@@ -163,6 +205,69 @@ export class ToolMessagesService {
     }
 
     return { ...item, tenantId: identity.tenantId };
+  }
+
+  /**
+   * Fuera de la ventana de 24 horas, WhatsApp solo admite plantillas aprobadas.
+   *
+   * Se aplica a TODO lo que no sea plantilla: un texto o una foto fuera de plazo tambien los rechaza
+   * Meta, y ese rechazo llega minutos despues como un mensaje fallido que nadie mira. Fallar aqui es
+   * inmediato y operable.
+   *
+   * No se bloquea cuando la ventana no se puede afirmar (otro canal, o un hilo sin mensajes
+   * entrantes registrados): en ese caso decide el proveedor, que es quien tiene la ultima palabra.
+   */
+  private async assertMessagingAllowed(
+    supabase: ReturnType<SupabaseServerClientFactory['create']>,
+    tenantId: string,
+    conversationId: string
+  ): Promise<void> {
+    const { data: conversacion, error } = await supabase
+      .from('conversations')
+      .select('id, channel_account:channel_accounts(platform)')
+      .eq('tenant_id', tenantId)
+      .eq('id', conversationId)
+      .maybeSingle();
+    if (error) {
+      throw new InternalServerErrorException(
+        'No fue posible comprobar el canal de la conversacion.'
+      );
+    }
+    // Sin conversacion no hay nada que comprobar aqui: el encolado dara el error que corresponde.
+    if (!conversacion) return;
+
+    const canal = (conversacion as { channel_account?: unknown }).channel_account;
+    const relacion = Array.isArray(canal) ? canal[0] : canal;
+    const plataforma =
+      relacion && typeof relacion === 'object' && 'platform' in relacion
+        ? String((relacion as { platform?: unknown }).platform ?? '')
+            .trim()
+            .toLowerCase()
+        : '';
+    if (plataforma !== 'whatsapp') return;
+
+    const { data: entrante, error: entranteError } = await supabase
+      .from('messages')
+      .select('created_at')
+      .eq('tenant_id', tenantId)
+      .eq('conversation_id', conversationId)
+      .eq('direction', 'inbound')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (entranteError) {
+      throw new InternalServerErrorException('No fue posible comprobar la ventana de mensajeria.');
+    }
+
+    const ventana = whatsappServiceWindow(
+      typeof entrante?.created_at === 'string' ? entrante.created_at : null,
+      Date.now()
+    );
+    if (ventana && !ventana.open) {
+      throw new UnprocessableEntityException(
+        `La ventana de 24 horas de WhatsApp esta cerrada desde ${ventana.expiresAt}: envia una plantilla aprobada con whatsappTemplate.`
+      );
+    }
   }
 
   /**

@@ -66,7 +66,9 @@ const MENSAJES = [
 function cadena(resultado: unknown) {
   const encadenable: Record<string, unknown> = {
     eq: () => encadenable,
-    limit: () => Promise.resolve(resultado),
+    // Encadenable Y esperable: el historial se limita y se espera; el ultimo entrante se limita y
+    // sigue encadenando hacia `maybeSingle`.
+    limit: () => encadenable,
     maybeSingle: () => Promise.resolve(resultado),
     order: () => encadenable,
     select: () => encadenable,
@@ -75,7 +77,14 @@ function cadena(resultado: unknown) {
   return encadenable;
 }
 
-function crearServicio(opciones: { existe?: boolean; etiquetas?: unknown[] } = {}) {
+function crearServicio(
+  opciones: {
+    canal?: string | null;
+    existe?: boolean;
+    etiquetas?: unknown[];
+    ultimoEntrante?: string | null;
+  } = {}
+) {
   const tablas: Record<string, unknown> = {
     conversation_labels: {
       data: opciones.etiquetas ?? [
@@ -89,8 +98,33 @@ function crearServicio(opciones: { existe?: boolean; etiquetas?: unknown[] } = {
     messages: { data: MENSAJES, error: null }
   };
 
+  // La tabla `messages` se consulta dos veces con formas distintas: primero el historial (una lista)
+  // y despues el ultimo entrante (una fila). Un doble que devolviera lo mismo en las dos escondería
+  // justo el error que estas pruebas buscan: calcular la ventana con la pagina del historial.
+  let lecturasDeMensajes = 0;
+
   const supabase = {
-    from: vi.fn((tabla: string) => cadena(tablas[tabla] ?? { data: null, error: null }))
+    from: vi.fn((tabla: string) => {
+      if (tabla === 'messages') {
+        lecturasDeMensajes += 1;
+        if (lecturasDeMensajes === 1) return cadena({ data: MENSAJES, error: null });
+        return cadena(
+          opciones.ultimoEntrante
+            ? { data: { created_at: opciones.ultimoEntrante }, error: null }
+            : { data: null, error: null }
+        );
+      }
+      if (tabla === 'conversations' && opciones.canal !== undefined) {
+        return cadena({
+          data: {
+            ...CONVERSACION,
+            channel_account: { display_name: 'canal', platform: opciones.canal }
+          },
+          error: null
+        });
+      }
+      return cadena(tablas[tabla] ?? { data: null, error: null });
+    })
   };
 
   const toolTokenService = {
@@ -178,6 +212,63 @@ describe('lectura de conversacion', () => {
 
     expect(r.messages).toHaveLength(2);
     expect(r.messages[0]).toMatchObject({ direction: 'inbound', id: 'm2' });
+  });
+});
+
+describe('lectura de conversacion: ventana de WhatsApp', () => {
+  type ConVentana = Respuesta & {
+    whatsappWindow: { open: boolean; expiresAt: string; lastInboundAt: string } | null;
+  };
+
+  const hace = (horas: number) => new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
+
+  it('dice si la ventana esta abierta y cuando cierra', async () => {
+    const entrante = hace(1);
+    const { servicio } = crearServicio({ canal: 'whatsapp', ultimoEntrante: entrante });
+
+    const r = (await servicio.read('Bearer token', 'conv-1')) as ConVentana;
+
+    expect(r.whatsappWindow).toMatchObject({
+      open: true,
+      lastInboundAt: new Date(entrante).toISOString()
+    });
+    expect(Date.parse(r.whatsappWindow!.expiresAt)).toBe(
+      Date.parse(entrante) + 24 * 60 * 60 * 1000
+    );
+  });
+
+  it('la cierra cuando el ultimo entrante paso de ayer', async () => {
+    const { servicio } = crearServicio({ canal: 'whatsapp', ultimoEntrante: hace(30) });
+
+    const r = (await servicio.read('Bearer token', 'conv-1')) as ConVentana;
+
+    expect(r.whatsappWindow?.open).toBe(false);
+  });
+
+  it('la calcula con el ultimo entrante, no con la pagina del historial', async () => {
+    const entrante = hace(2);
+    const { servicio } = crearServicio({ canal: 'whatsapp', ultimoEntrante: entrante });
+
+    const r = (await servicio.read('Bearer token', 'conv-1')) as ConVentana;
+
+    // El historial del doble no trae fechas: si la ventana se dedujera de el, seria nula.
+    expect(r.whatsappWindow?.lastInboundAt).toBe(new Date(entrante).toISOString());
+  });
+
+  it('en un canal que no es WhatsApp no aplica', async () => {
+    const { servicio } = crearServicio({ canal: 'instagram', ultimoEntrante: hace(1) });
+
+    const r = (await servicio.read('Bearer token', 'conv-1')) as ConVentana;
+
+    expect(r.whatsappWindow).toBeNull();
+  });
+
+  it('sin mensajes entrantes registrados no se afirma nada, ni abierta ni cerrada', async () => {
+    const { servicio } = crearServicio({ canal: 'whatsapp', ultimoEntrante: null });
+
+    const r = (await servicio.read('Bearer token', 'conv-1')) as ConVentana;
+
+    expect(r.whatsappWindow).toBeNull();
   });
 });
 

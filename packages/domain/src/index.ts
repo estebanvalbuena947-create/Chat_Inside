@@ -11,3 +11,4 @@ export * from './reservation-board';
 export * from './reservation-normalizers';
 export * from './reservation-values';
 export * from './reservations';
+export * from './whatsapp-window';
