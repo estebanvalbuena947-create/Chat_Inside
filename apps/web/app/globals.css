@@ -748,6 +748,15 @@ h1 {
   justify-content: space-between;
   align-items: center;
 }
+/*
+ * La ayuda "Selecciona una respuesta o escribe un mensaje" heredaba el tamaño del compositor y
+ * competia con el texto que se escribe. Es una pista, no contenido: gris y pequeña, igual en
+ * escritorio y en telefono.
+ */
+.composer-actions span {
+  color: var(--brand-tinta-suave, #8b8577);
+  font-size: 12px;
+}
 .composer-actions button {
   background: transparent;
   color: #888396;
@@ -3669,6 +3678,33 @@ h2 {
   }
   .reservations-table td button {
     width: 100%;
+  }
+}
+
+/*
+ * Movil: "Detalles" caia a una segunda linea, alineado a la izquierda, porque la cabecera envuelve.
+ * En pantallas estrechas la cabecera no envuelve y el boton se va al extremo derecho de la primera
+ * linea; el nombre se recorta con puntos suspensivos en lugar de empujar el boton fuera.
+ */
+@media (max-width: 760px) {
+  .conversation-header {
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .header-contact,
+  .header-contact-content {
+    /* Sin esto el nombre no se encoge y el boton acaba fuera de la pantalla. */
+    min-width: 0;
+  }
+  .header-contact-content h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .conversation-header-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
   }
 }
 .reservation-status {
