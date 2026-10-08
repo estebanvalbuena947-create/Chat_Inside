@@ -111,6 +111,7 @@ type PersistedConversation = {
   automation_mode: unknown;
   automation_version: unknown;
   channel_account: unknown;
+  channel_account_id?: unknown;
   contact: unknown;
   contact_id: unknown;
   id: unknown;
@@ -191,6 +192,10 @@ function asConversationSummary(conversation: PersistedConversation): Conversatio
     automationMode: conversation.automation_mode,
     automationVersion: conversation.automation_version,
     channelPlatform: readChannelPlatform(conversation.channel_account),
+    // Identificador interno de la cuenta de canal: la interfaz lo necesita para ofrecer solo lo que
+    // se puede enviar desde ESA cuenta. Nunca se expone el identificador del proveedor.
+    channelAccountId:
+      typeof conversation.channel_account_id === 'string' ? conversation.channel_account_id : null,
     contactAvatarAvailable: contact.avatarAvailable,
     contactId: conversation.contact_id,
     contactName: contact.name,
@@ -214,7 +219,7 @@ function asConversationSummary(conversation: PersistedConversation): Conversatio
 }
 
 const conversationSummarySelection =
-  'id, contact_id, assigned_user_id, status, status_version, assignment_version, automation_mode, automation_version, last_message_at, started_at, updated_at, contact:contacts(display_name, external_username, avatar_object_path), channel_account:channel_accounts(platform), latest:messages(body, direction, created_at), inbound:messages(created_at), read:conversation_reads(last_read_at)';
+  'id, contact_id, assigned_user_id, status, status_version, assignment_version, automation_mode, automation_version, last_message_at, started_at, updated_at, channel_account_id, contact:contacts(display_name, external_username, avatar_object_path), channel_account:channel_accounts(platform), latest:messages(body, direction, created_at), inbound:messages(created_at), read:conversation_reads(last_read_at)';
 
 type EmbeddedQuery = {
   eq: (column: string, value: string) => EmbeddedQuery;

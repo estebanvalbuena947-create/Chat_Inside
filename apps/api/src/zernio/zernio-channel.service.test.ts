@@ -29,7 +29,7 @@ function createClientFake(responses: Array<{ data: unknown; error: unknown }>) {
 
 function createService(
   responses: Array<{ data: unknown; error: unknown }>,
-  options: { canManage?: boolean; zernio?: unknown } = {}
+  options: { canManage?: boolean; catalog?: unknown; zernio?: unknown } = {}
 ) {
   const fake = createClientFake(responses);
   const assertRole = vi.fn(async () => {
@@ -39,7 +39,8 @@ function createService(
     { authenticate: async () => ({ userId }) } as never,
     { assertMembership: async () => undefined, assertRole } as never,
     { create: () => fake.client } as never,
-    (options.zernio ?? {}) as never
+    (options.zernio ?? {}) as never,
+    (options.catalog ?? {}) as never
   );
 
   return { assertRole, calls: fake.calls, service };
@@ -154,51 +155,35 @@ describe('ZernioChannelService list', () => {
 });
 
 describe('ZernioChannelService plantillas de WhatsApp', () => {
-  const aprobada = {
+  const item = {
+    blockedReason: null,
     category: 'UTILITY',
+    channelAccountIds: [channelId],
     language: 'es_MX',
-    name: 'confirmacion_reserva',
-    status: 'APPROVED'
+    name: 'notificacion_48h',
+    previewText: 'Hola, confirmamos tu reservacion.',
+    sendable: true,
+    status: 'APPROVED',
+    variables: []
   };
 
-  it('lee las plantillas de la cuenta de WhatsApp conectada', async () => {
-    const listWhatsappTemplates = vi.fn(async () => [aprobada]);
-    const { service } = createService(
-      [{ data: [{ provider_account_id: 'cuenta-wa' }], error: null }],
-      {
-        zernio: { listWhatsappTemplates }
-      }
-    );
+  // El catalogo es quien resuelve cuentas y proveedor; este servicio autoriza y da forma.
+  it('pide el catalogo del espacio al catalogo y no al proveedor directamente', async () => {
+    const listForTenant = vi.fn(async () => [item]);
+    const { service } = createService([], { catalog: { listForTenant } });
 
     await expect(service.listWhatsappTemplates('Bearer valid.jwt', tenantId)).resolves.toEqual({
-      items: [aprobada]
+      items: [item]
     });
-    expect(listWhatsappTemplates).toHaveBeenCalledWith(['cuenta-wa']);
+    expect(listForTenant).toHaveBeenCalledWith(tenantId);
   });
 
-  it('sin cuenta de WhatsApp devuelve una lista vacia y no molesta al proveedor', async () => {
-    const listWhatsappTemplates = vi.fn();
-    const { calls, service } = createService([{ data: [], error: null }], {
-      zernio: { listWhatsappTemplates }
-    });
+  it('un espacio sin cuentas de WhatsApp devuelve una lista vacia y no un error', async () => {
+    const listForTenant = vi.fn(async () => []);
+    const { service } = createService([], { catalog: { listForTenant } });
 
     await expect(service.listWhatsappTemplates('Bearer valid.jwt', tenantId)).resolves.toEqual({
       items: []
     });
-    expect(listWhatsappTemplates).not.toHaveBeenCalled();
-    expect(calls).toContainEqual({ args: ['platform', 'whatsapp'], method: 'eq' });
-  });
-
-  it('ignora una cuenta sin identificador de proveedor en lugar de consultarla', async () => {
-    const listWhatsappTemplates = vi.fn(async () => []);
-    const { service } = createService(
-      [
-        { data: [{ provider_account_id: null }, { provider_account_id: 'cuenta-wa' }], error: null }
-      ],
-      { zernio: { listWhatsappTemplates } }
-    );
-
-    await service.listWhatsappTemplates('Bearer valid.jwt', tenantId);
-    expect(listWhatsappTemplates).toHaveBeenCalledWith(['cuenta-wa']);
   });
 });

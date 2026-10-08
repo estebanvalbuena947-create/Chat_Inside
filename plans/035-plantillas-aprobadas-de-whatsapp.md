@@ -51,10 +51,17 @@
 - Pruebas: 7 (lectura tolerante, descarte sin nombre, sin duplicados, motivo del proveedor conservado,
   lista vacía sin cuenta y cuenta sin identificador).
 
-### Corte 2 — usarlas (pendiente)
+### Corte 2 — usarlas (hecho)
 
-- Enviar con plantilla para poder escribir fuera de la ventana de 24 horas: contrato del mensaje,
-  servicio de envío y trabajador. Merece su propio diseño, porque toca todo el camino de salida.
+- Ejecutado como corte propio: `specs/023-envio-con-plantilla-de-whatsapp.md` y
+  `plans/037-envio-con-plantilla-de-whatsapp.md`.
+- Un mensaje saliente es texto o plantilla, nunca los dos; la plantilla viaja como referencia exacta
+  (nombre + idioma) que el proveedor resuelve antes de enviar, y solo se envía desde la cuenta de
+  canal de la conversación. El texto guardado es la copia visible, no la carga.
+- Las plantillas que declaran huecos `{{...}}` se rechazan en este corte, con el motivo a la vista:
+  capturar valores es un corte aparte.
+- Pendiente derivado: las respuestas de botón («Asistiré») llegan como texto normal y no como
+  decisión de la reserva.
 
 ## Condición de detención
 

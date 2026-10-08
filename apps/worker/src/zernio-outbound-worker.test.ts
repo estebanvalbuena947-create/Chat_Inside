@@ -61,6 +61,77 @@ describe('Zernio outbound adapter', () => {
     );
   });
 
+  it('sends the template reference instead of free text', async () => {
+    const request = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ data: { messageId: 'provider-message-9' }, success: true }), {
+          status: 200
+        })
+    );
+    const dispatcher = createZernioDispatcher('test-key', request as typeof fetch);
+
+    await dispatcher.send({
+      accountId: 'account-1',
+      body: 'Hola, confirmamos tu reservacion.',
+      conversationId: 'conversation-1',
+      idempotencyKey: 'request-9',
+      whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
+    });
+
+    const [, init] = request.mock.calls[0] as unknown as [string, RequestInit];
+    const cuerpo = JSON.parse(String(init.body)) as Record<string, unknown>;
+    // La carga es la referencia: el proveedor resuelve el par exacto y no acepta texto en su lugar.
+    expect(cuerpo.template).toEqual({
+      elements: [{ language: 'es_MX', name: 'notificacion_48h' }]
+    });
+    expect(cuerpo.message).toBeUndefined();
+    expect(cuerpo.attachmentUrl).toBeUndefined();
+  });
+
+  it('does not retry a template the provider cannot resolve', async () => {
+    const dispatcher = createZernioDispatcher(
+      'test-key',
+      (async () => new Response('{}', { status: 400 })) as typeof fetch
+    );
+
+    await expect(
+      dispatcher.send({
+        accountId: 'account-1',
+        body: 'x',
+        conversationId: 'c',
+        idempotencyKey: 'stable',
+        whatsappTemplate: { language: 'pt_BR', name: 'notificacion_48h' }
+      })
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<ZernioDispatchError>>({
+        code: 'zernio_http_400',
+        retryable: false
+      })
+    );
+  });
+
+  it('retries a 502 because the provider uses it for a permanent and a transient cause', async () => {
+    const dispatcher = createZernioDispatcher(
+      'test-key',
+      (async () => new Response('{}', { status: 502 })) as typeof fetch
+    );
+
+    await expect(
+      dispatcher.send({
+        accountId: 'account-1',
+        body: 'x',
+        conversationId: 'c',
+        idempotencyKey: 'stable',
+        whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
+      })
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<ZernioDispatchError>>({
+        code: 'zernio_http_502',
+        retryable: true
+      })
+    );
+  });
+
   it('marks a provider conflict as retryable without creating a new key', async () => {
     const dispatcher = createZernioDispatcher(
       'test-key',
@@ -133,6 +204,151 @@ describe('Zernio outbound adapter', () => {
         idempotencyKey: 'stable'
       })
     ).resolves.toEqual({ providerMessageId: 'provider-message-2', sentAt: null });
+  });
+});
+
+describe('ZernioOutboundWorker envio con plantilla', () => {
+  /** Cliente falso que responde por tabla, en el orden en que el trabajador la consulta. */
+  function createTableClientFake(responses: Record<string, FakeResponse[]>) {
+    const seen: Record<string, number> = {};
+    const siguiente = (table: string, vacio: FakeResponse): FakeResponse => {
+      const index = seen[table] ?? 0;
+      seen[table] = index + 1;
+      return responses[table]?.[index] ?? vacio;
+    };
+    const client = {
+      from: (table: string) => {
+        const builder: Record<string, unknown> = {};
+        for (const method of ['eq', 'is', 'limit', 'lt', 'lte', 'order', 'select', 'update']) {
+          builder[method] = () => builder;
+        }
+        builder.then = (resolve: (value: FakeResponse) => unknown) =>
+          Promise.resolve(siguiente(table, { data: [], error: null })).then(resolve);
+        builder.maybeSingle = () => Promise.resolve(siguiente(table, { data: null, error: null }));
+        return builder;
+      }
+    };
+    return { client };
+  }
+
+  it('despacha la referencia de la plantilla y nunca su texto visible', async () => {
+    const { client } = createTableClientFake({
+      channel_accounts: [
+        { data: { provider: 'zernio', provider_account_id: 'cuenta-1' }, error: null }
+      ],
+      conversations: [
+        {
+          data: {
+            channel_account_id: 'canal-1',
+            external_reference: 'zernio:cuenta-1:conversation:proveedor-1'
+          },
+          error: null
+        }
+      ],
+      messages: [
+        {
+          data: {
+            body: 'Hola, confirmamos tu reservacion.',
+            channel_account_id: 'canal-1',
+            conversation_id: 'conversacion-1',
+            id: 'mensaje-1',
+            idempotency_key: 'clave-1',
+            status: 'queued',
+            whatsapp_template_language: 'es_MX',
+            whatsapp_template_name: 'notificacion_48h'
+          },
+          error: null
+        },
+        { data: null, error: null },
+        { data: null, error: null }
+      ],
+      outbox_events: [
+        { data: [], error: null },
+        {
+          data: [
+            { attempts: 0, id: 'outbox-1', payload: { messageId: 'mensaje-1' }, tenant_id: 't-1' }
+          ],
+          error: null
+        },
+        { data: { id: 'outbox-1' }, error: null },
+        { data: null, error: null }
+      ]
+    });
+    const dispatcher = { send: vi.fn(async () => ({ providerMessageId: 'p-1', sentAt: null })) };
+    const logInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    try {
+      await new ZernioOutboundWorker(() => client as never, dispatcher as never).drain();
+
+      expect(dispatcher.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'cuenta-1',
+          body: 'Hola, confirmamos tu reservacion.',
+          conversationId: 'proveedor-1',
+          idempotencyKey: 'clave-1',
+          whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
+        })
+      );
+    } finally {
+      logInfo.mockRestore();
+    }
+  });
+
+  it('un mensaje de texto sigue saliendo sin plantilla', async () => {
+    const { client } = createTableClientFake({
+      channel_accounts: [
+        { data: { provider: 'zernio', provider_account_id: 'cuenta-1' }, error: null }
+      ],
+      conversations: [
+        {
+          data: {
+            channel_account_id: 'canal-1',
+            external_reference: 'zernio:cuenta-1:conversation:proveedor-1'
+          },
+          error: null
+        }
+      ],
+      messages: [
+        {
+          data: {
+            body: 'Hola',
+            channel_account_id: 'canal-1',
+            conversation_id: 'conversacion-1',
+            id: 'mensaje-1',
+            idempotency_key: 'clave-1',
+            status: 'queued',
+            whatsapp_template_language: null,
+            whatsapp_template_name: null
+          },
+          error: null
+        },
+        { data: null, error: null },
+        { data: null, error: null }
+      ],
+      outbox_events: [
+        { data: [], error: null },
+        {
+          data: [
+            { attempts: 0, id: 'outbox-1', payload: { messageId: 'mensaje-1' }, tenant_id: 't-1' }
+          ],
+          error: null
+        },
+        { data: { id: 'outbox-1' }, error: null },
+        { data: null, error: null }
+      ]
+    });
+    const dispatcher = { send: vi.fn(async () => ({ providerMessageId: 'p-1', sentAt: null })) };
+    const logInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    try {
+      await new ZernioOutboundWorker(() => client as never, dispatcher as never).drain();
+
+      const [input] = dispatcher.send.mock.calls[0] as unknown as [Record<string, unknown>];
+      expect(input.whatsappTemplate).toBeUndefined();
+      expect(input.body).toBe('Hola');
+    } finally {
+      logInfo.mockRestore();
+    }
   });
 });
 

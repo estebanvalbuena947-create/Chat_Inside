@@ -4,6 +4,18 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-047 - Una plantilla de Meta se despacha por referencia, y solo desde la cuenta de la conversación
+
+- **Fecha:** 2026-10-09
+- **Estado:** aceptada
+- **Contexto:** La bandeja ya listaba las plantillas aprobadas de Meta, pero no había forma de enviarlas: el panel no era clicable y el camino de salida solo sabía mandar texto. Fuera de la ventana de 24 horas Meta no acepta texto libre, así que la confirmación a 48 horas —el motivo por el que existe la plantilla— era imposible. Dos hechos más obligaron a decidir: el catálogo se leía mezclando todas las cuentas de WhatsApp del espacio, de modo que una plantilla de otra cuenta se ofrecía donde el proveedor no podría resolverla; y en el contrato de herramientas del bot «plantilla» ya significaba otra cosa —un texto guardado en `message_templates` con huecos `{fecha}` que el servidor rellena—, así que reutilizar ese nombre habría sido ambiguo.
+- **Decisión:** Un mensaje saliente es texto libre o plantilla, nunca los dos, y el contrato lo expresa como unión discriminada (`kind` opcional en el texto para no romper a quien ya envía). La plantilla viaja como **referencia exacta** nombre + idioma, que el proveedor resuelve antes de enviar; el texto que se guarda es solo la **copia visible** tomada de la definición aprobada, nunca la carga. Solo se envía desde la cuenta de canal de la conversación, comprobando que la plantilla pertenece al catálogo de esa cuenta. Una plantilla que declara huecos `{{...}}` —en cualquier componente, no solo el cuerpo— se rechaza en este corte: se prefiere no enviar a mostrarle las llaves al cliente; capturar valores es un corte propio. Los huecos se leen de la definición del proveedor, que es el único que conoce su forma. El catálogo vive en el módulo de Zernio y la regla de lo que se puede enviar en el dominio (`whatsappTemplateSendability`), de modo que la interfaz solo presenta el motivo ya decidido. En el despacho, `400` y `422` no se reintentan —no hay variante aprobada y repetir no puede funcionar— y el `502` sí: el proveedor lo usa tanto para una cuenta sin WhatsApp Business como para un fallo pasajero suyo, y como en una respuesta no-2xx no se envió nada, el reintento acotado no puede duplicar el mensaje.
+- **Alternativas consideradas:** Copiar las plantillas a nuestra base, que sería una segunda fuente de verdad que envejece justo cuando importa; mandar el texto visible como mensaje normal, que Meta rechaza fuera de la ventana y que además perdería la referencia; capturar variables en el mismo corte, que lo multiplica; tratar el `502` como definitivo, que perdería un envío recuperable.
+- **Consecuencias:** Ya se puede escribir fuera de la ventana de 24 horas con contenido aprobado por Meta. Un envío de plantilla tiene coste y no se deshace, así que la interfaz confirma antes de mandarlo. Las plantillas con variables quedan visibles pero no enviables, con el motivo a la vista. Las respuestas de botón («Asistiré» / «No Asistiré») llegan hoy como texto normal: mapearlas a una decisión de reserva es un corte pendiente. Y sigue en pie el corte de administración de canales (reconectar / remover): desconectar no puede borrar la fila de `channel_accounts` porque `conversations` y `messages` la referencian con `on delete restrict`.
+- **Cómo se verifica:** Pruebas de dominio (estado no aprobado, huecos en cualquier variante, idioma ausente, coincidencia exacta nombre + idioma y referencia incompleta tratada como ausencia, no como comodín); del adaptador (lectura tolerante, copia visible y huecos en encabezado, cuerpo y botón); del catálogo (agrupación de la misma plantilla en dos cuentas, motivo de lo que no se puede enviar, sin cuentas de WhatsApp no se consulta al proveedor); del servicio (rechazo sin encolar, copia visible y referencia guardadas, conflicto de idempotencia y reintento sin volver al proveedor); y del trabajador (el cuerpo lleva `template` y no `message`; `400` no reintentable, `502` reintentable; un texto sigue saliendo sin plantilla).
+
+---
+
 ## ADR-046 - Un enlace de invitación se emite una vez y se establece en el callback
 
 - **Fecha:** 2026-10-08
@@ -937,3 +949,13 @@ tenga que interpretar.
 Enviar con plantilla —lo que permite escribir fuera de la ventana de 24 horas— **no** entra aquí: toca
 el contrato del mensaje, el servicio de envío y el trabajador, y merece su propio corte. Está en
 `plans/035-plantillas-aprobadas-de-whatsapp.md`.
+
+## Las decisiones de reservas se autorizan en Inbox y se aplican atómicamente en SPA
+
+El dashboard antiguo usa una sesión del proyecto SPA para ejecutar su RPC. Inbox usa una identidad de
+otro proyecto, por lo que no puede ni debe fingir esa sesión. La API autoriza la membresía y el rol
+`admin` o `supervisor`, resuelve el correo del actor y llama con su credencial de servidor a un RPC
+separado. El RPC valida que solo se invoque como `service_role`, bloquea la pre-reserva, actualiza
+reserva y comprobante, e inserta el historial en una única transacción. La clave UUID de idempotencia
+impide repetir el efecto ante reintentos. La migración externa es aditiva y el dashboard anterior sigue
+funcionando durante la transición.

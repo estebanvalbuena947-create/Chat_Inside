@@ -7,6 +7,7 @@ const conversationId = '44444444-4444-4444-8444-444444444444';
 const contactId = '33333333-3333-4333-8333-333333333333';
 const assigneeUserId = '66666666-6666-4666-8666-666666666666';
 const labelId = '55555555-5555-4555-8555-555555555555';
+const channelAccountId = '77777777-7777-4777-8777-777777777777';
 
 type FakeResponse = { data: unknown; error: unknown };
 type RecordedCall = { args: unknown[]; method: string };
@@ -106,6 +107,7 @@ function conversationRow(overrides: Record<string, unknown> = {}) {
     automation_mode: 'auto',
     automation_version: 1,
     channel_account: { platform: 'instagram' },
+    channel_account_id: channelAccountId,
     contact: {
       avatar_object_path: 'tenant/contact/avatar.jpg',
       display_name: 'Contacto de prueba',
@@ -132,6 +134,7 @@ function expectedSummary(overrides: Record<string, unknown> = {}) {
     automationMode: 'auto',
     automationVersion: 1,
     channelPlatform: 'instagram',
+    channelAccountId,
     contactAvatarAvailable: true,
     contactId,
     contactName: 'Contacto de prueba',

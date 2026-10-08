@@ -49,6 +49,7 @@ import { ZernioWebhookService } from './zernio/zernio-webhook.service';
 import { ZernioApiClient } from './zernio/zernio-api.client';
 import { ZernioChannelService } from './zernio/zernio-channel.service';
 import { ZernioChannelsController } from './zernio/zernio-channels.controller';
+import { WhatsappTemplateCatalog } from './zernio/whatsapp-template-catalog';
 import { ReservationsController } from './reservations/reservations.controller';
 import { ReservationsService } from './reservations/reservations.service';
 
@@ -107,7 +108,8 @@ import { ReservationsService } from './reservations/reservations.service';
     TenantRealtimeService,
     ZernioWebhookService,
     ZernioApiClient,
-    ZernioChannelService
+    ZernioChannelService,
+    WhatsappTemplateCatalog
   ]
 })
 export class AppModule {}

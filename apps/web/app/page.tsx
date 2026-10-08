@@ -10,6 +10,7 @@ type Conversation = {
   automationMode: 'auto' | 'suggest' | 'paused';
   automationVersion: number;
   channelPlatform: string | null;
+  channelAccountId: string | null;
   contactAvatarAvailable: boolean;
   contactId: string;
   contactName: string;
@@ -51,6 +52,26 @@ type Message = {
   source: 'dm' | 'comment';
   sentAt: string | null;
   status: 'received' | 'draft' | 'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+  // Presente cuando el mensaje salió como plantilla aprobada de Meta.
+  whatsappTemplate: { language: string; name: string } | null;
+};
+
+/**
+ * Una plantilla del catálogo tal como la sirve la API.
+ *
+ * `sendable` y `blockedReason` vienen decididos: esta pantalla no vuelve a deducir qué se puede
+ * enviar, solo lo presenta.
+ */
+type WhatsappTemplate = {
+  blockedReason: string | null;
+  category: string | null;
+  channelAccountIds: string[];
+  language: string | null;
+  name: string;
+  previewText: string;
+  sendable: boolean;
+  status: string | null;
+  variables: string[];
 };
 type MediaItem = {
   contactId: string;
@@ -321,12 +342,14 @@ export default function HomePage(): React.ReactNode {
   const [cannedResponses, setCannedResponses] = useState<CannedResponse[]>([]);
   // Plantillas aprobadas de Meta. Son de la cuenta de WhatsApp, no de la conversacion, y se piden
   // al abrir el panel: no tiene sentido ir al proveedor cada vez que se abre un chat.
-  const [whatsappTemplates, setWhatsappTemplates] = useState<
-    Array<{ category: string | null; language: string | null; name: string; status: string | null }>
-  >([]);
+  const [whatsappTemplates, setWhatsappTemplates] = useState<WhatsappTemplate[]>([]);
   const [whatsappTemplatesError, setWhatsappTemplatesError] = useState<string | null>(null);
   const [isWhatsappTemplatesLoading, setIsWhatsappTemplatesLoading] = useState(false);
   const [isWhatsappTemplatesOpen, setIsWhatsappTemplatesOpen] = useState(false);
+  // Plantilla pendiente de confirmar: enviar una plantilla de Meta tiene coste y no se deshace.
+  const [pendingWhatsappTemplate, setPendingWhatsappTemplate] = useState<WhatsappTemplate | null>(
+    null
+  );
   const [cannedResponsesError, setCannedResponsesError] = useState<string | null>(null);
   const [isCannedResponsesLoading, setIsCannedResponsesLoading] = useState(false);
   const [isCannedResponsesOpen, setIsCannedResponsesOpen] = useState(false);
@@ -1117,6 +1140,13 @@ export default function HomePage(): React.ReactNode {
     };
   }, [selectedConversationId]);
 
+  // Al cambiar de conversación se cierra el panel y se descarta la confirmación a medias: una
+  // plantilla confirmada para un contacto no puede acabar enviándose a otro.
+  useEffect(() => {
+    setIsWhatsappTemplatesOpen(false);
+    setPendingWhatsappTemplate(null);
+  }, [selectedConversationId]);
+
   useEffect(() => {
     const container = messagesRef.current;
     if (!container || history.kind !== 'ready') return;
@@ -1265,6 +1295,64 @@ export default function HomePage(): React.ReactNode {
       setDraft('');
     } catch (error) {
       setSendError(error instanceof Error ? error.message : 'No fue posible preparar el envío.');
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  /**
+   * Las plantillas del catálogo que pertenecen a la cuenta de esta conversación.
+   *
+   * Una plantilla de otra cuenta del espacio se vería, pero el proveedor no podría resolverla: solo
+   * se ofrece lo que se puede enviar desde este número.
+   */
+  function whatsappTemplatesForSelection(): WhatsappTemplate[] {
+    const accountId = selectedConversation?.channelAccountId;
+    if (!accountId) return [];
+    return whatsappTemplates.filter((plantilla) => plantilla.channelAccountIds.includes(accountId));
+  }
+
+  /**
+   * Envía una plantilla aprobada.
+   *
+   * Va por el mismo extremo que un texto y hereda sus garantías: clave de idempotencia y encolado.
+   * Lo que viaja es la referencia (nombre e idioma), nunca el texto: la API comprueba que esa
+   * plantilla pertenece al catálogo de la cuenta de esta conversación antes de encolar nada.
+   */
+  async function sendWhatsappTemplate(template: WhatsappTemplate): Promise<void> {
+    if (!selectedConversationId || !template.language || isSending) return;
+    setIsSending(true);
+    setSendError(null);
+    try {
+      const response = await fetch(`/api/inbox/${selectedConversationId}/messages`, {
+        body: JSON.stringify({
+          idempotencyKey: crypto.randomUUID(),
+          kind: 'whatsapp_template',
+          whatsappTemplate: { language: template.language, name: template.name }
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST'
+      });
+      const payload = response.headers.get('content-type')?.includes('application/json')
+        ? await response.json()
+        : {};
+      if (response.status === 401) {
+        window.location.assign('/login');
+        return;
+      }
+      if (!response.ok || !payload.item) {
+        throw new Error(payload.error ?? 'No fue posible enviar la plantilla.');
+      }
+      isPinnedToBottomRef.current = true;
+      setHistory((current) =>
+        current.kind === 'ready'
+          ? { kind: 'ready', messages: [...current.messages, payload.item] }
+          : current
+      );
+      setPendingWhatsappTemplate(null);
+      setIsWhatsappTemplatesOpen(false);
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'No fue posible enviar la plantilla.');
     } finally {
       setIsSending(false);
     }
@@ -2810,6 +2898,11 @@ export default function HomePage(): React.ReactNode {
                           {message.senderType === 'automation' && (
                             <span className="bubble-author">Bot</span>
                           )}
+                          {message.whatsappTemplate && (
+                            <span className="bubble-author">
+                              Plantilla · {message.whatsappTemplate.name}
+                            </span>
+                          )}
 
                           <time>
                             {formatMessageTime(messageTimestamp)}
@@ -2882,13 +2975,19 @@ export default function HomePage(): React.ReactNode {
                   role="dialog"
                 >
                   {isWhatsappTemplatesLoading && <p>Cargando plantillas…</p>}
-                  {!isWhatsappTemplatesLoading && whatsappTemplates.length === 0 && (
-                    <p>Aún no hay plantillas aprobadas para esta cuenta.</p>
+                  {!isWhatsappTemplatesLoading && whatsappTemplatesForSelection().length === 0 && (
+                    <p>Esta conversación no tiene plantillas aprobadas en su cuenta de WhatsApp.</p>
                   )}
-                  {whatsappTemplates.map((plantilla) => (
-                    <div
+                  {whatsappTemplatesForSelection().map((plantilla) => (
+                    <button
                       className="canned-response-option"
+                      disabled={!plantilla.sendable || isSending}
                       key={plantilla.name + '|' + (plantilla.language ?? '')}
+                      onClick={() => {
+                        setPendingWhatsappTemplate(plantilla);
+                        setSendError(null);
+                      }}
+                      type="button"
                     >
                       <strong>{plantilla.name}</strong>
                       <span>
@@ -2896,7 +2995,9 @@ export default function HomePage(): React.ReactNode {
                           .filter(Boolean)
                           .join(' · ') || 'Sin datos de Meta'}
                       </span>
-                    </div>
+                      {plantilla.previewText && <span>{plantilla.previewText}</span>}
+                      {plantilla.blockedReason && <span>{plantilla.blockedReason}</span>}
+                    </button>
                   ))}
                 </div>
               )}
@@ -2904,6 +3005,41 @@ export default function HomePage(): React.ReactNode {
                 <p className="canned-response-error" role="alert">
                   {whatsappTemplatesError}
                 </p>
+              )}
+              {/* Un mensaje de plantilla de Meta tiene coste y no se deshace: se confirma antes. */}
+              {pendingWhatsappTemplate && (
+                <div
+                  aria-label="Confirmar envío de plantilla"
+                  className="canned-response-picker"
+                  role="dialog"
+                >
+                  <p>
+                    Se enviará la plantilla <strong>{pendingWhatsappTemplate.name}</strong> (
+                    {pendingWhatsappTemplate.language}) a{' '}
+                    {selectedConversation?.contactName ?? 'este contacto'}. Es un mensaje de
+                    plantilla de Meta: tiene coste y no se puede deshacer.
+                  </p>
+                  {pendingWhatsappTemplate.previewText && (
+                    <p>{pendingWhatsappTemplate.previewText}</p>
+                  )}
+                  <div className="composer-actions">
+                    <button
+                      className="canned-response-trigger"
+                      disabled={isSending}
+                      onClick={() => void sendWhatsappTemplate(pendingWhatsappTemplate)}
+                      type="button"
+                    >
+                      Enviar plantilla
+                    </button>
+                    <button
+                      className="canned-response-trigger"
+                      onClick={() => setPendingWhatsappTemplate(null)}
+                      type="button"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
               )}
               <textarea
                 aria-label="Escribe una respuesta"

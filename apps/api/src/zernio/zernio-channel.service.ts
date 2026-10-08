@@ -26,6 +26,7 @@ import { RequestAuthenticator } from '../auth/request-authenticator';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantAccessService } from '../tenants/tenant-access.service';
 import { ZernioApiClient } from './zernio-api.client';
+import { WhatsappTemplateCatalog } from './whatsapp-template-catalog';
 
 function asZernioChannel(row: {
   created_at: unknown;
@@ -48,7 +49,9 @@ export class ZernioChannelService {
     @Inject(TenantAccessService) private readonly tenantAccessService: TenantAccessService,
     @Inject(SupabaseServerClientFactory)
     private readonly supabaseServerClientFactory: SupabaseServerClientFactory,
-    @Inject(ZernioApiClient) private readonly zernioApiClient: ZernioApiClient
+    @Inject(ZernioApiClient) private readonly zernioApiClient: ZernioApiClient,
+    @Inject(WhatsappTemplateCatalog)
+    private readonly whatsappTemplateCatalog: WhatsappTemplateCatalog
   ) {}
 
   async list(authorization: unknown, tenantId: string): Promise<ZernioChannelListResponse> {
@@ -71,9 +74,9 @@ export class ZernioChannelService {
   /**
    * Plantillas aprobadas de WhatsApp del espacio.
    *
-   * Pertenecen a la cuenta de WhatsApp, no a la conversacion: se resuelven las cuentas de esa
-   * plataforma y se leen del proveedor. Sin ninguna cuenta conectada devuelve una lista vacia, que
-   * es la verdad —no hay plantillas que mostrar— y no un error que la pantalla tenga que entender.
+   * Pertenecen a la cuenta de WhatsApp, no a la conversacion: el catalogo resuelve las cuentas de esa
+   * plataforma y lee de cada una su catalogo. Sin ninguna cuenta conectada devuelve una lista vacia,
+   * que es la verdad —no hay plantillas que mostrar— y no un error que la pantalla tenga que entender.
    */
   async listWhatsappTemplates(
     authorization: unknown,
@@ -82,27 +85,8 @@ export class ZernioChannelService {
     const identity = await this.requestAuthenticator.authenticate(authorization);
     await this.tenantAccessService.assertMembership(identity.userId, tenantId);
 
-    const { data, error } = await this.supabaseServerClientFactory
-      .create()
-      .from('channel_accounts')
-      .select('provider_account_id')
-      .eq('tenant_id', tenantId)
-      .eq('provider', 'zernio')
-      .eq('platform', 'whatsapp')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      throw new InternalServerErrorException('No fue posible resolver la cuenta de WhatsApp.');
-    }
-
-    const cuentas = (data ?? [])
-      .map((fila) => (typeof fila.provider_account_id === 'string' ? fila.provider_account_id : ''))
-      .filter(Boolean);
-
-    if (!cuentas.length) return whatsappTemplateListResponseSchema.parse({ items: [] });
-
     return whatsappTemplateListResponseSchema.parse({
-      items: await this.zernioApiClient.listWhatsappTemplates(cuentas)
+      items: await this.whatsappTemplateCatalog.listForTenant(tenantId)
     });
   }
 

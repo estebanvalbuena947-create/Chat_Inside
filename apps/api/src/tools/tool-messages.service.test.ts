@@ -95,7 +95,7 @@ describe('envio de mensajes del bot', () => {
 
     expect(enqueueOutbound).toHaveBeenCalledTimes(1);
     expect(enqueueOutbound).toHaveBeenCalledWith({
-      command: { body: cuerpoValido.body, idempotencyKey: UUID },
+      command: { body: cuerpoValido.body, idempotencyKey: UUID, kind: 'text' },
       conversationId: 'conv-1',
       senderType: 'automation',
       senderUserId: null,

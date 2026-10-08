@@ -4,7 +4,11 @@ import {
   InternalServerErrorException,
   UnprocessableEntityException
 } from '@nestjs/common';
-import { createOutboundMessageSchema } from '@chat-zernio/contracts';
+import {
+  createOutboundTextMessageSchema,
+  outboundIdempotencyKeySchema,
+  type CreateOutboundMessage
+} from '@chat-zernio/contracts';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantMessageService } from '../conversations/tenant-message.service';
 import { claveIdempotencia } from './idempotency-key';
@@ -96,11 +100,11 @@ export class ToolMessagesService {
       conversationId,
       cuerpo.idempotencyKey
     );
-    const clave = createOutboundMessageSchema.shape.idempotencyKey.safeParse(claveResuelta);
+    const clave = outboundIdempotencyKeySchema.safeParse(claveResuelta);
 
-    const comandos: Array<{ body: string; idempotencyKey: string }> = [];
+    const comandos: Array<CreateOutboundMessage> = [];
     for (let indice = 0; indice < partes.length; indice++) {
-      const command = createOutboundMessageSchema.safeParse({
+      const command = createOutboundTextMessageSchema.safeParse({
         body: partes[indice],
         idempotencyKey:
           typeof claveResuelta === 'string'
@@ -115,7 +119,9 @@ export class ToolMessagesService {
         );
       }
       comandos.push(
-        command.success ? command.data : { body: '', idempotencyKey: String(claveResuelta) }
+        command.success
+          ? command.data
+          : { body: '', idempotencyKey: String(claveResuelta), kind: 'text' }
       );
     }
 

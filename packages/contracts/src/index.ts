@@ -97,6 +97,9 @@ export const conversationSummarySchema = z.object({
   attentionLevel: attentionLevelSchema.nullable(),
   assignedUserId: z.uuid().nullable(),
   channelPlatform: z.string().trim().min(1).max(64).nullable(),
+  // Cuenta de canal del espacio (identificador nuestro, nunca el del proveedor). La interfaz la usa
+  // para ofrecer solo lo que se puede enviar desde ESA cuenta y no desde otra del mismo espacio.
+  channelAccountId: z.uuid().nullable(),
   status: conversationStatusSchema,
   automationMode: automationModeSchema,
   automationVersion: z.number().int().min(1),
@@ -157,10 +160,25 @@ export const mediaListQuerySchema = z.object({
   search: z.string().max(80).optional()
 });
 
+/**
+ * Referencia exacta con la que Meta resuelve una plantilla aprobada: nombre e idioma.
+ *
+ * No es la plantilla interna del bot (`{fecha}` en una fila de `message_templates`): esta vive en la
+ * cuenta de WhatsApp Business del proveedor y no se puede enviar si no coincide exactamente.
+ */
+export const whatsappTemplateReferenceSchema = z.object({
+  language: z.string().trim().min(1).max(20),
+  name: z.string().trim().min(1).max(200)
+});
+
+export type WhatsappTemplateReference = z.infer<typeof whatsappTemplateReferenceSchema>;
+
 export const conversationMessageSchema = z.object({
   attachments: z.array(messageAttachmentSchema),
   id: z.uuid(),
   body: z.string().max(8000),
+  // Presente cuando el mensaje salio como plantilla de Meta: el cuerpo es su copia visible.
+  whatsappTemplate: whatsappTemplateReferenceSchema.nullable(),
   // Estado del comentario en la plataforma. Solo presente en mensajes de comentario.
   commentState: z.enum(['visible', 'hidden', 'deleted']).nullish(),
   /** La respuesta privada es de un solo uso: la interfaz necesita saberlo antes de ofrecerla. */
@@ -183,10 +201,31 @@ export const conversationMessageListResponseSchema = z.object({
   nextCursor: z.null()
 });
 
-export const createOutboundMessageSchema = z.object({
+/**
+ * Un mensaje saliente es texto libre o plantilla de Meta, nunca los dos.
+ *
+ * `kind` es opcional en el texto para no romper a quien ya envia cuerpo sin declararlo; declarar
+ * `kind: 'text'` sigue siendo valido. La variante de plantilla no admite cuerpo: lo que se despacha
+ * es la referencia, y la copia visible la escribe el servidor a partir de la definicion aprobada.
+ */
+export const outboundIdempotencyKeySchema = z.uuid();
+
+export const createOutboundTextMessageSchema = z.object({
   body: z.string().trim().min(1).max(8000),
-  idempotencyKey: z.uuid()
+  idempotencyKey: outboundIdempotencyKeySchema,
+  kind: z.literal('text').default('text')
 });
+
+export const createOutboundWhatsappTemplateMessageSchema = z.object({
+  idempotencyKey: outboundIdempotencyKeySchema,
+  kind: z.literal('whatsapp_template'),
+  whatsappTemplate: whatsappTemplateReferenceSchema
+});
+
+export const createOutboundMessageSchema = z.union([
+  createOutboundWhatsappTemplateMessageSchema,
+  createOutboundTextMessageSchema
+]);
 
 export const createOutboundMessageResponseSchema = z.object({
   item: conversationMessageSchema
@@ -708,13 +747,32 @@ export const whatsappTemplateSchema = z.object({
   category: z.string().max(40).nullable(),
   language: z.string().max(20).nullable(),
   name: z.string().min(1).max(200),
-  status: z.string().max(40).nullable()
+  status: z.string().max(40).nullable(),
+  // Copia visible de la definicion aprobada. Es lo que se guarda en el historial y lo que se le
+  // muestra a quien confirma el envio; lo que viaja al proveedor es la referencia, no este texto.
+  previewText: z.string().max(4000),
+  // Huecos declarados ({{1}}, {{nombre}}...) en cualquier componente. Sin valores no se puede enviar.
+  variables: z.array(z.string().max(120))
 });
 
 export type WhatsappTemplate = z.infer<typeof whatsappTemplateSchema>;
 
+/**
+ * Una plantilla del catalogo, con las cuentas del espacio que la tienen.
+ *
+ * `sendable` y `blockedReason` los decide el servidor: la interfaz solo los presenta, no vuelve a
+ * deducir la regla de lo que se puede enviar.
+ */
+export const whatsappTemplateItemSchema = whatsappTemplateSchema.extend({
+  channelAccountIds: z.array(z.uuid()),
+  sendable: z.boolean(),
+  blockedReason: z.string().max(200).nullable()
+});
+
+export type WhatsappTemplateItem = z.infer<typeof whatsappTemplateItemSchema>;
+
 export const whatsappTemplateListResponseSchema = z.object({
-  items: z.array(whatsappTemplateSchema)
+  items: z.array(whatsappTemplateItemSchema)
 });
 
 export type WhatsappTemplateListResponse = z.infer<typeof whatsappTemplateListResponseSchema>;
@@ -860,9 +918,29 @@ export const reservationsBoardResponseSchema = z.object({
   comprobantes: z.array(reservationReceiptSchema)
 });
 
+/** Comando de revisión de un comprobante. La clave evita aplicar dos veces un reintento del navegador. */
+export const decideReservationSchema = z.object({
+  action: z.enum(['approved', 'rejected', 'needs_info']),
+  idempotencyKey: z.string().uuid(),
+  note: z.string().trim().max(1000).nullable().optional()
+});
+
+export const decideReservationResponseSchema = z.object({
+  item: z.object({
+    action: z.string(),
+    decidedByEmail: z.string().email(),
+    duplicate: z.boolean(),
+    previousStatus: z.string().nullable(),
+    reservationDraftId: z.number().int(),
+    resultingStatus: z.string()
+  })
+});
+
 export type ReservationDraftView = z.infer<typeof reservationDraftSchema>;
 export type ReservationConfirmedView = z.infer<typeof reservationConfirmedSchema>;
 export type ReservationDecisionView = z.infer<typeof reservationDecisionSchema>;
 export type ReservationReceiptView = z.infer<typeof reservationReceiptSchema>;
 export type ReservationKpis = z.infer<typeof reservationKpisSchema>;
 export type ReservationsBoardResponse = z.infer<typeof reservationsBoardResponseSchema>;
+export type DecideReservation = z.infer<typeof decideReservationSchema>;
+export type DecideReservationResponse = z.infer<typeof decideReservationResponseSchema>;

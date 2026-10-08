@@ -117,7 +117,55 @@ function whatsappTemplatesErrorFrom(status: number, payload: unknown): Error {
  * Se toma solo lo que el contrato necesita y se ignora el resto: el proveedor puede agregar campos
  * sin avisar, y eso no puede romper la pantalla. Una plantilla sin nombre se descarta, porque sin
  * nombre no hay nada que mostrar ni que enviar.
+ *
+ * De la definicion se conservan dos cosas mas, ambas derivadas del proveedor y no inventadas:
+ * el texto visible (encabezado, cuerpo, pie y botones) y los huecos `{{...}}` que declares en
+ * cualquier componente. Un hueco en un boton cuenta igual que uno en el cuerpo: si hay que
+ * rellenarlo, la plantilla no se puede enviar sin valores.
  */
+const TEMPLATE_PLACEHOLDER = /\{\{[^{}]*\}\}/g;
+
+function collectTexts(value: unknown, out: string[]): void {
+  if (typeof value === 'string') {
+    out.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectTexts(item, out);
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const item of Object.values(value as Record<string, unknown>)) collectTexts(item, out);
+  }
+}
+
+function readWhatsappTemplateVariables(components: unknown): string[] {
+  if (!Array.isArray(components)) return [];
+  const textos: string[] = [];
+  collectTexts(components, textos);
+  const encontrados = new Set<string>();
+  for (const texto of textos) {
+    for (const coincidencia of texto.matchAll(TEMPLATE_PLACEHOLDER)) {
+      encontrados.add(coincidencia[0].slice(0, 120));
+    }
+  }
+  return [...encontrados];
+}
+
+/** Copia visible: el texto tal como lo vera quien confirme el envio. */
+function readWhatsappTemplatePreview(components: unknown): string {
+  if (!Array.isArray(components)) return '';
+  const partes: string[] = [];
+  for (const componente of components) {
+    if (!componente || typeof componente !== 'object') continue;
+    const fila = componente as { text?: unknown; type?: unknown };
+    const tipo = typeof fila.type === 'string' ? fila.type : '';
+    if (tipo !== 'HEADER' && tipo !== 'BODY' && tipo !== 'FOOTER') continue;
+    if (typeof fila.text === 'string' && fila.text.trim()) partes.push(fila.text.trim());
+  }
+  return partes.join('\n').slice(0, 4000);
+}
+
 function readWhatsappTemplates(payload: unknown): WhatsappTemplate[] {
   const lista = (payload as { templates?: unknown } | null)?.templates;
   if (!Array.isArray(lista)) return [];
@@ -132,7 +180,9 @@ function readWhatsappTemplates(payload: unknown): WhatsappTemplate[] {
       category: typeof fila.category === 'string' ? fila.category : null,
       language: typeof fila.language === 'string' ? fila.language : null,
       name,
-      status: typeof fila.status === 'string' ? fila.status : null
+      previewText: readWhatsappTemplatePreview(fila.components),
+      status: typeof fila.status === 'string' ? fila.status : null,
+      variables: readWhatsappTemplateVariables(fila.components)
     });
   }
   return plantillas;
@@ -428,32 +478,20 @@ export class ZernioApiClient {
     throw commentErrorFrom(response.status, payload);
   }
   /**
-   * Plantillas aprobadas de WhatsApp de las cuentas dadas.
+   * Plantillas aprobadas de WhatsApp de una cuenta.
    *
    * El proveedor resuelve la plantilla por nombre e idioma exactos antes de enviarla, asi que lo que
-   * se lista aqui es exactamente lo que se puede enviar. Se juntan sin repetir nombre e idioma: la
-   * misma plantilla en dos cuentas del espacio es la misma plantilla.
+   * se lista aqui es exactamente lo que se puede enviar desde ESA cuenta. Quien agrupa varias
+   * cuentas del espacio es el catalogo, que es quien sabe a cual pertenece cada plantilla.
    */
-  async listWhatsappTemplates(accountIds: string[]): Promise<WhatsappTemplate[]> {
-    const plantillas = new Map<string, WhatsappTemplate>();
-
-    for (const accountId of accountIds) {
-      const response = await this.request(
-        `/v1/whatsapp/templates?accountId=${encodeURIComponent(accountId)}`,
-        { method: 'GET' }
-      );
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) throw whatsappTemplatesErrorFrom(response.status, payload);
-
-      for (const plantilla of readWhatsappTemplates(payload)) {
-        const clave = `${plantilla.name}|${plantilla.language ?? ''}`;
-        // La primera cuenta que la declara manda: si la misma plantilla vive en dos cuentas, no se
-        // duplica en la pantalla, y su estado no se pisa con el de la otra.
-        if (!plantillas.has(clave)) plantillas.set(clave, plantilla);
-      }
-    }
-
-    return [...plantillas.values()];
+  async listWhatsappTemplates(accountId: string): Promise<WhatsappTemplate[]> {
+    const response = await this.request(
+      `/v1/whatsapp/templates?accountId=${encodeURIComponent(accountId)}`,
+      { method: 'GET' }
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw whatsappTemplatesErrorFrom(response.status, payload);
+    return readWhatsappTemplates(payload);
   }
 
   private async request(path: string, init: RequestInit): Promise<Response> {

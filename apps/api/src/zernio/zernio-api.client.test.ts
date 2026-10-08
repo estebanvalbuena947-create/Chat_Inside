@@ -208,15 +208,21 @@ describe('cliente de Zernio: plantillas de WhatsApp', () => {
             category: 'UTILITY',
             status: 'APPROVED',
             // Campos que el proveedor puede agregar: se ignoran en lugar de romper la pantalla.
-            quality_score: { score: 'GREEN' },
-            components: [{ type: 'BODY' }]
+            quality_score: { score: 'GREEN' }
           }
         ]
       })
     );
 
-    await expect(cliente.listWhatsappTemplates(['cuenta-1'])).resolves.toEqual([
-      { category: 'UTILITY', language: 'es_MX', name: 'confirmacion_reserva', status: 'APPROVED' }
+    await expect(cliente.listWhatsappTemplates('cuenta-1')).resolves.toEqual([
+      {
+        category: 'UTILITY',
+        language: 'es_MX',
+        name: 'confirmacion_reserva',
+        previewText: '',
+        status: 'APPROVED',
+        variables: []
+      }
     ]);
 
     const [url, init] = fetchSimulado.mock.calls[0] as unknown as [string, RequestInit];
@@ -224,28 +230,74 @@ describe('cliente de Zernio: plantillas de WhatsApp', () => {
     expect(init.method).toBe('GET');
   });
 
-  it('descarta una plantilla sin nombre y no repite la misma en dos cuentas', async () => {
-    fetchSimulado.mockResolvedValueOnce(
+  it('lee el texto visible y los huecos de cualquier componente', async () => {
+    fetchSimulado.mockResolvedValue(
+      respuesta(200, {
+        success: true,
+        templates: [
+          {
+            name: 'recordatorio',
+            language: 'es_MX',
+            status: 'APPROVED',
+            components: [
+              { type: 'HEADER', format: 'TEXT', text: 'Recordatorio' },
+              { type: 'BODY', text: 'Hola {{1}}, tu cita es el {{2}}' },
+              { type: 'FOOTER', text: 'Inside Spa' },
+              // Un hueco en un boton cuenta igual que uno en el cuerpo.
+              { type: 'BUTTONS', buttons: [{ type: 'URL', text: 'Ver {{3}}', url: 'https://x' }] }
+            ]
+          },
+          {
+            name: 'confirmacion_48h',
+            language: 'es_MX',
+            status: 'APPROVED',
+            components: [
+              { type: 'HEADER', format: 'TEXT', text: 'confirmacion de cita' },
+              { type: 'BODY', text: 'Hola, confirmamos tu reservacion.' },
+              { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'Asistire' }] }
+            ]
+          }
+        ]
+      })
+    );
+
+    const plantillas = await cliente.listWhatsappTemplates('cuenta-1');
+
+    // Varias variantes de la misma clase: hueco en cuerpo y hueco en boton.
+    expect(plantillas[0]?.variables).toEqual(['{{1}}', '{{2}}', '{{3}}']);
+    expect(plantillas[0]?.previewText).toBe(
+      'Recordatorio\nHola {{1}}, tu cita es el {{2}}\nInside Spa'
+    );
+    // Sin huecos no se inventa ninguno, y los botones no entran en el texto visible.
+    expect(plantillas[1]?.variables).toEqual([]);
+    expect(plantillas[1]?.previewText).toBe(
+      'confirmacion de cita\nHola, confirmamos tu reservacion.'
+    );
+  });
+
+  it('descarta una plantilla sin nombre', async () => {
+    fetchSimulado.mockResolvedValue(
       respuesta(200, {
         success: true,
         templates: [{ language: 'es_MX' }, { name: 'hola', language: 'es_MX' }]
       })
     );
-    fetchSimulado.mockResolvedValueOnce(
-      respuesta(200, {
-        success: true,
-        templates: [{ name: 'hola', language: 'es_MX', status: 'PENDING' }]
-      })
-    );
 
-    await expect(cliente.listWhatsappTemplates(['cuenta-1', 'cuenta-2'])).resolves.toEqual([
-      { category: null, language: 'es_MX', name: 'hola', status: null }
+    await expect(cliente.listWhatsappTemplates('cuenta-1')).resolves.toEqual([
+      {
+        category: null,
+        language: 'es_MX',
+        name: 'hola',
+        previewText: '',
+        status: null,
+        variables: []
+      }
     ]);
   });
 
   it('no inventa plantillas cuando el proveedor no devuelve la lista', async () => {
     fetchSimulado.mockResolvedValue(respuesta(200, { success: true }));
-    await expect(cliente.listWhatsappTemplates(['cuenta-1'])).resolves.toEqual([]);
+    await expect(cliente.listWhatsappTemplates('cuenta-1')).resolves.toEqual([]);
   });
 
   it('conserva el motivo cuando el proveedor rechaza la consulta', async () => {
@@ -253,7 +305,7 @@ describe('cliente de Zernio: plantillas de WhatsApp', () => {
       respuesta(400, { error: 'Invalid input: expected string, received null' })
     );
 
-    await expect(cliente.listWhatsappTemplates(['cuenta-1'])).rejects.toThrow(
+    await expect(cliente.listWhatsappTemplates('cuenta-1')).rejects.toThrow(
       'Invalid input: expected string, received null'
     );
   });

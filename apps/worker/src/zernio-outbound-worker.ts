@@ -4,6 +4,7 @@ import {
   type SupabaseServerClient
 } from '@chat-zernio/config';
 import { signMediaPaths } from '@chat-zernio/media';
+import { whatsappTemplateReferenceFrom } from '@chat-zernio/domain';
 import { abandonedBefore, isReclaimDue } from './abandoned-claims';
 import { z } from 'zod';
 
@@ -21,6 +22,13 @@ type DispatchInput = {
   body: string;
   conversationId: string;
   idempotencyKey: string;
+  /**
+   * Plantilla aprobada de Meta, cuando el mensaje salio asi.
+   *
+   * Es la CARGA que se despacha: el proveedor resuelve el par nombre+idioma exactos antes de enviar
+   * y no acepta texto libre en su lugar. `body` es solo la copia visible del historial.
+   */
+  whatsappTemplate?: { language: string; name: string };
 };
 
 type DispatchResult = {
@@ -55,6 +63,20 @@ export class ZernioDispatchError extends Error {
 
 export type ZernioDispatcher = { send(input: DispatchInput): Promise<DispatchResult> };
 
+/**
+ * Que fallos del proveedor merecen otro intento.
+ *
+ * `400` y `422` son definitivos: no hay variante aprobada de esa plantilla en ese idioma, o la
+ * peticion no es valida; repetir no puede funcionar. `408`, `409`, `429` y los `5xx` si.
+ *
+ * El `502` se reintenta a proposito: el proveedor lo usa tanto para «esta cuenta no tiene cuenta de
+ * WhatsApp Business» —definitivo— como para un fallo pasajero de su plataforma. Como en una
+ * respuesta no-2xx no se envio nada, el reintento acotado no puede duplicar el mensaje.
+ */
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
 export function createZernioDispatcher(
   apiKey: string,
   request: typeof fetch = fetch
@@ -66,12 +88,28 @@ export function createZernioDispatcher(
         {
           body: JSON.stringify({
             accountId: input.accountId,
-            message: input.body,
-            // Solo se anaden cuando hay adjunto: sin el, el cuerpo es el de siempre y el
-            // comportamiento no cambia.
-            ...(input.attachment
-              ? { attachmentType: input.attachment.kind, attachmentUrl: input.attachment.url }
-              : {})
+            ...(input.whatsappTemplate
+              ? {
+                  template: {
+                    elements: [
+                      {
+                        language: input.whatsappTemplate.language,
+                        name: input.whatsappTemplate.name
+                      }
+                    ]
+                  }
+                }
+              : {
+                  message: input.body,
+                  // Solo se anaden cuando hay adjunto: sin el, el cuerpo es el de siempre y el
+                  // comportamiento no cambia.
+                  ...(input.attachment
+                    ? {
+                        attachmentType: input.attachment.kind,
+                        attachmentUrl: input.attachment.url
+                      }
+                    : {})
+                })
           }),
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -85,10 +123,7 @@ export function createZernioDispatcher(
 
       if (!response.ok) {
         throw new ZernioDispatchError(
-          response.status === 408 ||
-            response.status === 409 ||
-            response.status === 429 ||
-            response.status >= 500,
+          isRetryableStatus(response.status),
           `zernio_http_${response.status}`
         );
       }
@@ -251,7 +286,9 @@ export class ZernioOutboundWorker {
     try {
       const { data: message, error: messageError } = await supabase
         .from('messages')
-        .select('id, body, conversation_id, channel_account_id, idempotency_key, status')
+        .select(
+          'id, body, conversation_id, channel_account_id, idempotency_key, status, whatsapp_template_name, whatsapp_template_language'
+        )
         .eq('id', messageId)
         .eq('tenant_id', event.tenant_id)
         .maybeSingle();
@@ -293,12 +330,20 @@ export class ZernioOutboundWorker {
         .eq('id', message.id)
         .eq('tenant_id', event.tenant_id)
         .eq('status', 'queued');
+      const whatsappTemplate = whatsappTemplateReferenceFrom(
+        message.whatsapp_template_name,
+        message.whatsapp_template_language
+      );
       const dispatch = await this.dispatcher.send({
         accountId: channel.provider_account_id,
-        attachment: await this.readSignedAttachment(supabase, event.tenant_id, message.id),
+        // Una plantilla trae su propio contenido: el adjunto solo acompana a un mensaje de texto.
+        attachment: whatsappTemplate
+          ? undefined
+          : await this.readSignedAttachment(supabase, event.tenant_id, message.id),
         body: message.body,
         conversationId: providerConversationId,
-        idempotencyKey: message.idempotency_key
+        idempotencyKey: message.idempotency_key,
+        ...(whatsappTemplate ? { whatsappTemplate } : {})
       });
       // Zernio may acknowledge a send with a messageId but without its optional sentAt.
       // In that case this is the local acknowledgement time, not a delivery/read receipt.

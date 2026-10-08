@@ -17,9 +17,15 @@ import {
   type CreateOutboundMessage,
   type CreateOutboundMessageResponse
 } from '@chat-zernio/contracts';
+import {
+  findWhatsappTemplateByReference,
+  whatsappTemplateReferenceFrom,
+  whatsappTemplateSendability
+} from '@chat-zernio/domain';
 import { RequestAuthenticator } from '../auth/request-authenticator';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantAccessService } from '../tenants/tenant-access.service';
+import { WhatsappTemplateCatalog } from '../zernio/whatsapp-template-catalog';
 import { signMediaUrls } from './conversation-media.service';
 
 type PersistedMessage = {
@@ -34,7 +40,30 @@ type PersistedMessage = {
   sent_at: unknown;
   source?: unknown;
   status: unknown;
+  whatsapp_template_language?: unknown;
+  whatsapp_template_name?: unknown;
 };
+
+/**
+ * Lo que se va a enviar, ya resuelto.
+ *
+ * El texto es la copia visible: para una plantilla no es la carga que viaja al proveedor —esa es la
+ * referencia— sino lo que se guarda para que el historial muestre lo mismo que vio el cliente.
+ */
+type SendIntent = {
+  body: string;
+  whatsappTemplate: { language: string; name: string } | null;
+};
+
+function readWhatsappTemplateReference(message: PersistedMessage): {
+  language: string;
+  name: string;
+} | null {
+  return whatsappTemplateReferenceFrom(
+    message.whatsapp_template_name,
+    message.whatsapp_template_language
+  );
+}
 
 function normalizeTimestamp(value: unknown, field: string): string {
   if (typeof value !== 'string') {
@@ -107,7 +136,8 @@ function asConversationMessage(
     senderType: message.sender_type,
     source: message.source,
     sentAt: message.sent_at === null ? null : normalizeTimestamp(message.sent_at, 'fecha de envío'),
-    status: message.status
+    status: message.status,
+    whatsappTemplate: readWhatsappTemplateReference(message)
   });
 }
 
@@ -127,7 +157,9 @@ export class TenantMessageService {
     @Inject(RequestAuthenticator) private readonly requestAuthenticator: RequestAuthenticator,
     @Inject(TenantAccessService) private readonly tenantAccessService: TenantAccessService,
     @Inject(SupabaseServerClientFactory)
-    private readonly supabaseServerClientFactory: SupabaseServerClientFactory
+    private readonly supabaseServerClientFactory: SupabaseServerClientFactory,
+    @Inject(WhatsappTemplateCatalog)
+    private readonly whatsappTemplateCatalog: WhatsappTemplateCatalog
   ) {}
 
   async list(
@@ -152,7 +184,7 @@ export class TenantMessageService {
     const { data: messages, error: messagesError } = await supabase
       .from('messages')
       .select(
-        'id, body, direction, sender_type, status, sent_at, created_at, source, comment_state, comment_private_reply_at, attachments:message_attachments(id, kind, content_type, storage_object_path, source_title)'
+        'id, body, direction, sender_type, status, sent_at, created_at, source, comment_state, comment_private_reply_at, whatsapp_template_name, whatsapp_template_language, attachments:message_attachments(id, kind, content_type, storage_object_path, source_title)'
       )
       .eq('tenant_id', tenantId)
       .eq('conversation_id', conversationId)
@@ -222,10 +254,14 @@ export class TenantMessageService {
     const existing = await this.findByIdempotencyKey(supabase, tenantId, command.idempotencyKey);
     if (existing) return this.resolveIdempotentResult(existing, conversationId, command);
 
+    // Lo que se va a enviar se resuelve ANTES de insertar: una plantilla que no pertenece a esta
+    // cuenta, o que exige valores, no puede dejar un mensaje a medias en el historial.
+    const intent = await this.resolveSendIntent(tenantId, conversation.channel_account_id, command);
+
     const { data: created, error: createError } = await supabase
       .from('messages')
       .insert({
-        body: command.body,
+        body: intent.body,
         channel_account_id: conversation.channel_account_id,
         conversation_id: conversationId,
         direction: 'outbound',
@@ -234,10 +270,12 @@ export class TenantMessageService {
         sender_user_id: senderUserId,
         sent_at: new Date().toISOString(),
         status: 'queued',
-        tenant_id: tenantId
+        tenant_id: tenantId,
+        whatsapp_template_language: intent.whatsappTemplate?.language ?? null,
+        whatsapp_template_name: intent.whatsappTemplate?.name ?? null
       })
       .select(
-        'id, body, direction, sender_type, status, sent_at, created_at, source, comment_state, comment_private_reply_at, attachments:message_attachments(id, kind, content_type, storage_object_path, source_title)'
+        'id, body, direction, sender_type, status, sent_at, created_at, source, comment_state, comment_private_reply_at, whatsapp_template_name, whatsapp_template_language, attachments:message_attachments(id, kind, content_type, storage_object_path, source_title)'
       )
       .maybeSingle();
     if (!createError && created) {
@@ -260,7 +298,7 @@ export class TenantMessageService {
     const { data, error } = await supabase
       .from('messages')
       .select(
-        'id, body, direction, sender_type, status, sent_at, created_at, source, conversation_id'
+        'id, body, direction, sender_type, status, sent_at, created_at, source, conversation_id, whatsapp_template_name, whatsapp_template_language'
       )
       .eq('tenant_id', tenantId)
       .eq('idempotency_key', idempotencyKey)
@@ -272,16 +310,85 @@ export class TenantMessageService {
     return (data as (PersistedMessage & { conversation_id: string }) | null) ?? null;
   }
 
+  /**
+   * Traduce el comando a lo que se guarda y se despacha.
+   *
+   * Para un texto es el propio texto. Para una plantilla hay que comprobar que pertenece al catalogo
+   * de ESA cuenta y que se puede enviar: si no, se rechaza aqui y no se encola nada. La copia visible
+   * la escribe el servidor desde la definicion aprobada; lo que viaja al proveedor es la referencia.
+   */
+  private async resolveSendIntent(
+    tenantId: string,
+    channelAccountId: string,
+    command: CreateOutboundMessage
+  ): Promise<SendIntent> {
+    if (command.kind !== 'whatsapp_template') return { body: command.body, whatsappTemplate: null };
+
+    const catalogo = await this.whatsappTemplateCatalog.readForChannelAccount(
+      tenantId,
+      channelAccountId
+    );
+    if (!catalogo) {
+      throw new UnprocessableEntityException(
+        'La conversación no tiene una cuenta de WhatsApp lista para enviar.'
+      );
+    }
+
+    const plantilla = findWhatsappTemplateByReference(catalogo.templates, command.whatsappTemplate);
+    if (!plantilla) {
+      throw new UnprocessableEntityException(
+        'Esa plantilla no está aprobada en la cuenta de WhatsApp de esta conversación.'
+      );
+    }
+
+    const envio = whatsappTemplateSendability(plantilla);
+    if (!envio.sendable) {
+      throw new UnprocessableEntityException(
+        envio.reason === 'not_approved'
+          ? 'Meta todavía no tiene aprobada esa plantilla.'
+          : envio.reason === 'missing_language'
+            ? 'Meta no informó el idioma de esa plantilla, así que no se puede resolver.'
+            : `Esa plantilla necesita valores para ${plantilla.variables.join(', ')} y este envío no los captura.`
+      );
+    }
+
+    return {
+      body: plantilla.previewText,
+      whatsappTemplate: { language: command.whatsappTemplate.language, name: plantilla.name }
+    };
+  }
+
+  /**
+   * Compara un mensaje ya guardado con el comando recibido.
+   *
+   * Una clave de idempotencia repetida solo es valida si describe el MISMO envio: mismo destino y
+   * misma carga. Se compara contra lo guardado —referencia incluida— y no contra el catalogo, para
+   * que un reintento no dependa de una lectura al proveedor.
+   */
+  private matchesCommand(
+    existing: PersistedMessage & { conversation_id: string },
+    conversationId: string,
+    command: CreateOutboundMessage
+  ): boolean {
+    if (existing.conversation_id !== conversationId || existing.direction !== 'outbound') {
+      return false;
+    }
+    const referencia = readWhatsappTemplateReference(existing);
+    if (command.kind === 'whatsapp_template') {
+      return (
+        referencia?.name === command.whatsappTemplate.name &&
+        referencia.language === command.whatsappTemplate.language
+      );
+    }
+    return referencia === null && existing.body === command.body;
+  }
+
   private resolveIdempotentResult(
     existing: PersistedMessage & { conversation_id: string },
     conversationId: string,
     command: CreateOutboundMessage
   ): CreateOutboundMessageResponse {
-    if (
-      existing.conversation_id !== conversationId ||
-      existing.direction !== 'outbound' ||
-      existing.body !== command.body
-    ) {
+    if (!this.matchesCommand(existing, conversationId, command)) {
       throw new ConflictException('La clave de idempotencia ya fue usada para otro mensaje.');
     }
     return createOutboundMessageResponseSchema.parse({
