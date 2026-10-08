@@ -37,7 +37,7 @@ export type ResponseRow = {
 };
 
 /** Cuenta mensajes salientes por actor. El Bot es `automation`; la identidad humana llega de la fila. */
-export function summarizeParticipants(rows: ResponseRow[]) {
+export function summarizeParticipants(rows: ResponseRow[], labels = new Map<string, string>()) {
   const values = new Map<
     string,
     { kind: 'advisor' | 'bot'; label: string; messagesSent: number }
@@ -52,7 +52,7 @@ export function summarizeParticipants(rows: ResponseRow[]) {
         : 'advisor:unknown';
     const current = values.get(key) ?? {
       kind: isBot ? 'bot' : 'advisor',
-      label: isBot ? 'Bot' : `Asesor ${row.senderUserId?.slice(0, 8) ?? 'sin identificar'}`,
+      label: isBot ? 'Bot' : (labels.get(row.senderUserId ?? '') ?? 'Asesor sin identificar'),
       messagesSent: 0
     };
     current.messagesSent += 1;
@@ -301,6 +301,33 @@ export class MetricsService {
       );
     }
 
+    const responseRows = respuestas.filas.map((fila) => ({
+      conversationId: String(fila.conversation_id),
+      createdAt: String(fila.created_at),
+      direction: String(fila.direction),
+      senderType: String(fila.sender_type),
+      senderUserId: typeof fila.sender_user_id === 'string' ? fila.sender_user_id : null
+    }));
+    const labels = new Map<string, string>();
+    await Promise.all(
+      [
+        ...new Set(
+          responseRows.flatMap((row) =>
+            row.senderType === 'agent' && row.senderUserId ? [row.senderUserId] : []
+          )
+        )
+      ].map(async (id) => {
+        const { data } = await supabase.auth.admin.getUserById(id);
+        const name = data.user?.user_metadata?.display_name;
+        labels.set(
+          id,
+          typeof name === 'string' && name.trim()
+            ? name.trim()
+            : (data.user?.email ?? 'Asesor sin identificar')
+        );
+      })
+    );
+
     return summarizeMessages(
       actividad.filas.map((fila) => ({
         createdAt: String(fila.created_at),
@@ -313,26 +340,9 @@ export class MetricsService {
       {
         closure: summarizeClosure(resueltasDelPeriodo, conAsesor),
         days,
-        responseTime: summarizeResponseTimes(
-          respuestas.filas.map((fila) => ({
-            conversationId: String(fila.conversation_id),
-            createdAt: String(fila.created_at),
-            direction: String(fila.direction),
-            senderType: String(fila.sender_type),
-            senderUserId: typeof fila.sender_user_id === 'string' ? fila.sender_user_id : null
-          })),
-          { since: desde }
-        ),
+        responseTime: summarizeResponseTimes(responseRows, { since: desde }),
         truncated: actividad.truncado || respuestas.truncado || cerradas.truncado,
-        participants: summarizeParticipants(
-          respuestas.filas.map((fila) => ({
-            conversationId: String(fila.conversation_id),
-            createdAt: String(fila.created_at),
-            direction: String(fila.direction),
-            senderType: String(fila.sender_type),
-            senderUserId: typeof fila.sender_user_id === 'string' ? fila.sender_user_id : null
-          }))
-        )
+        participants: summarizeParticipants(responseRows, labels)
       }
     );
   }
