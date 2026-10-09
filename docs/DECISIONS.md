@@ -1024,10 +1024,13 @@ que nadie tenga que cerrar sesión.
 
 El orden es round-robin por espacio y se decide dentro de PostgreSQL, en una función que bloquea la
 fila del cursor: dos transferencias simultáneas no pueden recibir a la misma persona, y mientras haya
-dos o más personas activas nadie recibe dos conversaciones seguidas. Participan todas las membresías
-con presencia, sin distinguir rol, porque el modelo actual no tiene un rol separado de «asesora». La
-primera asignación de un espacio la gana el identificador de persona más bajo: es determinista y
-arbitrario, y está escrito para que nadie tenga que deducirlo del SQL.
+dos o más personas activas nadie recibe dos conversaciones seguidas. **Participan solo las membresías
+con rol `agent`**: un administrador o un supervisor puede tener la bandeja abierta y su pulso se
+registra igual, pero no entra en el reparto porque su papel no es atender conversaciones. La lista de
+roles que participan vive en un único sitio (`v_roles`, dentro de la función SQL), así que sumar un rol
+no obliga a tocar la API ni los flujos. La primera asignación de un espacio la gana el identificador de
+persona más bajo: es determinista y arbitrario, y está escrito para que nadie tenga que deducirlo del
+SQL.
 
 Si no hay nadie disponible, la transferencia **falla con 422** y la conversación no cambia: es
 preferible que n8n lo vea y avise a que la conversación quede marcada como derivada a nadie. Repetir la

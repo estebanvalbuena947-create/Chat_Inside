@@ -202,6 +202,10 @@ minutos. Es lo que evita que una transferencia dependa de una sola persona: ante
 llevaban el UUID del supervisor escrito a mano, y si no estaba, la conversación esperaba a alguien que
 no iba a contestar.
 
+**Solo reparte entre agentes.** Un administrador o un supervisor puede tener la bandeja abierta, pero
+no recibe transferencias automáticas: la función SQL filtra por el rol `agent`. La lista de roles
+participantes está en un solo sitio, así que añadir otro es cambiar esa lista y nada más.
+
 Si no hay nadie con la bandeja abierta, la transferencia responde **422** y la conversación no cambia;
 n8n lo ve y puede avisar. Si se quiere derivar a una persona concreta a propósito, se manda `userId` con
 una membresía del espacio (la API responde 422 si no lo es).

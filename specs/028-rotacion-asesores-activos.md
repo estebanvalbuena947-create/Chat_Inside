@@ -10,8 +10,11 @@ sin pulso. Mientras no haya nadie disponible, la transferencia falla explícitam
 permanece sin cambios.
 
 El orden es round-robin por tenant y se decide atómicamente en PostgreSQL para que dos solicitudes
-simultáneas no seleccionen a la misma persona por accidente. Participan las membresías activas de
-la bandeja, independientemente del rol; el modelo actual no distingue un rol separado de "asesor".
+simultáneas no seleccionen a la misma persona por accidente. Participan las membresías **con rol
+`agent`** que tengan presencia: un administrador o un supervisor puede mirar la bandeja —y su pulso se
+registra igual—, pero no entra en el reparto, porque su papel no es atender conversaciones. Los roles
+que participan viven en un solo sitio (`v_roles`, dentro de la función SQL): sumar un rol no obliga a
+tocar la API ni los flujos.
 
 Los flujos de n8n deben enviar `conversationId` y `turnBotOff`, sin `userId`, para pedir la rotación.
 Un `userId` explícito conserva la asignación nominativa existente.

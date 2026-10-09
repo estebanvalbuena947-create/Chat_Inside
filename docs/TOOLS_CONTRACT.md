@@ -150,6 +150,11 @@ presencia vence a los dos minutos: un navegador cerrado deja de contar sin cerra
 perdido no saca a nadie del reparto. El orden es rotativo por espacio y lo decide PostgreSQL, así que
 dos transferencias simultáneas no reciben a la misma persona.
 
+**Quién entra en el reparto.** Solo las membresías con rol `agent`: un administrador o un supervisor
+puede tener la bandeja abierta, pero no recibe transferencias automáticas. La lista de roles vive en un
+solo sitio (`v_roles`, en `claim_next_active_advisor`); sumar otro rol es cambiar esa lista, sin tocar
+los flujos ni la API. Si se quiere derivar a una persona concreta, se manda su `userId`.
+
 **Si se incluye**, `userId` tiene que ser una **membresía del espacio** (tabla `memberships`): la API
 comprueba que esa persona pertenece al espacio antes de asignarle la conversación, y responde `422` si
 no.
