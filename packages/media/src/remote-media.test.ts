@@ -61,6 +61,13 @@ describe('reconocimiento de imagenes', () => {
       });
     }
   });
+
+  it('reconoce un PDF: los comprobantes de pago llegan asi', () => {
+    expect(recognizeMedia(Buffer.from('%PDF-1.7\n', 'ascii'))).toEqual({
+      contentType: 'application/pdf',
+      extension: 'pdf'
+    });
+  });
 });
 
 describe('reconocimiento de video y audio', () => {

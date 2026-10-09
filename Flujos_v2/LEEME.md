@@ -25,12 +25,19 @@ la versión vieja se apague: un mensaje, un emisor.
 
 1. **Los endpoints** (`/v1/tools/...`): **completos** — doce rutas con sus pruebas. Ya no hace falta
    probar en seco.
-2. **El cuerpo de cada llamada**: el `jsonBody` sigue siendo el de ManyChat. Hay que ajustarlo al
-   contrato de cada endpoint (por eso cada nodo lleva su nota). El `subscriber_id` de ManyChat se
-   sustituye por el **contacto** de nuestra base.
-3. **Cargar la multimedia** de cada sede en nuestro almacén, y que los `slug` de las sedes coincidan
-   (`valle`, `juarez`, `lomas`).
+2. **El cuerpo de cada llamada**: **ajustado al contrato** en los dieciséis archivos. Los envíos llevan
+   `conversationId` de nuestra conversación, clave de idempotencia por turno y el texto escapado; las
+   lecturas y los verificadores leen nuestra respuesta (`contactId`/`fields`, `item.status`,
+   `assignedUserId`) y no la de ManyChat. Lo comprueba `apps/api/src/tools/flow-payloads.test.ts`.
+3. **La multimedia titulada.** Los envíos de foto piden la imagen por su título
+   (`media: [{ "branchMediaTitle": "Accesorios" }]`) y la API la busca dentro de la sede de la
+   conversación. Falta **subir** esa imagen y ponerle ese título; mientras no exista, el envío responde
+   422 y no encola nada. Las tres herramientas `Multimedia_*` ya piden el catálogo de su sede.
 4. **El token de máquina** creado y pegado en la variable de entorno.
+
+Los flujos auxiliares que Sara llama por `workflowId` y que **no están en esta carpeta** (conocimiento,
+mensaje de errores, sucursal más cercana, cierre y pausa, gift cards y el emisor de TikTok) tienen que
+existir en n8n con esos mismos identificadores: si no, esas rutas fallan al ejecutarse.
 
 ## Qué NO se tocó (a propósito)
 

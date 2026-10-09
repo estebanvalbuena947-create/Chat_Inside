@@ -167,7 +167,12 @@ export class ToolMessagesService {
 
     // La multimedia se resuelve ANTES de encolar: si un archivo no existe en este espacio, no se
     // encola nada. Encolar primero y fallar despues dejaria un mensaje en la cola sin su imagen.
-    const adjuntos = await this.resolveAttachments(supabase, identity.tenantId, cuerpo.media);
+    const adjuntos = await this.resolveAttachments(
+      supabase,
+      identity.tenantId,
+      conversationId,
+      cuerpo.media
+    );
 
     // Las dos partes se encolan seguidas, y la multimedia viaja con la primera.
     let item: Awaited<ReturnType<TenantMessageService['enqueueOutbound']>> | null = null;
@@ -260,15 +265,19 @@ export class ToolMessagesService {
   /**
    * Resuelve la multimedia de sede a rutas concretas del deposito.
    *
-   * Tres reglas:
+   * Cuatro reglas:
    *   1. Se acepta UNA: Meta admite una multimedia por mensaje.
-   *   2. Si un identificador no existe en este espacio, se rechaza el envio entero en lugar de
-   *      mandarlo sin la imagen: un mensaje mudo es peor que un error visible.
-   *   3. La ruta tiene que estar en el deposito de sedes, que es donde el trabajador la busca.
+   *   2. El archivo se pide por identificador o por TITULO dentro de la sede de la conversacion. El
+   *      titulo existe porque los flujos no conocen los identificadores de la base, y escribir uno a
+   *      mano solo funciona en el espacio donde se copio: el titulo lo elige quien carga el material.
+   *   3. Si no existe en este espacio, se rechaza el envio entero en lugar de mandarlo sin la imagen:
+   *      un mensaje mudo es peor que un error visible.
+   *   4. La ruta tiene que estar en el deposito de sedes, que es donde el trabajador la busca.
    */
   private async resolveAttachments(
     supabase: ReturnType<SupabaseServerClientFactory['create']>,
     tenantId: string,
+    conversationId: string,
     valor: unknown
   ): Promise<Array<{ kind: string; path: string }>> {
     if (valor === undefined || valor === null) return [];
@@ -279,26 +288,43 @@ export class ToolMessagesService {
       throw new UnprocessableEntityException('Solo se admite una imagen por mensaje.');
     }
 
-    const ids = valor
-      .map((elemento) => {
-        const m = (elemento ?? {}) as Record<string, unknown>;
-        return typeof m.branchMediaId === 'string' ? m.branchMediaId : null;
-      })
-      .filter((id): id is string => id !== null);
-    if (ids.length === 0) {
-      throw new UnprocessableEntityException('Cada elemento de media necesita branchMediaId.');
+    const elemento = (valor[0] ?? {}) as Record<string, unknown>;
+    const id = typeof elemento.branchMediaId === 'string' ? elemento.branchMediaId : null;
+    const titulo =
+      typeof elemento.branchMediaTitle === 'string' ? elemento.branchMediaTitle.trim() : null;
+    if (id === null && titulo === null) {
+      throw new UnprocessableEntityException(
+        'Cada elemento de media necesita branchMediaId o branchMediaTitle.'
+      );
+    }
+    if (id !== null && titulo !== null) {
+      throw new UnprocessableEntityException(
+        'Cada elemento de media se indica por identificador o por titulo, no por los dos.'
+      );
     }
 
-    const { data, error } = await supabase
+    // Un identificador de otra sede se acepta solo si es de este espacio; el titulo, en cambio, se
+    // busca SOLO en la sede de la conversacion: dos sedes pueden titular igual su material.
+    const consulta = supabase
       .from('branch_media')
       .select('id, kind, storage_object_path')
-      .eq('tenant_id', tenantId)
-      .in('id', ids);
+      .eq('tenant_id', tenantId);
+    const { data, error } = id
+      ? await consulta.eq('id', id)
+      : await consulta
+          .eq('branch_id', await this.sedeDeLaConversacion(supabase, tenantId, conversationId))
+          .ilike('title', this.patronDeTitulo(titulo as string))
+          .order('sort_order', { ascending: true })
+          .limit(1);
     if (error) throw new InternalServerErrorException('No fue posible leer la multimedia.');
 
     const filas = (Array.isArray(data) ? data : []) as Array<Record<string, unknown>>;
-    if (filas.length !== ids.length) {
-      throw new UnprocessableEntityException('Alguna de las imagenes no existe en este espacio.');
+    if (filas.length !== 1) {
+      throw new UnprocessableEntityException(
+        id
+          ? 'La imagen no existe en este espacio.'
+          : 'La sede de la conversacion no tiene una imagen con ese titulo.'
+      );
     }
 
     return filas.map((fila) => {
@@ -310,5 +336,33 @@ export class ToolMessagesService {
       }
       return { kind: typeof fila.kind === 'string' ? fila.kind : 'image', path };
     });
+  }
+
+  /** La sede de la conversacion: es la que decide que material se puede enviar por titulo. */
+  private async sedeDeLaConversacion(
+    supabase: ReturnType<SupabaseServerClientFactory['create']>,
+    tenantId: string,
+    conversationId: string
+  ): Promise<string> {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('branch_id')
+      .eq('tenant_id', tenantId)
+      .eq('id', conversationId)
+      .maybeSingle();
+    if (error)
+      throw new InternalServerErrorException('No fue posible leer la sede de la conversacion.');
+    const sede = (data as { branch_id?: unknown } | null)?.branch_id;
+    if (typeof sede !== 'string' || sede.length === 0) {
+      throw new UnprocessableEntityException(
+        'La conversacion no tiene sede: no se puede buscar la imagen por su titulo.'
+      );
+    }
+    return sede;
+  }
+
+  /** El titulo se busca tal cual: los comodines de SQL se escapan para que no cambien la busqueda. */
+  private patronDeTitulo(titulo: string): string {
+    return titulo.replace(/[\\%_]/g, (caracter) => '\\' + caracter);
   }
 }

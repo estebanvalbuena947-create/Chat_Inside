@@ -80,8 +80,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const task=$('Entrada de un seguimiento').first().json;\nconst raw=$input.first().json || {};let b=raw.body ?? raw;if(typeof b==='string'){try{b=JSON.parse(b);}catch{b={};}}\nconst status=raw.statusCode==null?200:Number(raw.statusCode);\nconst ok=!raw.error && status>=200 && status<300 && b.status==='success';\nreturn [{json:{...task,ok,estado_final:ok?'enviado':'revision',detalle:{motivo:ok?'MANYCHAT_ACEPTO_SOLICITUD':'MANYCHAT_ENVIO_NO_ACEPTADO',http_status:status,aceptado_por_api:ok}}}];"
-      },
+        "jsCode":"const task=$('Entrada de un seguimiento').first().json;\nconst raw=$input.first().json || {};let b=raw.body ?? raw;if(typeof b==='string'){try{b=JSON.parse(b);}catch{b={};}}\nconst status=raw.statusCode==null?200:Number(raw.statusCode);\nconst item=b.item||{};\nconst ok=!raw.error && status>=200 && status<300 && typeof item.id==='string' && item.id.length>0 && ['queued','sending','sent'].includes(String(item.status));\nreturn [{json:{...task,ok,estado_final:ok?'enviado':'revision',detalle:{motivo:ok?'API_ACEPTO_SOLICITUD':'ENVIO_NO_ACEPTADO',http_status:status,aceptado_por_api:ok}}}];"},
       "name": "Comprobar envío de seguimiento",
       "id": "0fde7530-ae4c-41b1-ad3d-3f3abd1c07f4",
       "type": "n8n-nodes-base.code",
@@ -200,8 +199,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const task=$('Entrada de un seguimiento').first().json;\nconst raw=$input.first().json || {};let b=raw.body ?? raw;if(typeof b==='string'){try{b=JSON.parse(b);}catch{b={};}}\nconst status=raw.statusCode==null?200:Number(raw.statusCode);\nconst ok=!raw.error && status>=200 && status<300 && b.status==='success';\nreturn [{json:{...task,ok,estado_final:ok?'enviado':'revision',detalle:{motivo:ok?'MANYCHAT_ACEPTO_SOLICITUD':'MANYCHAT_CAMPOS_NO_ACEPTADO',http_status:status}}}];"
-      },
+        "jsCode":"const task=$('Entrada de un seguimiento').first().json;\nconst raw=$input.first().json || {};let b=raw.body ?? raw;if(typeof b==='string'){try{b=JSON.parse(b);}catch{b={};}}\nconst status=raw.statusCode==null?200:Number(raw.statusCode);\nconst item=b.item||{};\nconst ok=!raw.error && status>=200 && status<300 && typeof item.id==='string' && item.id.length>0 && ['queued','sending','sent'].includes(String(item.status));\nreturn [{json:{...task,ok,estado_final:ok?'enviado':'revision',detalle:{motivo:ok?'API_ACEPTO_SOLICITUD':'CAMPOS_NO_ACEPTADOS',http_status:status,aceptado_por_api:ok}}}];"},
       "name": "Comprobar carga de mensaje",
       "id": "aeb22a3c-2c9a-4a19-8586-a07a48d5e552",
       "type": "n8n-nodes-base.code",
@@ -347,8 +345,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const task=$('Entrada de un seguimiento').first().json;\nconst raw=$input.first().json || {};\nlet body=raw.body ?? raw;\nif(typeof body==='string'){try{body=JSON.parse(body);}catch{body={};}}\nconst status=raw.statusCode==null?200:Number(raw.statusCode);\nconst fail=(motivo,estado='revision')=>[{json:{...task,contacto_valido:false,estado_final:estado,detalle:{motivo}}}];\nif(raw.error || status<200 || status>=300 || body.status!=='success') return fail('MANYCHAT_CONTACTO_NO_VERIFICADO');\nconst c=body.data || {};\nif(String(c.id)!==String(task.subscriber_id)) return fail('MANYCHAT_CONTACTO_NO_COINCIDE');\nif(c.status!=='active' || c.is_followup_enabled===false) return fail('CONTACTO_INACTIVO_O_SEGUIMIENTO_DESHABILITADO','cancelado');\nconst channel=task.payload?.canal;\nif(channel==='tiktok' && !c.tt_user_id) return fail('CONTACTO_SIN_TIKTOK');\nif(channel==='instagram' && !c.ig_id) return fail('CONTACTO_SIN_INSTAGRAM');\nif(!['instagram','tiktok'].includes(channel)) return fail('CANAL_NO_CONFIGURADO');\nconst clean=s=>String(s||'').replace(/\\s+/g,' ').trim();\nif(clean(c.last_input_text) && clean(task.payload?.ultimo_mensaje_cliente) && clean(c.last_input_text)!==clean(task.payload.ultimo_mensaje_cliente)) return fail('CLIENTE_YA_RESPONDIO','cancelado');\nreturn [{json:{...task,contacto_valido:true}}];\n"
-      },
+        "jsCode":"const task=$('Entrada de un seguimiento').first().json;\nconst raw=$input.first().json || {};\nlet b=raw.body ?? raw;\nif(typeof b==='string'){try{b=JSON.parse(b);}catch{b={};}}\nconst status=raw.statusCode==null?200:Number(raw.statusCode);\nconst fail=(motivo,estado='revision')=>[{json:{...task,contacto_valido:false,estado_final:estado,detalle:{motivo}}}];\nif(raw.error || status<200 || status>=300 || !b.id) return fail('CONVERSACION_NO_VERIFICADA');\nif(String(b.id)!==String(task.conversationId ?? task.subscriber_id)) return fail('CONVERSACION_NO_COINCIDE');\nif(String(b.automationMode||'').toLowerCase()==='paused') return fail('CONVERSACION_EN_ATENCION_HUMANA','cancelado');\nconst canal=String(b.contact?.platform ?? task.payload?.canal ?? '').toLowerCase();\nif(!['instagram','tiktok'].includes(canal)) return fail('CANAL_NO_CONFIGURADO');\nconst mensajes=Array.isArray(b.messages)?b.messages:[];\nconst ultimoEntrante=mensajes.find(m=>String(m.direction).toLowerCase()==='inbound');\nconst clean=s=>String(s||'').replace(/\\s+/g,' ').trim();\nif(clean(ultimoEntrante?.body) && clean(task.payload?.ultimo_mensaje_cliente) && clean(ultimoEntrante.body)!==clean(task.payload.ultimo_mensaje_cliente)) return fail('CLIENTE_YA_RESPONDIO','cancelado');\nreturn [{json:{...task,contacto_valido:true}}];"},
       "name": "Validar contacto actual",
       "id": "872fe9a2-6cb6-44d5-a953-a2b4ce005e91",
       "type": "n8n-nodes-base.code",
@@ -360,7 +357,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $json.conversation_id }}",
+        "url":"={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $('Entrada de un seguimiento').first().json.conversationId }}",
         "genericAuthType": "httpBearerAuth",
         "options": {
           "response": {

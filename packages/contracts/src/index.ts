@@ -537,12 +537,22 @@ export type RenameZernioChannelResponse = z.infer<typeof renameZernioChannelResp
 export const toolMediaSchema = z
   .object({
     branchMediaId: z.uuid().optional(),
+    // La multimedia de una sede tambien se puede pedir por su titulo: el flujo no conoce los
+    // identificadores de la base, y el titulo es lo que la persona que carga el material escribe.
+    // La API lo busca dentro de la sede de la conversacion.
+    branchMediaTitle: z.string().trim().min(1).max(80).optional(),
     kind: attachmentKindSchema.optional(),
     url: z.url().optional()
   })
-  .refine((value) => Boolean(value.branchMediaId) !== Boolean(value.url), {
-    message: 'Cada adjunto se indica por branchMediaId o por url, no ambos.'
-  });
+  .refine(
+    (value) =>
+      [value.branchMediaId, value.branchMediaTitle, value.url].filter(
+        (campo) => campo !== undefined
+      ).length === 1,
+    {
+      message: 'Cada adjunto se indica por branchMediaId, branchMediaTitle o url: exactamente uno.'
+    }
+  );
 
 export const toolSendMessageSchema = z
   .object({

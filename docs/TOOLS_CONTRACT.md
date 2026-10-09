@@ -38,7 +38,7 @@ Sustituye a los **38 nodos** que hoy llaman a `api.manychat.com` para enviar.
 | `conversationId`   | sí             | la conversación de nuestra base                                           |
 | `idempotencyKey`   | sí             | **legible**: la API la convierte en UUID. Si n8n reintenta, no se duplica |
 | `text`             | uno de los dos | el texto a enviar                                                         |
-| `media`            | uno de los dos | por `branchMediaId` (nuestra multimedia); **una** por mensaje             |
+| `media`            | uno de los dos | por `branchMediaId` o `branchMediaTitle`; **una** por mensaje             |
 | `templateName`     | no             | plantilla guardada en nuestra base (se envía como **texto**)              |
 | `whatsappTemplate` | no             | plantilla **aprobada por Meta**: nombre e idioma exactos                  |
 
@@ -113,16 +113,55 @@ Sustituye a **`Multimedia_Valle`, `Multimedia_Juarez`, `Multimedia_Lomas`**.
 La `url` es **firmada y caduca** (10 minutos): se pide justo antes de enviarla. Para enviarla, usa su
 `id` en `media[].branchMediaId` y deja que la API resuelva la URL.
 
+### Enviar una imagen por su título
+
+Los flujos no conocen los identificadores de la base, y copiar uno a mano solo funciona en el espacio
+donde se copió. Por eso un adjunto también se puede pedir por el título que ve quien carga el material:
+
+```json
+{
+  "conversationId": "uuid",
+  "idempotencyKey": "foto-accesorios-{{ $execution.id }}",
+  "media": [{ "branchMediaTitle": "Accesorios" }]
+}
+```
+
+La API busca ese título **dentro de la sede de la conversación** (la que el bot fijó en el punto 6) y
+del espacio del token. Si hay varias coincidencias toma la de menor `sort_order`; si no hay ninguna,
+responde `422` y **no encola nada**. Sin sede en la conversación tampoco se puede buscar por título.
+
+**Antes de activar un flujo que la use**: sube la imagen y titúlala. El procedimiento está en
+`docs/procedimiento-multimedia-sedes.md`.
+
 ## 4. Transferir a un asesor — `POST /v1/tools/assignments`
 
 Sustituye a **`Transferir_al_asesor`**.
 
 ```json
-{ "conversationId": "uuid", "userId": "uuid", "turnBotOff": true }
+{ "conversationId": "uuid", "turnBotOff": true }
 ```
 
-`userId` tiene que ser una **membresía del espacio** (tabla `memberships`): la API comprueba que esa
-persona pertenece al espacio antes de asignarle la conversación, y responde `422` si no.
+Sin `userId`, la API asigna de forma rotativa a la siguiente persona con la bandeja activa. Si se
+incluye `userId`, conserva la asignación explícita y comprueba su membresía.
+
+**Qué cuenta como «bandeja activa».** La bandeja de esa persona manda un pulso autenticado a
+`POST /v1/tenants/{tenantId}/presence` cada minuto, y solo mientras la pestaña está visible. La
+presencia vence a los dos minutos: un navegador cerrado deja de contar sin cerrar sesión, y un pulso
+perdido no saca a nadie del reparto. El orden es rotativo por espacio y lo decide PostgreSQL, así que
+dos transferencias simultáneas no reciben a la misma persona.
+
+**Si se incluye**, `userId` tiene que ser una **membresía del espacio** (tabla `memberships`): la API
+comprueba que esa persona pertenece al espacio antes de asignarle la conversación, y responde `422` si
+no.
+
+Errores propios de la rotación:
+
+- `422` **no hay asesores activos**: nadie tiene la bandeja abierta en ese momento. La conversación **no
+  cambia**: es un fallo visible a propósito, para que n8n avise en lugar de dejar la conversación
+  marcada como derivada a nadie.
+- Repetir la misma petición no cambia de persona: si la conversación ya está asignada y el bot apagado,
+  la respuesta `200` devuelve esa misma asignación sin gastar el turno de la rotación. Así un reintento
+  de n8n por un timeout no mueve la conversación a otra asesora.
 
 Respuesta `200`:
 

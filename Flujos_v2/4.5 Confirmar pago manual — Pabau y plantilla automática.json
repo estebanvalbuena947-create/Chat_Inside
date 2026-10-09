@@ -1,5 +1,5 @@
 {
-  "name": "4.5 Confirmar pago manual â€” Pabau y plantilla automática (v2 WEPLASH)",
+  "name": "4.5 Confirmar pago manual — Pabau y plantilla automática (v2 WEPLASH)",
   "nodes": [
     {
       "parameters": {
@@ -295,17 +295,9 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $json.conversation_id }}",
+        "url":"={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}",
         "genericAuthType": "httpBearerAuth",
         "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "subscriber_id",
-              "value": "={{ Number($('Preparar campos plantilla confirmación').first().json.subscriber_id) }}"
-            }
-          ]
-        },
         "options": {
           "response": {
             "response": {
@@ -348,17 +340,9 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $json.conversation_id }}",
+        "url":"={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}",
         "genericAuthType": "httpBearerAuth",
         "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "subscriber_id",
-              "value": "={{ Number($('Preparar campos plantilla confirmación').first().json.subscriber_id) }}"
-            }
-          ]
-        },
         "options": {
           "response": {
             "response": {
@@ -401,8 +385,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const base = $('Preparar campos plantilla confirmación').first().json;\nconst sid = String(base.subscriber_id ?? '').trim();\nconst clean = v => String(v ?? '').trim();\nconst present = v => !['','0','null','undefined','false'].includes(clean(v).toLowerCase());\nfunction node(name) { try { return $(name).first().json || {}; } catch { return {}; } }\nfunction body(r) {\n  let b = r.body ?? r;\n  if (typeof b === 'string') { try { b = JSON.parse(b); } catch { return {}; } }\n  return b && typeof b === 'object' ? b : {};\n}\nfunction lookup(name, account) {\n  const raw = node(name), b = body(raw), data = b.data || {};\n  const code = Number(raw.statusCode || 0);\n  const reportedAccount=accountURL(data.live_chat_url);\n  const ok = !raw.error && code >= 200 && code < 300 && b.status === 'success'\n    && clean(data.id ?? data.subscriber_id) === sid && (!reportedAccount || reportedAccount===account);\n  return {account, ok, code, data: ok ? data : {},\n    error: ok ? null : (raw.error ? 'ERROR_TRANSPORTE' : code === 401 || code === 403\n      ? 'CREDENCIAL_RECHAZADA' : reportedAccount && reportedAccount!==account ? 'CUENTA_CREDENCIAL_NO_COINCIDE'\n      : b.status === 'success' ? 'ID_NO_COINCIDE' : 'CONTACTO_NO_VALIDADO')};\n}\nfunction accountURL(url) {\n  const m = clean(url).match(/^https:\\/\\/app\\.manychat\\.com\\/(fb1309803|fb1346079)\\/chat\\/(\\d+)(?:[/?#]|$)/i);\n  return m && m[2] === sid ? m[1].toLowerCase() : '';\n}\nfunction channel(v) {\n  const s = clean(v).toLowerCase().replace(/[\\s_-]+/g, '');\n  if (['instagram','ig','igisv','igis'].includes(s)) return 'instagram';\n  if (['tiktok','tt'].includes(s)) return 'tiktok';\n  return '';\n}\nconst results = [lookup('Stripe buscar contacto ISV','fb1309803'), lookup('Stripe buscar contacto IS','fb1346079')];\nconst found = results.filter(r => r.ok);\nconst requestedAccount = accountURL(base.live_chat_url_recibida || base.live_chat_url);\nlet selected = found.length === 1 ? found[0] : found.find(r => r.account === requestedAccount);\nlet error = !/^[1-9]\\d*$/.test(sid) || !Number.isSafeInteger(Number(sid)) ? 'SUBSCRIBER_ID_INVALIDO' : '';\nif (!error && !selected) error = found.length ? 'CUENTA_AMBIGUA' : 'CONTACTO_NO_ENCONTRADO_O_API_FALLIDA';\n// Una URL de contexto puede desempatar resultados positivos; nunca sustituye getInfo exitoso.\nif (!error && requestedAccount && selected.account !== requestedAccount) error = 'CUENTA_ORIGEN_NO_COINCIDE';\nconst profile = selected?.data || {};\nconst custom = (Array.isArray(profile.custom_fields) ? profile.custom_fields : []).filter(f=>\n  ['canal_origen','canal origen','channel','canal','plataforma'].includes(clean(f.name).toLowerCase())\n).map(f=>channel(f.value)).filter(Boolean);\nconst customChannels=[...new Set(custom)];\nconst sourceChannel = channel(base.manychat_channel_origen || base.canal_origen || base.channel || base.canal || base.platform)\n  || (customChannels.length===1 ? customChannels[0] : '');\nconst hasIG = present(profile.ig_id);\nconst hasTT = present(profile.tt_user_id) || present(profile.tiktok_id) || present(profile.tt_id) || present(profile.tiktok_user_id);\nconst profileChannel = channel(profile.channel || profile.platform);\nlet resolvedChannel = sourceChannel || profileChannel || (hasIG !== hasTT ? (hasIG ? 'instagram' : 'tiktok') : '');\nif (!error && !resolvedChannel) error = hasIG && hasTT ? 'CANAL_AMBIGUO_ENVIAR_CANAL_ORIGEN' : 'CANAL_NO_IDENTIFICADO';\nif (!error && selected.account === 'fb1346079' && resolvedChannel !== 'instagram') error = 'CANAL_NO_CONFIGURADO_PARA_CUENTA';\nif (!error && !sourceChannel && profileChannel === 'instagram' && !hasIG) error = 'PERFIL_INSTAGRAM_NO_VALIDADO';\nconst flows = {\n  'fb1309803:instagram': {message:'content20260727160555_940586', transfer:'content20260727160555_959292'},\n  'fb1309803:tiktok': {message:'content20260727172417_383894', transfer:'content20260727171146_206702'},\n  'fb1346079:instagram': {message:'content20260706133514_126519', transfer:'content20260715195103_467329'},\n};\nconst key = selected ? selected.account + ':' + resolvedChannel : '';\nconst flow = flows[key];\nif (!error && !flow) error = 'FLUJO_NO_CONFIGURADO';\nconst account = selected?.account || '';\nreturn [{json:{...base,\n  manychat_account_id: account,\n  manychat_channel: resolvedChannel,\n  manychat_message_flow_ns: !error ? flow.message : '',\n  manychat_transfer_flow_ns: !error ? flow.transfer : '',\n  manychat_ruta_valida: !error,\n  manychat_error: error || null,\n  manychat_diagnostico: results.map(({account,ok,code,error})=>({account,ok,http_status:code,error})),\n  live_chat_url: selected ? 'https://app.manychat.com/'+account+'/chat/'+sid : '',\n  url_manychat_resuelta: Boolean(selected),\n}}];\n"
-      },
+        "jsCode":"// La cuenta de ManyChat ya no decide nada: el canal lo resuelve la conversacion en nuestra API.\n// Este nodo lee la conversacion que acaba de devolver la API y publica los campos que esperan los\n// IF y los verificadores del flujo. Se conservan los nombres 'manychat_*' para no tocar el resto.\nconst base = $('Preparar campos plantilla confirmación').first().json;\nconst conversationId = String(base.subscriber_id ?? '').trim();\nfunction nodo(name) { try { return $(name).first().json || {}; } catch { return {}; } }\nfunction cuerpo(raw) {\n  let b = raw.body ?? raw;\n  if (typeof b === 'string') { try { b = JSON.parse(b); } catch { return {}; } }\n  return b && typeof b === 'object' ? b : {};\n}\nconst raw = nodo('Stripe buscar contacto IS');\nconst b = cuerpo(raw);\nconst code = Number(raw.statusCode || 0);\nconst leida = !raw.error && code >= 200 && code < 300 && String(b.id ?? '') === conversationId;\nconst plataforma = String(b.contact?.platform ?? base.canal_origen ?? '').toLowerCase();\nconst canal = plataforma === 'tiktok' ? 'tiktok' : 'instagram';\nconst error = !conversationId ? 'SIN_CONVERSATION_ID' : leida ? null : 'CONVERSACION_NO_LEIDA:' + (code || 'SIN_RESPUESTA');\nreturn [{ json: { ...base,\n  weplash_conversation_id: conversationId,\n  manychat_account_id: leida ? (canal === 'tiktok' ? 'fb1309803' : 'fb1346079') : '',\n  manychat_channel: canal,\n  manychat_ruta_valida: leida,\n  manychat_error: error,\n  live_chat_url: '',\n  url_manychat_resuelta: false,\n  estado_conversacion: leida ? String(b.status ?? '') : '',\n  ventana_whatsapp: b.whatsappWindow ?? null } }];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -499,7 +482,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {conversationId:$('Preparar campos plantilla confirmación').first().json.conversationId,fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
+        "jsonBody":"={{ {conversationId:String($('Preparar campos plantilla confirmación').first().json.subscriber_id), fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
         "options": {
           "response": {
             "response": {
@@ -538,8 +521,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Cargar campos plantilla principal. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Cargar campos plantilla principal',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof b.contactId==='string'&&b.contactId.length>0&&Array.isArray(b.fields);\nif(!ok)throw new Error('La API no aceptó la operación: Validar Cargar campos plantilla principal. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Cargar campos plantilla principal',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -628,8 +610,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar plantilla confirmación IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar plantilla confirmación IG IS',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar plantilla confirmación IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar plantilla confirmación IG IS',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -645,7 +626,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-is-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaId\": \"eee43939-4e2c-46a3-98aa-f252d7fadbf0\" } ]\n}",
+    "jsonBody":"={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-is-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaTitle\": \"Accesorios\" } ]\n}",
         "options": {
           "response": {
             "response": {
@@ -684,8 +665,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar foto_accesoro IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar foto_accesoro IG IS',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar foto_accesoro IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar foto_accesoro IG IS',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -774,8 +754,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar plantilla confirmación IG. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar plantilla confirmación IG',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar plantilla confirmación IG. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar plantilla confirmación IG',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -791,7 +770,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-isv-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaId\": \"eee43939-4e2c-46a3-98aa-f252d7fadbf0\" } ]\n}",
+    "jsonBody":"={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-isv-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaTitle\": \"Accesorios\" } ]\n}",
         "options": {
           "response": {
             "response": {
@@ -830,8 +809,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar foto_accesoro iG ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar foto_accesoro iG ISV',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar foto_accesoro iG ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar foto_accesoro iG ISV',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -886,8 +864,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar plantilla confirmación Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar plantilla confirmación Tiktok ISV',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar plantilla confirmación Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar plantilla confirmación Tiktok ISV',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -903,7 +880,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-tiktok-isv-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaId\": \"eee43939-4e2c-46a3-98aa-f252d7fadbf0\" } ]\n}",
+    "jsonBody":"={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-tiktok-isv-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaTitle\": \"Accesorios\" } ]\n}",
         "options": {
           "response": {
             "response": {
@@ -942,8 +919,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar foto_accesoro Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar foto_accesoro Tiktok ISV',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar foto_accesoro Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar foto_accesoro Tiktok ISV',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -959,7 +935,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {conversationId:$('Preparar campos plantilla confirmación').first().json.conversationId,fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
+        "jsonBody":"={{ {conversationId:String($('Preparar campos plantilla confirmación').first().json.subscriber_id), fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
         "options": {
           "response": {
             "response": {
@@ -998,8 +974,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Cargar campos plantilla ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Cargar campos plantilla ISV',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof b.contactId==='string'&&b.contactId.length>0&&Array.isArray(b.fields);\nif(!ok)throw new Error('La API no aceptó la operación: Validar Cargar campos plantilla ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Cargar campos plantilla ISV',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [

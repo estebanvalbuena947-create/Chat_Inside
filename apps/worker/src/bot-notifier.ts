@@ -1,3 +1,4 @@
+import { signMediaPaths } from '@chat-zernio/media';
 import type { SupabaseServerClient } from '@chat-zernio/config';
 
 /**
@@ -6,7 +7,7 @@ import type { SupabaseServerClient } from '@chat-zernio/config';
  * Toma los avisos pendientes de la cola y los entrega al webhook de n8n, que es quien decide. En
  * modo sombra el bot NO envia nada: solo registra lo que habria respondido.
  *
- * Cuatro decisiones:
+ * Cinco decisiones:
  *   1. El cuerpo del mensaje NO se guarda en la cola: se lee al entregar. El contenido del cliente
  *      no se duplica en la base.
  *   2. La forma del aviso es un contrato estable, documentado aqui. Si cambia, cambia tambien la
@@ -14,15 +15,37 @@ import type { SupabaseServerClient } from '@chat-zernio/config';
  *   3. Reintentar es seguro: la cola esta indexada por mensaje, y n8n recibe el mismo messageId, asi
  *      que puede deduplicar.
  *   4. Un espacio sin webhook configurado no es un error: se marca como omitido y se sigue.
+ *   5. Los adjuntos viajan con su enlace firmado (10 minutos). El bot no puede pedirlos de otra
+ *      forma: la ruta interna del almacen no sale nunca de la plataforma, y un comprobante que no
+ *      llegue deja al cliente sin su validacion de pago.
  */
 
 export const MAX_BOT_ATTEMPTS = 5;
 export const BOT_DELIVERIES_PER_RUN = 25;
+/** Deposito donde vive la copia propia de lo que manda el cliente. */
+export const CONVERSATION_MEDIA_BUCKET = 'conversation-media';
+/** Lo que dura el enlace firmado que viaja en el aviso. */
+export const BOT_ATTACHMENT_URL_TTL_SECONDS = 600;
 
 /** Si al aviso le quedan intentos. */
 export function shouldRetryBotDelivery(attempts: number): boolean {
   return attempts < MAX_BOT_ATTEMPTS;
 }
+
+/**
+ * Un adjunto del mensaje del cliente.
+ *
+ * `url` es un enlace firmado de corto plazo a NUESTRA copia; es `null` cuando el archivo todavia no
+ * se ha podido copiar al almacen (el aviso llega igual: el texto puede bastar, y perder el aviso
+ * entero por un archivo que aun no esta seria peor).
+ */
+export type InboundBotAttachment = {
+  contentType: string | null;
+  id: string;
+  kind: string;
+  title: string | null;
+  url: string | null;
+};
 
 /** El aviso que recibe n8n. Esta es su forma, y es un contrato. */
 export type InboundBotNotification = {
@@ -38,6 +61,7 @@ export type InboundBotNotification = {
   conversationId: string;
   event: 'message.inbound';
   message: {
+    attachments: InboundBotAttachment[];
     body: string;
     commentState: string | null;
     direction: string;
@@ -62,6 +86,7 @@ export function buildInboundNotification(input: {
     status: string;
   };
   message: {
+    attachments?: InboundBotAttachment[];
     body: string;
     commentState?: string | null;
     direction: string;
@@ -85,6 +110,7 @@ export function buildInboundNotification(input: {
     conversationId: input.conversation.id,
     event: 'message.inbound',
     message: {
+      attachments: input.message.attachments ?? [],
       body: input.message.body,
       commentState: input.message.commentState ?? null,
       direction: input.message.direction,
@@ -188,6 +214,10 @@ export async function sendPendingBotDeliveries(input: {
     const contacto = (c.contact ?? null) as Record<string, unknown> | null;
     const canal = (c.channel_account ?? null) as Record<string, unknown> | null;
 
+    // Los adjuntos se leen al entregar y se firman en el momento: el enlace dura diez minutos, asi
+    // que firmarlo al encolar lo dejaria caducado justo cuando el bot lo necesita.
+    const adjuntos = await readAttachments(input.supabase, fila.message_id);
+
     const aviso = buildInboundNotification({
       conversation: {
         channelName: canal ? (canal.display_name as string | null) : null,
@@ -200,6 +230,7 @@ export async function sendPendingBotDeliveries(input: {
         status: String(c.status ?? '')
       },
       message: {
+        attachments: adjuntos,
         body: String(m.body ?? ''),
         commentState: (m.comment_state as string | null) ?? null,
         direction: String(m.direction ?? ''),
@@ -242,8 +273,61 @@ export async function sendPendingBotDeliveries(input: {
   return resultados;
 }
 
-/** Transporte real: entrega el aviso al webhook de n8n. */
-export function createBotTransport(): (url: string, body: InboundBotNotification) => Promise<void> {
+/**
+ * Los adjuntos del mensaje, con su enlace firmado.
+ *
+ * Reglas:
+ *   1. Un fallo al firmar NO pierde el aviso: los adjuntos viajan con `url: null`. El bot puede
+ *      responder al texto y pedir el archivo de nuevo; perder el turno entero seria peor.
+ *   2. El orden es el del mensaje (`ordinal`): una misma imagen partida en dos capturas se lee en
+ *      el orden en que el cliente la mando.
+ *   3. Solo se firma lo que ya esta copiado: un adjunto sin archivo propio no tiene enlace.
+ */
+async function readAttachments(
+  supabase: SupabaseServerClient,
+  messageId: string
+): Promise<InboundBotAttachment[]> {
+  const { data, error } = await supabase
+    .from('message_attachments')
+    .select('id, kind, content_type, storage_object_path')
+    .eq('message_id', messageId)
+    .order('ordinal', { ascending: true });
+
+  if (error || !Array.isArray(data)) return [];
+
+  const filas = data as Array<Record<string, unknown>>;
+  const rutas = filas
+    .map((fila) => (typeof fila.storage_object_path === 'string' ? fila.storage_object_path : ''))
+    .filter((ruta) => ruta.trim().length > 0);
+
+  let firmadas = new Map<string, string>();
+  try {
+    firmadas = await signMediaPaths({
+      bucket: CONVERSATION_MEDIA_BUCKET,
+      paths: rutas,
+      signer: supabase,
+      ttlSeconds: BOT_ATTACHMENT_URL_TTL_SECONDS
+    });
+  } catch {
+    firmadas = new Map();
+  }
+
+  return filas.map((fila) => {
+    const ruta = typeof fila.storage_object_path === 'string' ? fila.storage_object_path : '';
+    return {
+      contentType: typeof fila.content_type === 'string' ? fila.content_type : null,
+      id: String(fila.id),
+      kind: String(fila.kind ?? 'file'),
+      title: null,
+      url: ruta ? (firmadas.get(ruta) ?? null) : null
+    };
+  });
+}
+
+/** Transporte real: entrega el aviso al webhook de n8n. */ export function createBotTransport(): (
+  url: string,
+  body: InboundBotNotification
+) => Promise<void> {
   return async (url: string, body: InboundBotNotification) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);

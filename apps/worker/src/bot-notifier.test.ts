@@ -51,6 +51,54 @@ describe('aviso al bot', () => {
     expect(aviso.conversation.platform).toBeNull();
     expect(aviso.message.sentAt).toBeNull();
     expect(aviso.message.source).toBe('dm');
+    // Un mensaje sin archivos viaja con la lista vacia, no sin el campo: el flujo que lo lee no
+    // tiene que distinguir "no hay adjuntos" de "el aviso es viejo".
+    expect(aviso.message.attachments).toEqual([]);
+  });
+
+  it('los adjuntos viajan con su tipo y su enlace, en el orden del mensaje', () => {
+    const aviso = buildInboundNotification({
+      ...base,
+      message: {
+        ...base.message,
+        attachments: [
+          {
+            contentType: 'image/jpeg',
+            id: 'adj-1',
+            kind: 'image',
+            title: null,
+            url: 'https://almacen/comprobante-1.jpg'
+          },
+          {
+            contentType: 'application/pdf',
+            id: 'adj-2',
+            kind: 'file',
+            title: null,
+            url: 'https://almacen/comprobante-2.pdf'
+          }
+        ]
+      }
+    });
+
+    expect(aviso.message.attachments).toHaveLength(2);
+    expect(aviso.message.attachments[0]).toMatchObject({ id: 'adj-1', kind: 'image' });
+    expect(aviso.message.attachments[1]).toMatchObject({
+      contentType: 'application/pdf',
+      kind: 'file'
+    });
+  });
+
+  it('un adjunto que todavia no esta copiado viaja con enlace nulo, sin perder el aviso', () => {
+    const aviso = buildInboundNotification({
+      ...base,
+      message: {
+        ...base.message,
+        attachments: [{ contentType: null, id: 'adj-3', kind: 'file', title: null, url: null }]
+      }
+    });
+
+    expect(aviso.message.attachments[0]?.url).toBeNull();
+    expect(aviso.message.body).toBe('Hola, quiero una cita');
   });
 
   it('reintenta mientras queden intentos y se rinde al agotarlos', () => {

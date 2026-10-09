@@ -223,20 +223,7 @@
                                                             "cachedResultUrl":  "/workflow/V6XrdcSIp5xyxVc8",
                                                             "cachedResultName":  "7.1 Emisor Followup v2 IG_IS"
                                                         },
-                                         "workflowInputs":  {
-                                                                "mappingMode":  "defineBelow",
-                                                                "value":  {
-
-                                                                          },
-                                                                "matchingColumns":  [
-
-                                                                                    ],
-                                                                "schema":  [
-
-                                                                           ],
-                                                                "attemptToConvertTypes":  false,
-                                                                "convertFieldsToString":  true
-                                                            },
+                                         "workflowInputs":{"mappingMode":"defineBelow","value":{"conversationId":"={{ $json.conversationId || $json.subscriber_id }}","id":"={{ $json.id }}","payload":"={{ $json.payload }}","scope":"={{ $json.scope }}","simulacion":"={{ $json.simulacion }}","subscriber_id":"={{ $json.subscriber_id }}","worker":"={{ $json.worker }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":true},
                                          "mode":  "each",
                                          "options":  {
                                                          "waitForSubWorkflow":  false
@@ -260,20 +247,7 @@
                                                             "cachedResultUrl":  "/workflow/aHja3uyQBSid8Pib",
                                                             "cachedResultName":  "7.1 Emisor Followup v2 IG_ISV"
                                                         },
-                                         "workflowInputs":  {
-                                                                "mappingMode":  "defineBelow",
-                                                                "value":  {
-
-                                                                          },
-                                                                "matchingColumns":  [
-
-                                                                                    ],
-                                                                "schema":  [
-
-                                                                           ],
-                                                                "attemptToConvertTypes":  false,
-                                                                "convertFieldsToString":  true
-                                                            },
+                                         "workflowInputs":{"mappingMode":"defineBelow","value":{"conversationId":"={{ $json.conversationId || $json.subscriber_id }}","id":"={{ $json.id }}","payload":"={{ $json.payload }}","scope":"={{ $json.scope }}","simulacion":"={{ $json.simulacion }}","subscriber_id":"={{ $json.subscriber_id }}","worker":"={{ $json.worker }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":true},
                                          "mode":  "each",
                                          "options":  {
                                                          "waitForSubWorkflow":  false
@@ -297,20 +271,7 @@
                                                             "cachedResultUrl":  "/workflow/Yr1cnK7pzsYK7mT1",
                                                             "cachedResultName":  "7.1 Emisor Followup v2 TIKTOK"
                                                         },
-                                         "workflowInputs":  {
-                                                                "mappingMode":  "defineBelow",
-                                                                "value":  {
-
-                                                                          },
-                                                                "matchingColumns":  [
-
-                                                                                    ],
-                                                                "schema":  [
-
-                                                                           ],
-                                                                "attemptToConvertTypes":  false,
-                                                                "convertFieldsToString":  true
-                                                            },
+                                         "workflowInputs":{"mappingMode":"defineBelow","value":{"conversationId":"={{ $json.conversationId || $json.subscriber_id }}","id":"={{ $json.id }}","payload":"={{ $json.payload }}","scope":"={{ $json.scope }}","simulacion":"={{ $json.simulacion }}","subscriber_id":"={{ $json.subscriber_id }}","worker":"={{ $json.worker }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":true},
                                          "mode":  "each",
                                          "options":  {
                                                          "waitForSubWorkflow":  false

@@ -20,25 +20,54 @@ import type { ToolTokenService } from './tool-token.service';
 
 const CAMPOS_ASIGNACION = { assigned_user_id: 'user-1', assignment_version: 5, id: 'conv-1' };
 
+/** La conversacion tal como la devuelve la lectura previa (con su asignacion y sus versiones). */
+function conversacionLeida(opciones: {
+  existeConversacion?: boolean;
+  asignadaA?: string | null;
+  modoAutomatizacion?: string;
+}) {
+  if (opciones.existeConversacion === false) return { data: null, error: null };
+  return {
+    data: {
+      assigned_user_id: opciones.asignadaA ?? null,
+      assignment_version: 4,
+      automation_mode: opciones.modoAutomatizacion ?? 'auto',
+      automation_version: 2,
+      id: 'conv-1'
+    },
+    error: null
+  };
+}
+
 function crearServicio(
   opciones: {
     conflicto?: boolean;
     esMiembro?: boolean;
     existeConversacion?: boolean;
     labels?: unknown[];
+    asesorActivo?: string | null;
+    asignadaA?: string | null;
+    modoAutomatizacion?: string;
   } = {}
 ) {
-  const cola: unknown[] = [
-    // 1) membresia
-    { data: opciones.esMiembro === false ? null : { user_id: 'user-1' }, error: null },
-    // 2) conversacion leida
-    {
-      data: opciones.existeConversacion === false ? null : { assignment_version: 4, id: 'conv-1' },
-      error: null
-    },
-    // 3) conversacion actualizada
-    { data: opciones.conflicto ? null : CAMPOS_ASIGNACION, error: null }
-  ];
+  // La conversacion se lee SIEMPRE antes de decidir: la rotacion no gasta turno de nadie si la
+  // conversacion no existe o ya esta derivada. Por eso la cola empieza por esa lectura.
+  const cola: unknown[] =
+    opciones.asesorActivo === undefined
+      ? [
+          // 1) conversacion leida
+          conversacionLeida(opciones),
+          // 2) membresia (solo en la asignacion nominativa)
+          { data: opciones.esMiembro === false ? null : { user_id: 'user-1' }, error: null },
+          // 3) conversacion actualizada
+          { data: opciones.conflicto ? null : CAMPOS_ASIGNACION, error: null }
+        ]
+      : [
+          // 1) conversacion leida
+          conversacionLeida(opciones),
+          // 2) conversacion actualizada (el asesor lo elige el RPC, que va aparte)
+          { data: opciones.conflicto ? null : CAMPOS_ASIGNACION, error: null }
+        ];
   let indice = 0;
   const siguiente = () => cola[Math.min(indice++, cola.length - 1)];
   const update = vi.fn((_filas: unknown, _opciones?: unknown) => cadena());
@@ -65,9 +94,9 @@ function crearServicio(
   const supabase = {
     from: vi.fn((tabla: string) =>
       tabla === 'labels' ? { select: () => cadenaConResultado(tablas[tabla]) } : cadena()
-    )
+    ),
+    rpc: vi.fn().mockResolvedValue({ data: opciones.asesorActivo ?? null, error: null })
   };
-
   function cadenaConResultado(resultado: unknown) {
     const encadenable: Record<string, unknown> = {
       eq: () => encadenable,
@@ -91,7 +120,7 @@ function crearServicio(
     { create: () => supabase } as unknown as SupabaseServerClientFactory
   );
 
-  return { insert, servicio, toolTokenService, update };
+  return { insert, rpc: supabase.rpc, servicio, toolTokenService, update };
 }
 
 /**
@@ -156,15 +185,87 @@ describe('asignaciones', () => {
     );
   });
 
-  it('rechaza una asignacion sin conversacion o sin persona', async () => {
+  it('rechaza una asignacion sin conversacion', async () => {
     const { servicio } = crearServicio();
 
     await expect(servicio.assign('Bearer token', { userId: 'user-1' })).rejects.toBeInstanceOf(
       UnprocessableEntityException
     );
+  });
+
+  it('asigna de forma rotativa cuando el bot no nombra a un asesor', async () => {
+    const { insert, servicio, update } = crearServicio({ asesorActivo: 'user-2' });
+
+    await servicio.assign('Bearer token', { conversationId: 'conv-1' });
+
+    expect(update.mock.calls[0]?.[0]).toMatchObject({ assigned_user_id: 'user-2' });
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ assigned_user_id: 'user-2' }));
+  });
+
+  it('no pausa ni asigna si no hay asesor activo', async () => {
+    const { servicio, update } = crearServicio({ asesorActivo: null });
+
     await expect(
       servicio.assign('Bearer token', { conversationId: 'conv-1' })
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('la rotacion reclama con el espacio del token y la ventana de presencia', async () => {
+    const { servicio, rpc } = crearServicio({ asesorActivo: 'user-2' });
+
+    await servicio.assign('Bearer token', { conversationId: 'conv-1' });
+
+    // El espacio sale del token, nunca de la peticion (regla 1 del servicio).
+    expect(rpc).toHaveBeenCalledTimes(1);
+    const argumentos = rpc.mock.calls[0]?.[1] as { p_active_after: string; p_tenant_id: string };
+    expect(argumentos.p_tenant_id).toBe('tenant-1');
+    const hace = Date.now() - Date.parse(argumentos.p_active_after);
+    // La ventana de presencia son dos minutos; se comprueba con holgura de reloj.
+    expect(hace).toBeGreaterThan(110_000);
+    expect(hace).toBeLessThan(130_000);
+  });
+
+  it('repetir la peticion NO cambia de asesora: devuelve la que ya estaba', async () => {
+    const { insert, rpc, servicio, update } = crearServicio({
+      asesorActivo: 'user-2',
+      asignadaA: 'user-7',
+      modoAutomatizacion: 'paused'
+    });
+
+    const resultado = (await servicio.assign('Bearer token', { conversationId: 'conv-1' })) as {
+      assignedUserId: unknown;
+      automationMode: string;
+    };
+
+    // Un reintento de n8n (timeout, 5xx) no puede mover la conversacion a otra persona.
+    expect(resultado.assignedUserId).toBe('user-7');
+    expect(resultado.automationMode).toBe('paused');
+    expect(rpc).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('una conversacion inexistente no gasta turno de rotacion', async () => {
+    const { rpc, servicio, update } = crearServicio({ existeConversacion: false });
+
+    await expect(
+      servicio.assign('Bearer token', { conversationId: 'conv-1' })
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('con turnBotOff en false la rotacion no registra transferencia', async () => {
+    const { insert, servicio, update } = crearServicio({ asesorActivo: 'user-2' });
+
+    await servicio.assign('Bearer token', { conversationId: 'conv-1', turnBotOff: false });
+
+    const filas = update.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(filas).toMatchObject({ assigned_user_id: 'user-2' });
+    expect('automation_mode' in filas).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
   });
 
   it('NO asigna a alguien que no pertenece al espacio, y no llega a escribir', async () => {

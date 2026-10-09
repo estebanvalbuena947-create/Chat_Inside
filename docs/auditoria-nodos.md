@@ -2,68 +2,107 @@
 
 Comprobacion automatica de coherencia entre metodo, ruta y cuerpo en los nodos que apuntan a nuestra API.
 
+## Estado tras la ronda de correcciones (2026-10-09)
+
+Ronda aplicada sobre `Flujos_v2/`. Vale para los tres hallazgos de abajo:
+
+- **Las lecturas ya no «coinciden» con el JSON de ManyChat: leen el JSON de nuestra API.** El hallazgo se
+  cerró al revés de como estaba escrito. En 4.1, `Resolver cuenta y URL ManyChat` y
+  `Resolver cuenta para liberación` leen la conversación de nuestra API y publican los campos que esperan
+  los IF; `Buscar contacto fb1309803` y `Liberación - buscar contacto ISV` piden
+  `GET /v1/tools/conversations/{id de la conversación}` sin `queryParameters`, y
+  `Buscar contacto fb1346079` y `Liberación - buscar contacto IS` quedaron deshabilitados. En 4.2 y 4.5,
+  `Stripe resolver cuenta y canal` ya no exige cuenta de ManyChat y publica `manychat_account_id`,
+  `manychat_channel` y `manychat_ruta_valida` a partir de la conversación, y los cuatro
+  `Stripe buscar contacto ISV/IS` usan `$('Preparar campos plantilla confirmación')`. En 7.1,
+  `Leer contacto en ManyChat` usa el `conversationId` de `Entrada de un seguimiento` y los verificadores
+  leen `id`, `automationMode`, `contact.platform` y `messages[]` de nuestra forma.
+- **Los campos del contacto ya se escriben contra nuestra API.** Los cuatro nodos «guardar campos» de 4.1
+  son `POST /v1/tools/contact-fields` con `{conversationId, fields}` y sus cuatro claves de idempotencia
+  llevan `{{ $execution.id }}`. Ya no hay GET con el id vacío ni `Number(subscriber_id)`, que producía
+  NaN. Los verificadores de campos leen `contactId` y `fields`; los de envío leen `item.id` y
+  `item.status`, no `status: 'success'`.
+- **El flujo de Sara cambió de archivo.** El antiguo
+  `Sara IG ISV - comprobantes optimizados y cierre automático (v2 WEPLASH).json` se retiró y su lugar lo
+  ocupa `Sara ZNO - (v2).json`, con el mismo flujo y el nombre interno
+  «Sara IG ISV - comprobantes optimizados y cierre automático (v2 WEPLASH)». La fila de la tabla se
+  actualizó a ese nombre.
+
+También queda alineado fuera de los tres hallazgos: el flujo padre `7 Followup v2 - cola global 6 por
+minuto 09 a 20.json` manda `workflowInputs.value` (conversationId, id, payload, scope, simulacion,
+subscriber_id, worker) a `Enviar IG_IS`, `Enviar IG_ISV` y `Enviar TIKTOK`, donde antes mandaba `{}`.
+
+La tabla de «Detalle» arrastra dos defectos de la generación original: los nombres de nodo tienen la
+codificación rota y tres filas (`Multimedia_Valle`, `Multimedia_Juarez` y `Multimedia_Lomas`) traen una
+celda de más. Se conserva tal cual, como registro de lo que se encontró; lo que hoy vale es lo que dice
+esta sección de estado.
+
+Lo que sigue pendiente y no está en esta tabla: subir a `branch_media` la imagen titulada «Accesorios» de
+cada sede (el envío con `media` responde 422 mientras no exista) y los flujos auxiliares que Sara
+referencia por `workflowId` y que no están en la carpeta, que el usuario conecta él.
+
 ## Resumen
 
 Los tres hallazgos de la auditoría original, con lo que resultó ser cada uno. **Los tres están
 resueltos**; el detalle de abajo se conserva como registro de lo que se encontró.
 
-| HALLAZGO                                                                 | Nodos | Estado                                                                                                                                                                       |
-| ------------------------------------------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Usa `subscriber_id` de ManyChat: debe ser `contactId` o `conversationId` | 40    | **Resuelto.** El nodo traductor rellena `subscriber_id` con el identificador de la conversación como puente, y los diez nodos que escriben campos ya mandan `conversationId` |
-| Envío sin contenido reconocible                                          | 7     | **Resuelto.** No eran envíos: eran escrituras de campos del contacto. Migradas a `/v1/tools/contact-fields`                                                                  |
-| GET con cuerpo de mensaje: incoherente                                   | 3     | **Resuelto.** Pedían catálogo mandando a la vez un cuerpo de flujo. Ahora piden sin cuerpo                                                                                   |
+| HALLAZGO                                                                 | Nodos | Estado                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Usa `subscriber_id` de ManyChat: debe ser `contactId` o `conversationId` | 40    | **Resuelto.** El nodo traductor rellena `subscriber_id` con el identificador de la conversación como puente, y los diez nodos que escriben campos mandan `{conversationId, fields}` con `{{ $execution.id }}` en la clave de idempotencia |
+| Envío sin contenido reconocible                                          | 7     | **Resuelto.** No eran envíos: eran escrituras de campos del contacto. Migradas a `/v1/tools/contact-fields`; los verificadores leen `contactId` y `fields`, o `item.id` y `item.status`                                                   |
+| GET con cuerpo de mensaje: incoherente                                   | 3     | **Resuelto.** Pedían catálogo mandando a la vez un cuerpo de flujo. Ahora piden sin cuerpo                                                                                                                                                |
 
 ## Detalle
 
-| Flujo                                                           | Nodo                                       | Metodo | Endpoint | Hallazgo                                                           |
-| --------------------------------------------------------------- | ------------------------------------------ | ------ | -------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| 4.1_V3_Retención y liberación - seguimiento corregido.json      | Recordatorio - guardar campos ISV          | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.1_V3_Retención y liberación - seguimiento corregido.json      | Recordatorio - guardar campos IS           | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.1_V3_Retención y liberación - seguimiento corregido.json      | Recordatorio - enviar flujo ISV o TikTok   | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.1_V3_Retención y liberación - seguimiento corregido.json      | Recordatorio - enviar flujo IG IS          | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.1_V3_Retención y liberación - seguimiento corregido.json      | Liberación - guardar campos ISV            | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.1_V3_Retención y liberación - seguimiento corregido.json      | Liberación - guardar campos IS             | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.1_V3_Retención y liberación - seguimiento corregido.json      | Liberación - enviar flujo ISV o TikTok     | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.1_V3_Retención y liberación - seguimiento corregido.json      | Liberación - enviar flujo IG IS            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Cargar campos plantilla principal          | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Cargar monto_pagado en ManyChat            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Enviar Flow conversión ManyChat            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Cargar campos plantilla ISV                | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Enviar foto_accesoro IG IS                 | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Enviar plantilla confirmación IG           | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Enviar foto_accesoro iG ISV                | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Enviar plantilla confirmación IG IS        | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Enviar plantilla confirmación Tiktok ISV   | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.2*V3* Stripe - lectura details, abono y plantilla.json        | Enviar foto_accesoro Tiktok ISV            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.5 Confirmar pago manual — Pabau y plantilla automática.json   | Cargar campos plantilla principal          | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.5 Confirmar pago manual — Pabau y plantilla automática.json   | Enviar plantilla confirmación IG IS        | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.5 Confirmar pago manual — Pabau y plantilla automática.json   | Enviar foto_accesoro IG IS                 | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.5 Confirmar pago manual — Pabau y plantilla automática.json   | Enviar plantilla confirmación IG           | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.5 Confirmar pago manual — Pabau y plantilla automática.json   | Enviar foto_accesoro iG ISV                | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.5 Confirmar pago manual — Pabau y plantilla automática.json   | Enviar plantilla confirmación Tiktok ISV   | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.5 Confirmar pago manual — Pabau y plantilla automática.json   | Enviar foto_accesoro Tiktok ISV            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 4.5 Confirmar pago manual — Pabau y plantilla automática.json   | Cargar campos plantilla ISV                | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 7.1 Emisor Followup v2 IG_IS.json                               | Cargar mensaje de seguimiento              | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 7.1 Emisor Followup v2 IG_IS.json                               | Enviar seguimiento por el canal del bot    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 7.1 Emisor Followup v2 IG_ISV.json                              | Enviar seguimiento por el canal del bot    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| 7.1 Emisor Followup v2 IG_ISV.json                              | Cargar mensaje de seguimiento              | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Multimedia_Valle                           | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Multimedia_Juarez                          | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Multimedia_Lomas                           | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Transferir_al_asesor                       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Foto_Deposito                              | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Send Flow                                  | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Set AI Answers                             | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Guardar mensaje comprobante                | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Enviar mensaje comprobante pendiente       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Guardar mensaje imagen no relacionada      | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Enviar aclaración imagen no relacionada    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Guardar mensaje revisión Banxico           | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Enviar mensaje revisión Banxico            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | catalogo_pdf                               | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | foto_accesorios                            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Cargar campos Banxico alternativo          | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Enviar plantilla Banxico alternativa       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Enviar foto_accesorios Banxico alternativa | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Transferir por consulta inconsistente      | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara IG ISV - comprobantes optimizados y cierre automático.json | Avisar al asesor del cambio pendiente      | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Flujo                                                         | Nodo                                       | Metodo | Endpoint | Hallazgo                                                           |
+| ------------------------------------------------------------- | ------------------------------------------ | ------ | -------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| 4.1_V3_Retención y liberación - seguimiento corregido.json    | Recordatorio - guardar campos ISV          | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.1_V3_Retención y liberación - seguimiento corregido.json    | Recordatorio - guardar campos IS           | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.1_V3_Retención y liberación - seguimiento corregido.json    | Recordatorio - enviar flujo ISV o TikTok   | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.1_V3_Retención y liberación - seguimiento corregido.json    | Recordatorio - enviar flujo IG IS          | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.1_V3_Retención y liberación - seguimiento corregido.json    | Liberación - guardar campos ISV            | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.1_V3_Retención y liberación - seguimiento corregido.json    | Liberación - guardar campos IS             | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.1_V3_Retención y liberación - seguimiento corregido.json    | Liberación - enviar flujo ISV o TikTok     | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.1_V3_Retención y liberación - seguimiento corregido.json    | Liberación - enviar flujo IG IS            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Cargar campos plantilla principal          | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Cargar monto_pagado en ManyChat            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Enviar Flow conversión ManyChat            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Cargar campos plantilla ISV                | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Enviar foto_accesoro IG IS                 | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Enviar plantilla confirmación IG           | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Enviar foto_accesoro iG ISV                | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Enviar plantilla confirmación IG IS        | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Enviar plantilla confirmación Tiktok ISV   | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.2*V3* Stripe - lectura details, abono y plantilla.json      | Enviar foto_accesoro Tiktok ISV            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.5 Confirmar pago manual — Pabau y plantilla automática.json | Cargar campos plantilla principal          | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.5 Confirmar pago manual — Pabau y plantilla automática.json | Enviar plantilla confirmación IG IS        | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.5 Confirmar pago manual — Pabau y plantilla automática.json | Enviar foto_accesoro IG IS                 | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.5 Confirmar pago manual — Pabau y plantilla automática.json | Enviar plantilla confirmación IG           | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.5 Confirmar pago manual — Pabau y plantilla automática.json | Enviar foto_accesoro iG ISV                | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.5 Confirmar pago manual — Pabau y plantilla automática.json | Enviar plantilla confirmación Tiktok ISV   | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.5 Confirmar pago manual — Pabau y plantilla automática.json | Enviar foto_accesoro Tiktok ISV            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 4.5 Confirmar pago manual — Pabau y plantilla automática.json | Cargar campos plantilla ISV                | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 7.1 Emisor Followup v2 IG_IS.json                             | Cargar mensaje de seguimiento              | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 7.1 Emisor Followup v2 IG_IS.json                             | Enviar seguimiento por el canal del bot    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 7.1 Emisor Followup v2 IG_ISV.json                            | Enviar seguimiento por el canal del bot    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 7.1 Emisor Followup v2 IG_ISV.json                            | Cargar mensaje de seguimiento              | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Multimedia_Valle                           | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Multimedia_Juarez                          | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Multimedia_Lomas                           | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Transferir_al_asesor                       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Foto_Deposito                              | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Send Flow                                  | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Set AI Answers                             | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Guardar mensaje comprobante                | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Enviar mensaje comprobante pendiente       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Guardar mensaje imagen no relacionada      | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Enviar aclaración imagen no relacionada    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Guardar mensaje revisión Banxico           | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Enviar mensaje revisión Banxico            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | catalogo_pdf                               | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | foto_accesorios                            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Cargar campos Banxico alternativo          | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Enviar plantilla Banxico alternativa       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Enviar foto_accesorios Banxico alternativa | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Transferir por consulta inconsistente      | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| Sara ZNO - (v2).json                                          | Avisar al asesor del cambio pendiente      | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |

@@ -20,42 +20,53 @@ import type { ToolTokenService } from './tool-token.service';
 const UUID = '6b1f4c2e-9d3a-4f58-8b7c-1e2d3f4a5b6c';
 const MEDIA = { id: 'media-1', kind: 'image', storage_object_path: 'b8b/valle/foto.jpg' };
 
-function crearServicio(opciones: { mediaIds?: number } = {}) {
+function crearServicio(
+  opciones: { mediaIds?: number; mediaPorTitulo?: unknown[]; sede?: string | null } = {}
+) {
   const enqueueOutbound = vi.fn().mockResolvedValue({ item: { id: 'msg-1' } });
   const insert = vi.fn();
-  let paso = 0;
 
-  const respuestas: unknown[] = [
-    { data: { sending_enabled: true }, error: null }, // 1) interruptor
-    {
-      data: opciones.mediaIds === 0 ? [] : [MEDIA],
+  // El doble responde POR TABLA y no por orden: el servicio consulta el interruptor, la
+  // conversacion, la multimedia y la tabla de adjuntos, y el orden puede cambiar sin que la prueba
+  // deje de comprobar lo que dice comprobar.
+  const respuestas: Record<string, unknown> = {
+    bot_integrations: { data: { sending_enabled: true }, error: null },
+    branch_media: {
+      data:
+        opciones.mediaPorTitulo !== undefined
+          ? opciones.mediaPorTitulo
+          : opciones.mediaIds === 0
+            ? []
+            : [MEDIA],
       error: null
-    }, // 2) multimedia
-    { data: null, error: null } // 3) adjuntos
-  ];
-
-  const siguiente = () => {
-    const r = respuestas[Math.min(paso, respuestas.length - 1)];
-    paso += 1;
-    return Promise.resolve(r);
+    },
+    conversations: {
+      data: opciones.sede === null ? { branch_id: null } : { branch_id: opciones.sede ?? 'sede-1' },
+      error: null
+    },
+    message_attachments: { data: null, error: null }
   };
 
-  const cadena = (): Record<string, unknown> => {
+  const cadena = (tabla: string): Record<string, unknown> => {
     const encadenable: Record<string, unknown> = {
       eq: () => encadenable,
+      ilike: () => encadenable,
       in: () => encadenable,
       insert: (...args: unknown[]) => {
         insert(...args);
-        return encadenable;
+        return Promise.resolve(respuestas.message_attachments);
       },
-      maybeSingle: () => siguiente(),
+      limit: () => Promise.resolve(respuestas[tabla]),
+      maybeSingle: () => Promise.resolve(respuestas[tabla]),
+      order: () => encadenable,
       select: () => encadenable,
-      then: (resolver: (valor: unknown) => unknown) => siguiente().then(resolver)
+      then: (resolver: (valor: unknown) => unknown) =>
+        Promise.resolve(respuestas[tabla]).then(resolver)
     };
     return encadenable;
   };
 
-  const supabase = { from: vi.fn(() => cadena()) };
+  const supabase = { from: vi.fn((tabla: string) => cadena(tabla)) };
 
   const servicio = new ToolMessagesService(
     {
@@ -211,6 +222,75 @@ describe('envio con multimedia de sede', () => {
         idempotencyKey: UUID,
         media: [{ otro: 'campo' }],
         text: 'Sin id'
+      })
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    expect(enqueueOutbound).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * La imagen pedida por su TITULO.
+ *
+ * Los flujos no conocen los identificadores de la base: escribir uno a mano solo funciona en el
+ * espacio donde se copio. El titulo lo elige quien carga el material, y la API lo busca dentro de la
+ * sede de la conversacion -- asi la misma palabra sirve en cualquier espacio y en cualquier sede.
+ */
+describe('multimedia pedida por titulo', () => {
+  it('resuelve la imagen de la sede de la conversacion y la envia', async () => {
+    const { enqueueOutbound, insert, servicio } = crearServicio();
+
+    await servicio.send('Bearer token', {
+      conversationId: 'conv-1',
+      idempotencyKey: UUID,
+      media: [{ branchMediaTitle: 'Accesorios' }],
+      text: 'Aqui tienes la foto'
+    });
+
+    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('si la sede no tiene esa imagen, rechaza el envio y NO encola nada', async () => {
+    const { enqueueOutbound, insert, servicio } = crearServicio({ mediaPorTitulo: [] });
+
+    await expect(
+      servicio.send('Bearer token', {
+        conversationId: 'conv-1',
+        idempotencyKey: UUID,
+        media: [{ branchMediaTitle: 'Accesorios' }],
+        text: 'Con foto'
+      })
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    expect(enqueueOutbound).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('sin sede en la conversacion no se puede buscar por titulo', async () => {
+    const { enqueueOutbound, servicio } = crearServicio({ sede: null });
+
+    await expect(
+      servicio.send('Bearer token', {
+        conversationId: 'conv-1',
+        idempotencyKey: UUID,
+        media: [{ branchMediaTitle: 'Accesorios' }],
+        text: 'Con foto'
+      })
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    expect(enqueueOutbound).not.toHaveBeenCalled();
+  });
+
+  it('no admite las dos formas a la vez para el mismo adjunto', async () => {
+    const { enqueueOutbound, servicio } = crearServicio();
+
+    await expect(
+      servicio.send('Bearer token', {
+        conversationId: 'conv-1',
+        idempotencyKey: UUID,
+        media: [{ branchMediaId: MEDIA.id, branchMediaTitle: 'Accesorios' }],
+        text: 'Con foto'
       })
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 

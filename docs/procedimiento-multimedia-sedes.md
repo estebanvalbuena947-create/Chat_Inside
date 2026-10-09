@@ -40,6 +40,13 @@ Es el camino normal, y no hace falta ningún token.
 El archivo se copia a nuestro almacén en ese momento. Si el enlace caduca o no es accesible, la
 pantalla lo dice y **no se registra nada**: no quedan filas a medias.
 
+**El título también es configuración.** Los flujos no conocen los identificadores de la base: piden la
+imagen por su título (`media: [{ "branchMediaTitle": "Accesorios" }]`) y la API la busca dentro de la
+sede de la conversación. Por eso la foto que acompaña a la confirmación de pago de cada sede tiene que
+llamarse **«Accesorios»**; si hay varias con ese título, se envía la de menor orden. Mientras esa
+imagen no exista, el envío responde 422 con el motivo y **no encola nada**, que es lo correcto: mandar
+el texto sin la foto pasaría desapercibido.
+
 Para cambiar el orden en que se muestran, vuelve a importar el mismo enlace con otro título: la
 importación es idempotente y **actualiza** la fila en lugar de duplicarla.
 

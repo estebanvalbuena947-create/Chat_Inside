@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { handoffToHuman } from '@chat-zernio/domain';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
+import { advisorActiveAfter } from '../tenants/advisor-presence.rule';
 import { ToolTokenService } from './tool-token.service';
 
 /**
@@ -16,11 +17,14 @@ import { ToolTokenService } from './tool-token.service';
  * El bot necesita poder derivar una conversacion a una persona y consultar las etiquetas del
  * espacio. Asignar NO envia nada al cliente, asi que es seguro incluso en modo sombra.
  *
- * Tres reglas:
+ * Cuatro reglas:
  *   1. El espacio sale del token, nunca de la peticion.
- *   2. Solo se puede asignar a quien pertenece al espacio: se comprueba contra las membresias.
+ *   2. Una persona concreta debe pertenecer al espacio; sin persona se selecciona una presencia activa.
  *   3. La asignacion lleva version. Dos personas asignando a la vez no se pisan: la segunda recibe
  *      un conflicto claro en lugar de sobrescribir a la primera en silencio.
+ *   4. Repetir la MISMA peticion no cambia de persona. Si la conversacion ya esta derivada y el bot
+ *      apagado, se devuelve esa asignacion sin gastar el turno de la rotacion: n8n reintenta ante un
+ *      timeout, y un reintento no puede mover la conversacion a otra asesora.
  */
 
 @Injectable()
@@ -30,7 +34,7 @@ export class ToolAssignmentsService {
     private readonly supabaseServerClientFactory: SupabaseServerClientFactory
   ) {}
 
-  /** Deriva una conversacion a una persona del espacio. */
+  /** Deriva una conversacion a una persona del espacio o a la siguiente presencia activa. */
   async assign(authorization: unknown, rawBody: unknown): Promise<unknown> {
     const identity = await this.toolTokenService.authenticate(authorization);
     this.toolTokenService.assertScope(identity, 'assignments');
@@ -41,32 +45,20 @@ export class ToolAssignmentsService {
       userId?: unknown;
     };
     const conversationId = typeof cuerpo.conversationId === 'string' ? cuerpo.conversationId : '';
-    const userId = typeof cuerpo.userId === 'string' ? cuerpo.userId : '';
+    let userId = typeof cuerpo.userId === 'string' ? cuerpo.userId : '';
     // El contrato dice que por defecto se apaga el bot al derivar, y tiene sentido: si sigue
     // contestando, la asesora y el bot hablarian a la vez. Solo se enciende si se pide lo contrario.
     const apagarBot = cuerpo.turnBotOff !== false;
-    if (!conversationId || !userId) {
-      throw new UnprocessableEntityException('Hacen falta conversationId y userId.');
-    }
+    if (!conversationId) throw new UnprocessableEntityException('Hace falta conversationId.');
 
     const supabase = this.supabaseServerClientFactory.create();
 
-    const { data: membresia, error: membresiaError } = await supabase
-      .from('memberships')
-      .select('user_id')
-      .eq('tenant_id', identity.tenantId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (membresiaError) {
-      throw new InternalServerErrorException('No fue posible comprobar la membresia.');
-    }
-    if (!membresia) {
-      throw new UnprocessableEntityException('Esa persona no pertenece a este espacio.');
-    }
-
+    // La conversacion se lee ANTES de reclamar turno de rotacion. Si no existe, o ya esta en manos
+    // de una persona, no se debe gastar el turno de nadie: la rotacion avanza al reclamar, y un
+    // fallo posterior dejaria a la siguiente asesora recibiendo la conversacion que no era.
     const { data: conversacion, error: conversacionError } = await supabase
       .from('conversations')
-      .select('id, assignment_version, automation_version')
+      .select('id, assigned_user_id, automation_mode, assignment_version, automation_version')
       .eq('tenant_id', identity.tenantId)
       .eq('id', conversationId)
       .maybeSingle();
@@ -75,12 +67,66 @@ export class ToolAssignmentsService {
     }
     if (!conversacion) throw new NotFoundException('La conversacion no existe en este espacio.');
 
-    const version = Number(
-      (conversacion as { assignment_version?: unknown }).assignment_version ?? 0
-    );
-    const versionAutomatizacion = Number(
-      (conversacion as { automation_version?: unknown }).automation_version ?? 0
-    );
+    const filaConversacion = conversacion as {
+      assigned_user_id?: unknown;
+      automation_mode?: unknown;
+      assignment_version?: unknown;
+      automation_version?: unknown;
+      id?: unknown;
+    };
+    const version = Number(filaConversacion.assignment_version ?? 0);
+    const versionAutomatizacion = Number(filaConversacion.automation_version ?? 0);
+    const yaAsignada =
+      typeof filaConversacion.assigned_user_id === 'string' &&
+      filaConversacion.assigned_user_id.length > 0;
+
+    // Reintento: n8n repite una peticion que ya se aplico (timeout, 5xx). Sin esto, el reintento
+    // rotaria a la SIGUIENTE asesora y la conversacion cambiaria de manos sola. La asignacion
+    // explicita ya respondia asi (409); la rotativa devuelve la que ya estaba puesta.
+    if (
+      !userId &&
+      apagarBot &&
+      yaAsignada &&
+      String(filaConversacion.automation_mode ?? '') === handoffToHuman()
+    ) {
+      return {
+        assignedUserId: filaConversacion.assigned_user_id,
+        assignmentVersion: version,
+        automationMode: handoffToHuman(),
+        conversationId: String(filaConversacion.id ?? conversationId),
+        tenantId: identity.tenantId,
+        userId: filaConversacion.assigned_user_id
+      };
+    }
+
+    if (!userId) {
+      const { data, error } = await supabase.rpc('claim_next_active_advisor', {
+        p_active_after: advisorActiveAfter(),
+        p_tenant_id: identity.tenantId
+      });
+      if (error) {
+        throw new InternalServerErrorException('No fue posible seleccionar un asesor disponible.');
+      }
+      userId = typeof data === 'string' ? data : '';
+      if (!userId) {
+        throw new UnprocessableEntityException(
+          'No hay asesores activos disponibles para la transferencia.'
+        );
+      }
+    } else {
+      const { data: membresia, error: membresiaError } = await supabase
+        .from('memberships')
+        .select('user_id')
+        .eq('tenant_id', identity.tenantId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (membresiaError) {
+        throw new InternalServerErrorException('No fue posible comprobar la membresia.');
+      }
+      if (!membresia) {
+        throw new UnprocessableEntityException('Esa persona no pertenece a este espacio.');
+      }
+    }
 
     const { data: actualizada, error } = await supabase
       .from('conversations')

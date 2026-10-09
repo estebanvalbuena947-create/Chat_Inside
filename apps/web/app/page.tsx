@@ -650,6 +650,37 @@ export default function HomePage(): React.ReactNode {
     inboxRef.current = inbox;
   }, [inbox]);
 
+  // Solo una pestaña visible cuenta como una asesora disponible. El servidor expira la presencia
+  // si el navegador se cierra o pierde conectividad, por lo que no hace falta un "logout" especial.
+  //
+  // El fallo se avisa en la consola a propósito: si el pulso no llega, esta persona queda fuera de
+  // la rotación de transferencias y el único síntoma sería que el bot dijera que no hay asesoras.
+  useEffect(() => {
+    const pulse = () => {
+      if (document.visibilityState !== 'visible') return;
+      void fetch('/api/presence', { method: 'POST' })
+        .then((respuesta) => {
+          if (!respuesta.ok) {
+            console.warn(
+              'No se pudo registrar tu presencia (' +
+                respuesta.status +
+                '): no entrarás en el reparto de conversaciones hasta que se restablezca.'
+            );
+          }
+        })
+        .catch(() => {
+          console.warn('No se pudo registrar tu presencia: revisa tu conexión.');
+        });
+    };
+    pulse();
+    document.addEventListener('visibilitychange', pulse);
+    const timer = window.setInterval(pulse, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', pulse);
+      window.clearInterval(timer);
+    };
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => setSearch(searchInput), 350);
     return () => window.clearTimeout(timer);

@@ -70,7 +70,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {conversationId:$('Preparar campos plantilla confirmación').first().json.conversationId,fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
+        "jsonBody":"={{ {conversationId:String($('Preparar campos plantilla confirmación').first().json.subscriber_id), fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
         "options": {
           "response": {
             "response": {
@@ -723,7 +723,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar monto_pagado para ManyChat').first().json.conversationId }}\",\n  \"fields\": [\n    {\n      \"field_name\": \"monto_pagado\",\n      \"field_value\": {{ $('Preparar monto_pagado para ManyChat').first().json.monto_pagado }}\n    }\n  ]\n}",
+        "jsonBody":"={\n  \"conversationId\": \"{{ $('Preparar monto_pagado para ManyChat').first().json.subscriber_id }}\",\n  \"fields\": [\n    {\n      \"field_name\": \"monto_pagado\",\n      \"field_value\": {{ $('Preparar monto_pagado para ManyChat').first().json.monto_pagado }}\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -797,11 +797,11 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/messages",
+        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversions",
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"subscriber_id\": \"{{ $('Preparar monto_pagado para ManyChat').first().json.subscriber_id }}\",\n  \"flow_ns\": \"content20260908142259_259772\"\n}",
+        "jsonBody": "={{ { conversationId: $('Preparar monto_pagado para ManyChat').first().json.subscriber_id, amount: $('Preparar monto_pagado para ManyChat').first().json.monto_pagado, currency: 'MXN', occurredAt: $('Analizar pago Stripe1').first().json.fecha_evento_stripe } }}",
         "options": {
           "response": {
             "response": {
@@ -1291,7 +1291,7 @@
             {
               "keyName": "={{ $('Analizar pago Stripe1').first().json.nombre_pago ? 'nombre' : 'id' }}",
               "condition": "={{ $('Analizar pago Stripe1').first().json.nombre_pago ? 'ilike' : 'eq' }}",
-              "keyValue": "={{ $('Analizar pago Stripe1').first().json.nombre_pago ? ('*' + $('Analizar pago Stripe1').first().json.nombre_pago.trim().split(/\\s+/)[0].replace(/[^a-zA-ZÃ€-ÿ]/g, '') + '*') : '-1' }}"
+              "keyValue": "={{ $('Analizar pago Stripe1').first().json.nombre_pago ? ('*' + $('Analizar pago Stripe1').first().json.nombre_pago.trim().split(/\\s+/)[0].replace(/[^a-zA-ZÀ-ÿ]/g, '') + '*') : '-1' }}"
             }
           ]
         }
@@ -1441,7 +1441,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {conversationId:$('Preparar campos plantilla confirmación').first().json.conversationId,fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
+        "jsonBody":"={{ {conversationId:String($('Preparar campos plantilla confirmación').first().json.subscriber_id), fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
         "options": {
           "response": {
             "response": {
@@ -1484,7 +1484,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-is-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaId\": \"eee43939-4e2c-46a3-98aa-f252d7fadbf0\" } ]\n}",
+    "jsonBody":"={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-is-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaTitle\": \"Accesorios\" } ]\n}",
         "options": {
           "response": {
             "response": {
@@ -1700,7 +1700,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-isv-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaId\": \"eee43939-4e2c-46a3-98aa-f252d7fadbf0\" } ]\n}",
+    "jsonBody":"={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-ig-isv-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaTitle\": \"Accesorios\" } ]\n}",
         "options": {
           "response": {
             "response": {
@@ -1829,7 +1829,7 @@
         "genericAuthType": "httpBearerAuth",
         "sendBody": true,
         "specifyBody": "json",
-    "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-tiktok-isv-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaId\": \"eee43939-4e2c-46a3-98aa-f252d7fadbf0\" } ]\n}",
+    "jsonBody":"={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-tiktok-isv-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaTitle\": \"Accesorios\" } ]\n}",
         "options": {
           "response": {
             "response": {
@@ -1868,17 +1868,9 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $json.conversation_id }}",
+        "url":"={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}",
         "genericAuthType": "httpBearerAuth",
         "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "subscriber_id",
-              "value": "={{ Number($('Preparar campos plantilla confirmación').first().json.subscriber_id) }}"
-            }
-          ]
-        },
         "options": {
           "response": {
             "response": {
@@ -1921,17 +1913,9 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $json.conversation_id }}",
+        "url":"={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}",
         "genericAuthType": "httpBearerAuth",
         "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "subscriber_id",
-              "value": "={{ Number($('Preparar campos plantilla confirmación').first().json.subscriber_id) }}"
-            }
-          ]
-        },
         "options": {
           "response": {
             "response": {
@@ -1974,8 +1958,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const base = $('Preparar campos plantilla confirmación').first().json;\nconst sid = String(base.subscriber_id ?? '').trim();\nconst clean = v => String(v ?? '').trim();\nconst present = v => !['','0','null','undefined','false'].includes(clean(v).toLowerCase());\nfunction node(name) { try { return $(name).first().json || {}; } catch { return {}; } }\nfunction body(r) {\n  let b = r.body ?? r;\n  if (typeof b === 'string') { try { b = JSON.parse(b); } catch { return {}; } }\n  return b && typeof b === 'object' ? b : {};\n}\nfunction lookup(name, account) {\n  const raw = node(name), b = body(raw), data = b.data || {};\n  const code = Number(raw.statusCode || 0);\n  const reportedAccount=accountURL(data.live_chat_url);\n  const ok = !raw.error && code >= 200 && code < 300 && b.status === 'success'\n    && clean(data.id ?? data.subscriber_id) === sid && (!reportedAccount || reportedAccount===account);\n  return {account, ok, code, data: ok ? data : {},\n    error: ok ? null : (raw.error ? 'ERROR_TRANSPORTE' : code === 401 || code === 403\n      ? 'CREDENCIAL_RECHAZADA' : reportedAccount && reportedAccount!==account ? 'CUENTA_CREDENCIAL_NO_COINCIDE'\n      : b.status === 'success' ? 'ID_NO_COINCIDE' : 'CONTACTO_NO_VALIDADO')};\n}\nfunction accountURL(url) {\n  const m = clean(url).match(/^https:\\/\\/app\\.manychat\\.com\\/(fb1309803|fb1346079)\\/chat\\/(\\d+)(?:[/?#]|$)/i);\n  return m && m[2] === sid ? m[1].toLowerCase() : '';\n}\nfunction channel(v) {\n  const s = clean(v).toLowerCase().replace(/[\\s_-]+/g, '');\n  if (['instagram','ig','igisv','igis'].includes(s)) return 'instagram';\n  if (['tiktok','tt'].includes(s)) return 'tiktok';\n  return '';\n}\nconst results = [lookup('Stripe buscar contacto ISV','fb1309803'), lookup('Stripe buscar contacto IS','fb1346079')];\nconst found = results.filter(r => r.ok);\nconst requestedAccount = accountURL(base.live_chat_url_recibida || base.live_chat_url);\nlet selected = found.length === 1 ? found[0] : found.find(r => r.account === requestedAccount);\nlet error = !/^[1-9]\\d*$/.test(sid) || !Number.isSafeInteger(Number(sid)) ? 'SUBSCRIBER_ID_INVALIDO' : '';\nif (!error && !selected) error = found.length ? 'CUENTA_AMBIGUA' : 'CONTACTO_NO_ENCONTRADO_O_API_FALLIDA';\n// Una URL de contexto puede desempatar resultados positivos; nunca sustituye getInfo exitoso.\nif (!error && requestedAccount && selected.account !== requestedAccount) error = 'CUENTA_ORIGEN_NO_COINCIDE';\nconst profile = selected?.data || {};\nconst custom = (Array.isArray(profile.custom_fields) ? profile.custom_fields : []).filter(f=>\n  ['canal_origen','canal origen','channel','canal','plataforma'].includes(clean(f.name).toLowerCase())\n).map(f=>channel(f.value)).filter(Boolean);\nconst customChannels=[...new Set(custom)];\nconst sourceChannel = channel(base.manychat_channel_origen || base.canal_origen || base.channel || base.canal || base.platform)\n  || (customChannels.length===1 ? customChannels[0] : '');\nconst hasIG = present(profile.ig_id);\nconst hasTT = present(profile.tt_user_id) || present(profile.tiktok_id) || present(profile.tt_id) || present(profile.tiktok_user_id);\nconst profileChannel = channel(profile.channel || profile.platform);\nlet resolvedChannel = sourceChannel || profileChannel || (hasIG !== hasTT ? (hasIG ? 'instagram' : 'tiktok') : '');\nif (!error && !resolvedChannel) error = hasIG && hasTT ? 'CANAL_AMBIGUO_ENVIAR_CANAL_ORIGEN' : 'CANAL_NO_IDENTIFICADO';\nif (!error && selected.account === 'fb1346079' && resolvedChannel !== 'instagram') error = 'CANAL_NO_CONFIGURADO_PARA_CUENTA';\nif (!error && !sourceChannel && profileChannel === 'instagram' && !hasIG) error = 'PERFIL_INSTAGRAM_NO_VALIDADO';\nconst flows = {\n  'fb1309803:instagram': {message:'content20260727160555_940586', transfer:'content20260727160555_959292'},\n  'fb1309803:tiktok': {message:'content20260727172417_383894', transfer:'content20260727171146_206702'},\n  'fb1346079:instagram': {message:'content20260706133514_126519', transfer:'content20260715195103_467329'},\n};\nconst key = selected ? selected.account + ':' + resolvedChannel : '';\nconst flow = flows[key];\nif (!error && !flow) error = 'FLUJO_NO_CONFIGURADO';\nconst account = selected?.account || '';\nreturn [{json:{...base,\n  manychat_account_id: account,\n  manychat_channel: resolvedChannel,\n  manychat_message_flow_ns: !error ? flow.message : '',\n  manychat_transfer_flow_ns: !error ? flow.transfer : '',\n  manychat_ruta_valida: !error,\n  manychat_error: error || null,\n  manychat_diagnostico: results.map(({account,ok,code,error})=>({account,ok,http_status:code,error})),\n  live_chat_url: selected ? 'https://app.manychat.com/'+account+'/chat/'+sid : '',\n  url_manychat_resuelta: Boolean(selected),\n}}];\n"
-      },
+        "jsCode":"// La cuenta de ManyChat ya no decide nada: el canal lo resuelve la conversacion en nuestra API.\n// Este nodo lee la conversacion que acaba de devolver la API y publica los campos que esperan los\n// IF y los verificadores del flujo. Se conservan los nombres 'manychat_*' para no tocar el resto.\nconst base = $('Preparar campos plantilla confirmación').first().json;\nconst conversationId = String(base.subscriber_id ?? '').trim();\nfunction nodo(name) { try { return $(name).first().json || {}; } catch { return {}; } }\nfunction cuerpo(raw) {\n  let b = raw.body ?? raw;\n  if (typeof b === 'string') { try { b = JSON.parse(b); } catch { return {}; } }\n  return b && typeof b === 'object' ? b : {};\n}\nconst raw = nodo('Stripe buscar contacto IS');\nconst b = cuerpo(raw);\nconst code = Number(raw.statusCode || 0);\nconst leida = !raw.error && code >= 200 && code < 300 && String(b.id ?? '') === conversationId;\nconst plataforma = String(b.contact?.platform ?? base.canal_origen ?? '').toLowerCase();\nconst canal = plataforma === 'tiktok' ? 'tiktok' : 'instagram';\nconst error = !conversationId ? 'SIN_CONVERSATION_ID' : leida ? null : 'CONVERSACION_NO_LEIDA:' + (code || 'SIN_RESPUESTA');\nreturn [{ json: { ...base,\n  weplash_conversation_id: conversationId,\n  manychat_account_id: leida ? (canal === 'tiktok' ? 'fb1309803' : 'fb1346079') : '',\n  manychat_channel: canal,\n  manychat_ruta_valida: leida,\n  manychat_error: error,\n  live_chat_url: '',\n  url_manychat_resuelta: false,\n  estado_conversacion: leida ? String(b.status ?? '') : '',\n  ventana_whatsapp: b.whatsappWindow ?? null } }];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2136,8 +2119,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Cargar campos plantilla ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Cargar campos plantilla ISV',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof b.contactId==='string'&&b.contactId.length>0&&Array.isArray(b.fields);\nif(!ok)throw new Error('La API no aceptó la operación: Validar Cargar campos plantilla ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Cargar campos plantilla ISV',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2149,8 +2131,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Cargar campos plantilla principal. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Cargar campos plantilla principal',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof b.contactId==='string'&&b.contactId.length>0&&Array.isArray(b.fields);\nif(!ok)throw new Error('La API no aceptó la operación: Validar Cargar campos plantilla principal. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Cargar campos plantilla principal',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2162,8 +2143,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar plantilla confirmación IG. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar plantilla confirmación IG',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar plantilla confirmación IG. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar plantilla confirmación IG',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2175,8 +2155,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar plantilla confirmación Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar plantilla confirmación Tiktok ISV',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar plantilla confirmación Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar plantilla confirmación Tiktok ISV',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2188,8 +2167,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar plantilla confirmación IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar plantilla confirmación IG IS',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar plantilla confirmación IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar plantilla confirmación IG IS',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2201,8 +2179,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar foto_accesoro iG ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar foto_accesoro iG ISV',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar foto_accesoro iG ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar foto_accesoro iG ISV',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2214,8 +2191,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar foto_accesoro Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar foto_accesoro Tiktok ISV',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar foto_accesoro Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar foto_accesoro Tiktok ISV',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2227,8 +2203,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar foto_accesoro IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar foto_accesoro IG IS',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst item=b.item||{};\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof item.id==='string'&&['queued','sending','sent'].includes(String(item.status));\nif(!ok)throw new Error('La API no aceptó la operación: Validar Enviar foto_accesoro IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Enviar foto_accesoro IG IS',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2250,7 +2225,7 @@
           "conditions": [
             {
               "id": "01dde844-51d2-52cb-832e-347fd761ce46",
-              "leftValue": "={{ $('Stripe resolver cuenta y canal').first().json.manychat_account_id === 'fb1346079' }}",
+              "leftValue": "={{ $('Stripe resolver cuenta y canal').first().json.manychat_ruta_valida === true }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -2287,8 +2262,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Cargar monto_pagado en ManyChat. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Preparar monto_pagado para ManyChat').first().json,manychat_ultima_operacion:'Cargar monto_pagado en ManyChat',manychat_envio_aceptado:true}}];\n"
-      },
+        "jsCode":"const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof b.contactId==='string'&&b.contactId.length>0&&Array.isArray(b.fields);\nif(!ok)throw new Error('La API no aceptó la operación: Validar Cargar monto_pagado en ManyChat. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Validar Cargar monto_pagado en ManyChat',manychat_envio_aceptado:true}}];"},
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -2300,7 +2274,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar Flow conversión ManyChat. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar Flow conversión ManyChat',manychat_envio_aceptado:true}}];\n"
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof b.queued==='boolean';\nif(!ok)throw new Error('No fue posible encolar la conversión del pago. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Stripe resolver cuenta y canal').first().json,conversion_ultima_operacion:'encolar_conversion',conversion_encolada:b.queued===true,conversion_motivo:b.reason??null}}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -2400,7 +2374,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst d=$input.first().json||{};\nconst p=$('Analizar pago Stripe1').first().json||{};\nif(p.pago_confirmado!==true)throw Error('NO_NOTIFICAR_PAGO_NO_CONFIRMADO');\nconst esc=x=>String(x??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nconst nombres={'24077':'Del Valle','24079':'Polanco','24080':'Juárez','24082':'Lomas','24221':'Roma'};\nconst fecha=x=>{\n if(!x)return 'No disponible';\n const t=String(x);\n if(/(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(t)){\n  const dt=new Date(t);return Number.isNaN(dt.getTime())?'Fecha no válida':dt.toLocaleString('es-MX',{timeZone:'America/Mexico_City',hour12:false});\n }\n return t.replace('T',' ');\n};\nconst pendiente=d.pago_pendiente_guardado===true;\nif(!pendiente&&d.pago_recibido!==true)throw Error('PAGO_NO_REGISTRADO_EN_BORRADOR');\nconst sucursal=nombres[String(d.sucursal)]||'Por identificar';\nconst nombre=d.nombre||d.nombre_completo||p.nombre_pago||'Nombre no disponible';\nconst session=String(p.stripe_checkout_session_id||'');\nconst centavos=Number(p.monto_total);\nif(!Number.isSafeInteger(centavos)||centavos<=0)throw Error('IMPORTE_STRIPE_INVALIDO');\nconst importe=(centavos/100).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});\nconst moneda=String(p.moneda||'').toUpperCase();\nconst ambiente=p.livemode===true?'PRODUCCIÃ“N':'PRUEBA';\nconst detalle=[\n ['Cliente',nombre],['Sucursal',sucursal],\n ['Servicio',d.nombre_servicio||String(d.servicio||'').replace(/_/g,' ')||'Por identificar'],\n ['Fecha y hora de la cita (CDMX)',fecha(d.jacuzzi_inicio||d.masaje_inicio)],\n ['Número de personas',d.numero_personas??d.personas??'Por identificar'],\n ['Correo de la reserva',d.email||d.correo||'No disponible'],\n ['Teléfono',d.phone||d.telefono||'No disponible'],\n ['Pagador',p.nombre_pago||'No disponible'],['Correo de pago',p.email_pago||'No disponible'],\n ['Importe recibido por Stripe',importe+' '+moneda],\n ['Fecha del evento de pago (CDMX)',fecha(p.fecha_evento_stripe)],\n ['Estado Stripe',p.estado_pago_stripe||'Confirmado por el flujo'],\n ['Sesión Stripe',session],['Payment Intent',p.stripe_payment_intent_id||'No disponible'],\n ['Evento Stripe',p.evento_stripe_id||'No disponible'],\n ['Borrador',pendiente?'Sin asociación confirmada':d.id||d.reserva_draft_id||'No disponible'],\n ['Subscriber ID',d.subscriber_id||p.subscriber_id_metadata||'No disponible'],\n ['Criterio de asociación',String(d.motivo_asociacion||d.metodo_asociacion||'referencia exacta de Stripe')],\n ['Posibles reservas',(Array.isArray(d.candidatos_reserva)?d.candidatos_reserva:[]).map(x=>'#'+(x.id??'?')+' '+(x.nombre??'sin nombre')+(x.email?' <'+x.email+'>':'')+(x.estado_reserva?' ('+x.estado_reserva+')':'')+(x.criterio?' ['+x.criterio+']':'')).join(' | ')||'Ninguna'],\n ['Entorno',ambiente]\n];\nconst aviso=pendiente?'Pago recibido, pendiente de asociar a una reserva. Los datos de la cita no están confirmados.':'Pago registrado. Este aviso acredita el registro del abono; la actualización de notas y la confirmación de la reserva continúan en el flujo.';\nconst asunto=('['+ambiente+'] Pago Stripe recibido â€” '+nombre+' â€” '+sucursal).replace(/[\\r\\n]+/g,' ').slice(0,220);\nconst html='<html lang=\"es\"><body style=\"font-family:Arial;color:#243330\"><h2>Pago recibido por Stripe</h2><p>'+esc(aviso)+'</p><table style=\"border-collapse:collapse\">'+detalle.map(([k,v])=>'<tr><th style=\"text-align:left;padding:8px;border:1px solid #ddd\">'+esc(k)+'</th><td style=\"padding:8px;border:1px solid #ddd\">'+esc(v)+'</td></tr>').join('')+'</table></body></html>';\nreturn [{json:{contexto_original:d,email_subject:asunto,email_html:html}}];\n"
+        "jsCode": "\nconst d=$input.first().json||{};\nconst p=$('Analizar pago Stripe1').first().json||{};\nif(p.pago_confirmado!==true)throw Error('NO_NOTIFICAR_PAGO_NO_CONFIRMADO');\nconst esc=x=>String(x??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nconst nombres={'24077':'Del Valle','24079':'Polanco','24080':'Juárez','24082':'Lomas','24221':'Roma'};\nconst fecha=x=>{\n if(!x)return 'No disponible';\n const t=String(x);\n if(/(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(t)){\n  const dt=new Date(t);return Number.isNaN(dt.getTime())?'Fecha no válida':dt.toLocaleString('es-MX',{timeZone:'America/Mexico_City',hour12:false});\n }\n return t.replace('T',' ');\n};\nconst pendiente=d.pago_pendiente_guardado===true;\nif(!pendiente&&d.pago_recibido!==true)throw Error('PAGO_NO_REGISTRADO_EN_BORRADOR');\nconst sucursal=nombres[String(d.sucursal)]||'Por identificar';\nconst nombre=d.nombre||d.nombre_completo||p.nombre_pago||'Nombre no disponible';\nconst session=String(p.stripe_checkout_session_id||'');\nconst centavos=Number(p.monto_total);\nif(!Number.isSafeInteger(centavos)||centavos<=0)throw Error('IMPORTE_STRIPE_INVALIDO');\nconst importe=(centavos/100).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});\nconst moneda=String(p.moneda||'').toUpperCase();\nconst ambiente=p.livemode===true?'PRODUCCIÓN':'PRUEBA';\nconst detalle=[\n ['Cliente',nombre],['Sucursal',sucursal],\n ['Servicio',d.nombre_servicio||String(d.servicio||'').replace(/_/g,' ')||'Por identificar'],\n ['Fecha y hora de la cita (CDMX)',fecha(d.jacuzzi_inicio||d.masaje_inicio)],\n ['Número de personas',d.numero_personas??d.personas??'Por identificar'],\n ['Correo de la reserva',d.email||d.correo||'No disponible'],\n ['Teléfono',d.phone||d.telefono||'No disponible'],\n ['Pagador',p.nombre_pago||'No disponible'],['Correo de pago',p.email_pago||'No disponible'],\n ['Importe recibido por Stripe',importe+' '+moneda],\n ['Fecha del evento de pago (CDMX)',fecha(p.fecha_evento_stripe)],\n ['Estado Stripe',p.estado_pago_stripe||'Confirmado por el flujo'],\n ['Sesión Stripe',session],['Payment Intent',p.stripe_payment_intent_id||'No disponible'],\n ['Evento Stripe',p.evento_stripe_id||'No disponible'],\n ['Borrador',pendiente?'Sin asociación confirmada':d.id||d.reserva_draft_id||'No disponible'],\n ['Subscriber ID',d.subscriber_id||p.subscriber_id_metadata||'No disponible'],\n ['Criterio de asociación',String(d.motivo_asociacion||d.metodo_asociacion||'referencia exacta de Stripe')],\n ['Posibles reservas',(Array.isArray(d.candidatos_reserva)?d.candidatos_reserva:[]).map(x=>'#'+(x.id??'?')+' '+(x.nombre??'sin nombre')+(x.email?' <'+x.email+'>':'')+(x.estado_reserva?' ('+x.estado_reserva+')':'')+(x.criterio?' ['+x.criterio+']':'')).join(' | ')||'Ninguna'],\n ['Entorno',ambiente]\n];\nconst aviso=pendiente?'Pago recibido, pendiente de asociar a una reserva. Los datos de la cita no están confirmados.':'Pago registrado. Este aviso acredita el registro del abono; la actualización de notas y la confirmación de la reserva continúan en el flujo.';\nconst asunto=('['+ambiente+'] Pago Stripe recibido — '+nombre+' — '+sucursal).replace(/[\\r\\n]+/g,' ').slice(0,220);\nconst html='<html lang=\"es\"><body style=\"font-family:Arial;color:#243330\"><h2>Pago recibido por Stripe</h2><p>'+esc(aviso)+'</p><table style=\"border-collapse:collapse\">'+detalle.map(([k,v])=>'<tr><th style=\"text-align:left;padding:8px;border:1px solid #ddd\">'+esc(k)+'</th><td style=\"padding:8px;border:1px solid #ddd\">'+esc(v)+'</td></tr>').join('')+'</table></body></html>';\nreturn [{json:{contexto_original:d,email_subject:asunto,email_html:html}}];\n"
       },
       "id": "c05e9b99-5a40-4f34-aff0-c9ab637cb8f7",
       "name": "Preparar correo Stripe reserva",
@@ -2454,7 +2428,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst d=$input.first().json||{};\nconst p=$('Analizar pago Stripe1').first().json||{};\nif(p.pago_confirmado!==true)throw Error('NO_NOTIFICAR_PAGO_NO_CONFIRMADO');\nconst esc=x=>String(x??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nconst nombres={'24077':'Del Valle','24079':'Polanco','24080':'Juárez','24082':'Lomas','24221':'Roma'};\nconst fecha=x=>{\n if(!x)return 'No disponible';\n const t=String(x);\n if(/(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(t)){\n  const dt=new Date(t);return Number.isNaN(dt.getTime())?'Fecha no válida':dt.toLocaleString('es-MX',{timeZone:'America/Mexico_City',hour12:false});\n }\n return t.replace('T',' ');\n};\nconst pendiente=d.pago_pendiente_guardado===true;\nif(!pendiente&&d.pago_recibido!==true)throw Error('PAGO_NO_REGISTRADO_EN_BORRADOR');\nconst sucursal=nombres[String(d.sucursal)]||'Por identificar';\nconst nombre=d.nombre||d.nombre_completo||p.nombre_pago||'Nombre no disponible';\nconst session=String(p.stripe_checkout_session_id||'');\nconst centavos=Number(p.monto_total);\nif(!Number.isSafeInteger(centavos)||centavos<=0)throw Error('IMPORTE_STRIPE_INVALIDO');\nconst importe=(centavos/100).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});\nconst moneda=String(p.moneda||'').toUpperCase();\nconst ambiente=p.livemode===true?'PRODUCCIÃ“N':'PRUEBA';\nconst detalle=[\n ['Cliente',nombre],['Sucursal',sucursal],\n ['Servicio',d.nombre_servicio||String(d.servicio||'').replace(/_/g,' ')||'Por identificar'],\n ['Fecha y hora de la cita (CDMX)',fecha(d.jacuzzi_inicio||d.masaje_inicio)],\n ['Número de personas',d.numero_personas??d.personas??'Por identificar'],\n ['Correo de la reserva',d.email||d.correo||'No disponible'],\n ['Teléfono',d.phone||d.telefono||'No disponible'],\n ['Pagador',p.nombre_pago||'No disponible'],['Correo de pago',p.email_pago||'No disponible'],\n ['Importe recibido por Stripe',importe+' '+moneda],\n ['Fecha del evento de pago (CDMX)',fecha(p.fecha_evento_stripe)],\n ['Estado Stripe',p.estado_pago_stripe||'Confirmado por el flujo'],\n ['Sesión Stripe',session],['Payment Intent',p.stripe_payment_intent_id||'No disponible'],\n ['Evento Stripe',p.evento_stripe_id||'No disponible'],\n ['Borrador',pendiente?'Sin asociación confirmada':d.id||d.reserva_draft_id||'No disponible'],\n ['Subscriber ID',d.subscriber_id||p.subscriber_id_metadata||'No disponible'],\n ['Criterio de asociación',String(d.motivo_asociacion||d.metodo_asociacion||'referencia exacta de Stripe')],\n ['Referencia del cliente (Stripe)',String(p.referencia_cliente||'No disponible')],\n ['Origen del cobro',(d.stripe_payment_link_id||p.stripe_payment_link_id)?('Link de pago compartido ('+String(d.stripe_payment_link_id||p.stripe_payment_link_id)+') â€” sin referencia de pre-reserva'):'Checkout propio de la pre-reserva'],\n ['Posibles reservas',(Array.isArray(d.candidatos_reserva)?d.candidatos_reserva:[]).map(x=>'#'+(x.id??'?')+' '+(x.nombre??'sin nombre')+(x.email?' <'+x.email+'>':'')+(x.estado_reserva?' ('+x.estado_reserva+')':'')+(x.criterio?' ['+x.criterio+']':'')).join(' | ')||'Ninguna'],\n ['Entorno',ambiente]\n];\nconst aviso=pendiente?'Pago recibido, pendiente de asociar a una reserva. Los datos de la cita no están confirmados.':'Pago registrado. Este aviso acredita el registro del abono; la actualización de notas y la confirmación de la reserva continúan en el flujo.';\nconst asunto=('['+ambiente+'] Pago Stripe recibido â€” '+nombre+' â€” '+sucursal).replace(/[\\r\\n]+/g,' ').slice(0,220);\nconst html='<html lang=\"es\"><body style=\"font-family:Arial;color:#243330\"><h2>Pago recibido por Stripe</h2><p>'+esc(aviso)+'</p><table style=\"border-collapse:collapse\">'+detalle.map(([k,v])=>'<tr><th style=\"text-align:left;padding:8px;border:1px solid #ddd\">'+esc(k)+'</th><td style=\"padding:8px;border:1px solid #ddd\">'+esc(v)+'</td></tr>').join('')+'</table></body></html>';\nreturn [{json:{contexto_original:d,email_subject:asunto,email_html:html}}];\n"
+        "jsCode": "\nconst d=$input.first().json||{};\nconst p=$('Analizar pago Stripe1').first().json||{};\nif(p.pago_confirmado!==true)throw Error('NO_NOTIFICAR_PAGO_NO_CONFIRMADO');\nconst esc=x=>String(x??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nconst nombres={'24077':'Del Valle','24079':'Polanco','24080':'Juárez','24082':'Lomas','24221':'Roma'};\nconst fecha=x=>{\n if(!x)return 'No disponible';\n const t=String(x);\n if(/(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(t)){\n  const dt=new Date(t);return Number.isNaN(dt.getTime())?'Fecha no válida':dt.toLocaleString('es-MX',{timeZone:'America/Mexico_City',hour12:false});\n }\n return t.replace('T',' ');\n};\nconst pendiente=d.pago_pendiente_guardado===true;\nif(!pendiente&&d.pago_recibido!==true)throw Error('PAGO_NO_REGISTRADO_EN_BORRADOR');\nconst sucursal=nombres[String(d.sucursal)]||'Por identificar';\nconst nombre=d.nombre||d.nombre_completo||p.nombre_pago||'Nombre no disponible';\nconst session=String(p.stripe_checkout_session_id||'');\nconst centavos=Number(p.monto_total);\nif(!Number.isSafeInteger(centavos)||centavos<=0)throw Error('IMPORTE_STRIPE_INVALIDO');\nconst importe=(centavos/100).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});\nconst moneda=String(p.moneda||'').toUpperCase();\nconst ambiente=p.livemode===true?'PRODUCCIÓN':'PRUEBA';\nconst detalle=[\n ['Cliente',nombre],['Sucursal',sucursal],\n ['Servicio',d.nombre_servicio||String(d.servicio||'').replace(/_/g,' ')||'Por identificar'],\n ['Fecha y hora de la cita (CDMX)',fecha(d.jacuzzi_inicio||d.masaje_inicio)],\n ['Número de personas',d.numero_personas??d.personas??'Por identificar'],\n ['Correo de la reserva',d.email||d.correo||'No disponible'],\n ['Teléfono',d.phone||d.telefono||'No disponible'],\n ['Pagador',p.nombre_pago||'No disponible'],['Correo de pago',p.email_pago||'No disponible'],\n ['Importe recibido por Stripe',importe+' '+moneda],\n ['Fecha del evento de pago (CDMX)',fecha(p.fecha_evento_stripe)],\n ['Estado Stripe',p.estado_pago_stripe||'Confirmado por el flujo'],\n ['Sesión Stripe',session],['Payment Intent',p.stripe_payment_intent_id||'No disponible'],\n ['Evento Stripe',p.evento_stripe_id||'No disponible'],\n ['Borrador',pendiente?'Sin asociación confirmada':d.id||d.reserva_draft_id||'No disponible'],\n ['Subscriber ID',d.subscriber_id||p.subscriber_id_metadata||'No disponible'],\n ['Criterio de asociación',String(d.motivo_asociacion||d.metodo_asociacion||'referencia exacta de Stripe')],\n ['Referencia del cliente (Stripe)',String(p.referencia_cliente||'No disponible')],\n ['Origen del cobro',(d.stripe_payment_link_id||p.stripe_payment_link_id)?('Link de pago compartido ('+String(d.stripe_payment_link_id||p.stripe_payment_link_id)+') — sin referencia de pre-reserva'):'Checkout propio de la pre-reserva'],\n ['Posibles reservas',(Array.isArray(d.candidatos_reserva)?d.candidatos_reserva:[]).map(x=>'#'+(x.id??'?')+' '+(x.nombre??'sin nombre')+(x.email?' <'+x.email+'>':'')+(x.estado_reserva?' ('+x.estado_reserva+')':'')+(x.criterio?' ['+x.criterio+']':'')).join(' | ')||'Ninguna'],\n ['Entorno',ambiente]\n];\nconst aviso=pendiente?'Pago recibido, pendiente de asociar a una reserva. Los datos de la cita no están confirmados.':'Pago registrado. Este aviso acredita el registro del abono; la actualización de notas y la confirmación de la reserva continúan en el flujo.';\nconst asunto=('['+ambiente+'] Pago Stripe recibido — '+nombre+' — '+sucursal).replace(/[\\r\\n]+/g,' ').slice(0,220);\nconst html='<html lang=\"es\"><body style=\"font-family:Arial;color:#243330\"><h2>Pago recibido por Stripe</h2><p>'+esc(aviso)+'</p><table style=\"border-collapse:collapse\">'+detalle.map(([k,v])=>'<tr><th style=\"text-align:left;padding:8px;border:1px solid #ddd\">'+esc(k)+'</th><td style=\"padding:8px;border:1px solid #ddd\">'+esc(v)+'</td></tr>').join('')+'</table></body></html>';\nreturn [{json:{contexto_original:d,email_subject:asunto,email_html:html}}];\n"
       },
       "id": "8045684f-33c2-4e36-a4cb-e653f1308189",
       "name": "Preparar correo Stripe sin asociación",
@@ -2792,7 +2766,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function salidaSegura(nombre) {\n  try {\n    const n = $(nombre);\n    return n && n.isExecuted ? (n.first().json || {}) : null;\n  } catch { return null; }\n}\nconst fuentes = [\n  'Preparar revisión de nota pendiente',\n  'Preparar revisión de pago Stripe tardío',\n  'Conservar pago y cita con nota pendiente',\n  'Preparar correo revisión de nota Stripe',\n];\nlet revision = {};\nfor (const nombre of fuentes) { const dato = salidaSegura(nombre); if (dato) revision = { ...revision, ...dato }; }\nconst fila = { ...revision, ...($input.first().json || {}) };\nconst esc = x => String(x ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nconst nombres = { '24077': 'Del Valle', '24079': 'Polanco', '24080': 'Juárez', '24082': 'Lomas', '24221': 'Roma' };\nconst detalle = [\n  ['Cliente', fila.nombre ?? fila.nombre_completo],\n  ['Sucursal', nombres[String(fila.sucursal)] || fila.sucursal],\n  ['Servicio', fila.nombre_servicio ?? fila.servicio],\n  ['Borrador', fila.id],\n  ['Subscriber ID', fila.subscriber_id],\n  ['Sesión Stripe', fila.stripe_checkout_session_id],\n  ['Importe registrado', fila.monto_pagado ? fila.monto_pagado + ' ' + String(fila.moneda_pago || 'MXN').toUpperCase() : 'No disponible'],\n  ['Motivo', revision.motivo_revision ?? fila.motivo_revision ?? 'PAGO_CONFIRMADO_REVISION_MANUAL'],\n  ['Citas sin verificar', (revision.citas_pabau_no_verificadas || []).join(', ') || 'Ninguna'],\n];\nconst aviso = revision.mensaje_operativo || 'El pago quedó registrado, pero la confirmación no se pudo cerrar automáticamente. La reserva se conserva y requiere revisión manual.';\nconst html = '<html lang=\"es\"><body style=\"font-family:Arial;color:#243330\"><h2>Pago Stripe registrado â€” confirmación pendiente</h2><p>' + esc(aviso) + '</p><table style=\"border-collapse:collapse\">' + detalle.map(([k, v]) => '<tr><th style=\"text-align:left;padding:8px;border:1px solid #ddd\">' + esc(k) + '</th><td style=\"padding:8px;border:1px solid #ddd\">' + esc(v ?? 'No disponible') + '</td></tr>').join('') + '</table></body></html>';\nconst asunto = ('Pago Stripe registrado â€” confirmación pendiente â€” ' + (fila.nombre ?? 'Cliente') + ' â€” ' + (nombres[String(fila.sucursal)] || 'Sucursal')).replace(/[\\r\\n]+/g, ' ').slice(0, 220);\nreturn [{ json: { ...fila, email_subject: asunto, email_html: html } }];"
+        "jsCode": "function salidaSegura(nombre) {\n  try {\n    const n = $(nombre);\n    return n && n.isExecuted ? (n.first().json || {}) : null;\n  } catch { return null; }\n}\nconst fuentes = [\n  'Preparar revisión de nota pendiente',\n  'Preparar revisión de pago Stripe tardío',\n  'Conservar pago y cita con nota pendiente',\n  'Preparar correo revisión de nota Stripe',\n];\nlet revision = {};\nfor (const nombre of fuentes) { const dato = salidaSegura(nombre); if (dato) revision = { ...revision, ...dato }; }\nconst fila = { ...revision, ...($input.first().json || {}) };\nconst esc = x => String(x ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nconst nombres = { '24077': 'Del Valle', '24079': 'Polanco', '24080': 'Juárez', '24082': 'Lomas', '24221': 'Roma' };\nconst detalle = [\n  ['Cliente', fila.nombre ?? fila.nombre_completo],\n  ['Sucursal', nombres[String(fila.sucursal)] || fila.sucursal],\n  ['Servicio', fila.nombre_servicio ?? fila.servicio],\n  ['Borrador', fila.id],\n  ['Subscriber ID', fila.subscriber_id],\n  ['Sesión Stripe', fila.stripe_checkout_session_id],\n  ['Importe registrado', fila.monto_pagado ? fila.monto_pagado + ' ' + String(fila.moneda_pago || 'MXN').toUpperCase() : 'No disponible'],\n  ['Motivo', revision.motivo_revision ?? fila.motivo_revision ?? 'PAGO_CONFIRMADO_REVISION_MANUAL'],\n  ['Citas sin verificar', (revision.citas_pabau_no_verificadas || []).join(', ') || 'Ninguna'],\n];\nconst aviso = revision.mensaje_operativo || 'El pago quedó registrado, pero la confirmación no se pudo cerrar automáticamente. La reserva se conserva y requiere revisión manual.';\nconst html = '<html lang=\"es\"><body style=\"font-family:Arial;color:#243330\"><h2>Pago Stripe registrado — confirmación pendiente</h2><p>' + esc(aviso) + '</p><table style=\"border-collapse:collapse\">' + detalle.map(([k, v]) => '<tr><th style=\"text-align:left;padding:8px;border:1px solid #ddd\">' + esc(k) + '</th><td style=\"padding:8px;border:1px solid #ddd\">' + esc(v ?? 'No disponible') + '</td></tr>').join('') + '</table></body></html>';\nconst asunto = ('Pago Stripe registrado — confirmación pendiente — ' + (fila.nombre ?? 'Cliente') + ' — ' + (nombres[String(fila.sucursal)] || 'Sucursal')).replace(/[\\r\\n]+/g, ' ').slice(0, 220);\nreturn [{ json: { ...fila, email_subject: asunto, email_html: html } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -4192,12 +4166,7 @@
         ]
       ]
     },
-    "Conversión tiene cuenta configurada": {
-      "main": [
-        [],
-        []
-      ]
-    },
+    "Conversión tiene cuenta configurada": {"main":[[{"index":0,"node":"Cargar monto_pagado en ManyChat","type":"main"}],[{"index":0,"node":"Conversión omitida en cuenta ISV","type":"main"}]]},
     "Validar Cargar monto_pagado en ManyChat": {
       "main": [
         [

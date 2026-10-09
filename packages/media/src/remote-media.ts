@@ -63,6 +63,11 @@ export function recognizeMedia(buffer: Buffer): { contentType: string; extension
     buffer.subarray(offset, offset + bytes.length).equals(Buffer.from(bytes));
 
   if (startsWith([0xff, 0xd8, 0xff])) return { contentType: 'image/jpeg', extension: 'jpg' };
+  // Un comprobante de pago llega muchas veces en PDF. Sin esta firma, el archivo se descarga y se
+  // descarta, y la validacion del pago se queda sin su prueba.
+  if (startsWith([0x25, 0x50, 0x44, 0x46, 0x2d])) {
+    return { contentType: 'application/pdf', extension: 'pdf' };
+  }
   if (startsWith([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
     return { contentType: 'image/png', extension: 'png' };
   }

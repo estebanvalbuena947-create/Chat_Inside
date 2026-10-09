@@ -44,9 +44,12 @@ No pertenece al producto ninguna regla de reservas, citas, agenda, disponibilida
 
 ### Organización de atención
 
-- Es propietaria de etiquetas internas, respuestas rápidas y asignaciones.
+- Es propietaria de etiquetas internas, respuestas rápidas, asignaciones y de **quién está disponible
+  para recibir una conversación** (la presencia de la bandeja y el orden rotativo).
 - No representa estados de negocio de otro sistema ni etiquetas propias de plataformas conectadas.
-- Punto de entrada: `apps/api/src/tools/tool-assignments.service.ts` (etiquetas y asignación) y `packages/domain/src/labels.ts`.
+- Punto de entrada: `apps/api/src/tools/tool-assignments.service.ts` (etiquetas y asignación rotativa),
+  `apps/api/src/tenants/advisor-presence.service.ts` (el pulso de la bandeja) y
+  `packages/domain/src/labels.ts`.
 
 ### Integración y automatización
 

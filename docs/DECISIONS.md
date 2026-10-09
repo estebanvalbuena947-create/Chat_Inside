@@ -1007,3 +1007,71 @@ separado. El RPC valida que solo se invoque como `service_role`, bloquea la pre-
 reserva y comprobante, e inserta el historial en una única transacción. La clave UUID de idempotencia
 impide repetir el efecto ante reintentos. La migración externa es aditiva y el dashboard anterior sigue
 funcionando durante la transición.
+
+## La transferencia sin persona concreta se reparte por rotación entre quien tiene la bandeja abierta (2026-10-09)
+
+El bot derivaba siempre a la misma persona, fijada en tres nodos de n8n con un UUID escrito a mano:
+si esa persona no estaba, la conversación se quedaba esperando a alguien que no iba a contestar, y
+cambiar de turno exigía editar y reimportar los flujos. Ahora el flujo pide la transferencia **sin
+`userId`** y la API elige.
+
+Cómo se decide quién está disponible: la bandeja manda un pulso autenticado cada minuto **solo con la
+pestaña visible**, y la presencia vence a los dos minutos. No se deduce de una invitación, de un rol ni
+de una sesión de Supabase: se puede estar dentro de la plataforma con la pestaña de fondo y no contar,
+que es exactamente lo que hace que un reparto por sesiones abiertas no sirva. La ventana son dos
+pulsos, de modo que uno perdido no saca a nadie del reparto, y un navegador cerrado deja de contar sin
+que nadie tenga que cerrar sesión.
+
+El orden es round-robin por espacio y se decide dentro de PostgreSQL, en una función que bloquea la
+fila del cursor: dos transferencias simultáneas no pueden recibir a la misma persona, y mientras haya
+dos o más personas activas nadie recibe dos conversaciones seguidas. Participan todas las membresías
+con presencia, sin distinguir rol, porque el modelo actual no tiene un rol separado de «asesora». La
+primera asignación de un espacio la gana el identificador de persona más bajo: es determinista y
+arbitrario, y está escrito para que nadie tenga que deducirlo del SQL.
+
+Si no hay nadie disponible, la transferencia **falla con 422** y la conversación no cambia: es
+preferible que n8n lo vea y avise a que la conversación quede marcada como derivada a nadie. Repetir la
+misma petición tampoco cambia de persona: si la conversación ya está asignada y el bot apagado, se
+devuelve esa misma asignación. Sin esa regla, un reintento de n8n por un timeout habría movido la
+conversación a la siguiente asesora, que es un fallo silencioso y difícil de explicar.
+
+Queda anotado como límite conocido: el turno se reclama antes de escribir la conversación, así que un
+conflicto de versión (409) o un fallo al registrar la transferencia pueden consumir un turno de
+rotación. Unificarlo en una sola transacción de base es un corte posterior; hoy la conversación no se
+pierde ni se asigna dos veces, solo se salta un turno.
+
+## La multimedia de una sede se puede pedir por su título (2026-10-09)
+
+Los flujos que envían la foto de accesorios llevaban un identificador de `branch_media` escrito a
+mano. Ese identificador no puede ser correcto: pertenece a la base de un espacio concreto, y copiarlo a
+otro espacio apunta a una fila inexistente, con lo que el envío falla entero —incluido el texto que lo
+acompaña—. La alternativa de que cada flujo consultara el catálogo antes de enviar añadía dos nodos y
+dos llamadas a cada ruta de confirmación de pago.
+
+Decisión: el cuerpo del envío admite `media: [{ branchMediaTitle: "Accesorios" }]`. La API busca ese
+título **dentro de la sede de la conversación** y del espacio del token, y si hay varias coincidencias
+toma la de menor `sort_order`. El título lo elige quien carga el material desde la pantalla de
+multimedia de sedes, así que la configuración no vive en un UUID ni en el flujo. Si la sede no tiene
+esa imagen, la respuesta es 422 con el motivo, y **no se encola nada**: mandar el texto sin la foto
+sería peor, porque nadie lo notaría.
+
+`branchMediaId` sigue siendo válido y sigue siendo la forma explícita: se comprueba dentro del espacio
+del token. Las dos formas son excluyentes en un mismo adjunto.
+
+## El aviso al bot lleva los adjuntos con enlace firmado (2026-10-09)
+
+Un comprobante de pago llega como archivo, y hasta ahora el bot solo podía enterarse de los adjuntos si
+el proveedor había escrito una URL dentro del texto del mensaje. Nuestro aviso `message.inbound` no
+llevaba ninguna, así que el comprobante entraba a la conversación pero no a la validación de pagos: el
+cliente lo mandaba y el bot le contestaba como si no hubiera mandado nada.
+
+El aviso incluye ahora `message.attachments` con `id`, `kind`, `contentType` y `url`. La `url` es un
+enlace firmado de diez minutos a **nuestra copia** en el depósito privado, generado al entregar el
+aviso y no al encolarlo: firmarlo antes lo dejaría caducado justo cuando el bot lo necesita. Un adjunto
+que todavía no se ha podido copiar viaja con `url: null` y no impide el aviso; el bot puede responder
+al texto y pedir el archivo otra vez.
+
+En el mismo corte se reconoció el PDF por sus bytes (`%PDF-`) y se añadió `application/pdf` al depósito
+de la conversación. Sin lo primero, la descarga se completaba y el archivo se descartaba por
+desconocido; sin lo segundo, la escritura se rechazaba. Las dos cosas juntas eran la razón de que
+ningún comprobante en PDF llegara nunca a la validación.

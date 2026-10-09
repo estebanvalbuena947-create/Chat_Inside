@@ -49,7 +49,7 @@ https://chat.insidespa.com.mx/auth/password
 
 Es **el** paso. Los demás dependen de él.
 
-El flujo `Flujos_v2/Sara IG ISV - comprobantes optimizados y cierre automático (v2 WEPLASH).json` **ya
+El flujo `Flujos_v2/Sara ZNO - (v2).json` **ya
 trae el nodo** `Traducir aviso de WEPLASH1` entre el webhook y el resto. El archivo
 `Flujos_v2/nodo-traductor-entrada.json` es la **fuente de verdad** del código: si hay que pegarlo a
 mano, se copia de ahí, y su nota explica qué hace.
@@ -194,28 +194,21 @@ Derivan la conversación y apagan el bot en el mismo acto.
 | ---------------------------------------------------------------------------------------------------------- | ---------------------------- |
 | `Transferir_al_asesor` · `Transferir por consulta inconsistente` · `Avisar al asesor del cambio pendiente` | `POST /v1/tools/assignments` |
 
-Cuerpo: `{ "conversationId": …, "userId": "…", "turnBotOff": true }`.
+Cuerpo: `{ "conversationId": …, "turnBotOff": true }`, **sin `userId`**.
 
-El `userId` es el de **nuestra** base y tiene que ser una **membresía del espacio** (la tabla
-`memberships`); si no lo es, la API responde 422 en lugar de asignar a un desconocido. En este espacio
-hay dos personas:
+Sin `userId` la API reparte por rotación entre quien tiene la bandeja abierta en ese momento: la
+bandeja manda un pulso cada minuto mientras la pestaña está visible y la presencia vence a los dos
+minutos. Es lo que evita que una transferencia dependa de una sola persona: antes los tres nodos
+llevaban el UUID del supervisor escrito a mano, y si no estaba, la conversación esperaba a alguien que
+no iba a contestar.
 
-| `user_id`                              | Rol        | Correo                |
-| -------------------------------------- | ---------- | --------------------- |
-| `a69137d1-7dba-4a70-ba6c-e6e8dc4377f6` | supervisor | hola@insidespa.com.mx |
-| `eb2a8f2d-fa28-4e43-afa2-f2a3289b4667` | admin      | ymartinez@weplash.com |
+Si no hay nadie con la bandeja abierta, la transferencia responde **422** y la conversación no cambia;
+n8n lo ve y puede avisar. Si se quiere derivar a una persona concreta a propósito, se manda `userId` con
+una membresía del espacio (la API responde 422 si no lo es).
 
-Los tres nodos apuntan hoy al **supervisor**. Si la atención la lleva la otra persona, se cambia el
-UUID en los tres.
-
-> **`Foto_Deposito` ya no existe.** Mandaba un cuerpo de ManyChat (`subscriber_id` + `flow_ns`) a
-> `/v1/tools/messages`, y su descripción invitaba al agente a usarla para «continuar la
-> conversación». Lo único que hacía falta de ella —derivar a una persona— ya lo hace
-> `Transferir_al_asesor`. Si el negocio quiere que el bot **mande la foto del depósito**, eso es otra
-> herramienta: necesita el `branchMediaId` de esa imagen.
-
-**Comprobación**: la conversación aparece **asignada** en la bandeja a esa persona, y el modo de
-automatización queda apagado.
+**Comprobación**: con la bandeja abierta en el navegador, la conversación aparece **asignada** en la
+bandeja a esa persona y el modo de automatización queda apagado. Con dos personas y dos transferencias
+seguidas, cada una recibe una distinta.
 
 ---
 
@@ -225,10 +218,19 @@ Los tres nodos `Multimedia_Valle`, `Multimedia_Juarez` y `Multimedia_Lomas` esta
 (un GET al catálogo con cuerpo de mensaje) y **ya están corregidos** en el archivo. Al reimportar,
 quedan bien.
 
-Falta **subir las imágenes** a `branch-media` y sus filas en `branch_media` — el procedimiento está
-en el informe de la ronda 5. Las cuatro sedes (`valle`, `juarez`, `lomas`, `polanco`) ya existen.
+Los envíos de foto (`foto_accesorios`, `Enviar foto_accesorios Banxico alternativa` y los seis de
+4.2/4.5) ya **no llevan un identificador escrito a mano**: piden la imagen por su título,
+`media: [{ "branchMediaTitle": "Accesorios" }]`, y la API la busca dentro de la sede de la
+conversación. Un UUID copiado a mano solo podía existir en el espacio donde se copió, y su fallo se
+llevaba por delante también el texto del mensaje.
 
-**Comprobación**: `GET /v1/tools/branches/valle/media` devuelve las direcciones firmadas.
+Falta **subir las imágenes** a `branch-media` y sus filas en `branch_media`, titulando «Accesorios» la
+que acompaña a la confirmación de pago — el procedimiento está en
+`docs/procedimiento-multimedia-sedes.md`. Mientras esa imagen no exista, el envío responde **422** con
+el motivo y no encola nada.
+
+**Comprobación**: `GET /v1/tools/branches/valle/media` devuelve las direcciones firmadas y una de ellas
+se titula «Accesorios».
 
 ---
 
@@ -304,31 +306,47 @@ En este orden, que es el orden en que se rompe:
 
 ## Lo que falta en los demás flujos
 
-La mitad del trabajo está hecha: los nodos de envío de **4.2**, **4.5** y **7.1** (IG_IS e IG_ISV) ya
-usan una clave de idempotencia por turno, y todos los cuerpos dirigidos a nuestra API se interpretan.
-Lo comprueba `apps/api/src/tools/flow-payloads.test.ts`, que lee los flujos y se ejecuta con
-`corepack pnpm test`: si alguien pega un cuerpo que n8n no puede interpretar, la prueba lo dice con el
-nombre del nodo.
+**Ya está hecho en esta ronda.** Los nodos de envío de **4.1**, **4.2**, **4.5** y **7.1** (IG_IS e
+IG_ISV) usan una clave de idempotencia por turno, leen la conversación de nuestra API y sus
+verificadores leen nuestra forma (`contactId` + `fields`, o `item.id` + `item.status`), no
+`status: 'success'`. Lo comprueba `apps/api/src/tools/flow-payloads.test.ts`, que lee los flujos y se
+ejecuta con `corepack pnpm test`.
 
-Queda, por flujo:
+Lo que se corrigió, por flujo:
 
-**4.1 Retención y liberación — es el que más falta.** Su `Resolver cuenta y URL ManyChat` decide la
-cuenta validando la respuesta de **ManyChat**: espera `status: 'success'`, un identificador numérico y
-un `live_chat_url` con `app.manychat.com/…`. Nuestra API devuelve otra cosa, así que la cuenta **no se
-resuelve nunca**. Sus cuatro nodos «guardar campos» hacen `POST` a `/v1/tools/conversations/{id}` —una
-ruta que sólo tiene `GET`— y mandan `Number(subscriber_id)`, que sobre un UUID da `NaN`. Sus dos
-cuerpos mal formados ya están arreglados, pero el paso sigue sin funcionar.
+**4.1 Retención y liberación.** `Resolver cuenta y URL ManyChat` y `Resolver cuenta para liberación`
+validaban la respuesta de ManyChat (`status: 'success'`, identificador numérico y `live_chat_url` con
+`app.manychat.com`), así que la cuenta **no se resolvía nunca** y ni el recordatorio ni el aviso de
+liberación salían. Ahora leen la conversación de nuestra API y publican los campos que esperan los IF
+(los nombres `manychat_*` se conservan para no tocar el resto del flujo). Además: los cuatro «guardar
+campos» son `POST /v1/tools/contact-fields` con `{conversationId, fields}` — antes eran un GET a una
+ruta de solo lectura, con el identificador vacío y `Number(subscriber_id)`, que sobre un UUID da `NaN`
+—; los cuatro verificadores leen nuestra respuesta; las cuatro claves llevan `{{ $execution.id }}`; y
+`Buscar contacto fb1346079` y `Liberación - buscar contacto IS` quedaron **deshabilitados** (eran la
+segunda lectura de la misma conversación, herencia de las dos cuentas de ManyChat).
 
-La propuesta es **quitar la resolución de cuenta**: en ManyChat había que elegir la cuenta porque la
-credencial era por cuenta, y aquí el extremo de envío ya resuelve el canal **de la conversación**
-(`enqueueOutbound` usa su `channel_account_id`). Bastaría leer la conversación una vez y dejar un nodo
-de envío por mensaje.
+**4.2 Stripe.** `Stripe resolver cuenta y canal` cortaba la rama con un `throw` en cuanto el
+identificador no era numérico, de modo que **no se enviaba nada**; ahora resuelve el canal desde la
+conversación. El IF `Conversión tiene cuenta configurada` tenía **las dos salidas sin cablear**: toda la
+rama de conversión era inalcanzable; ahora lleva a `Cargar monto_pagado en ManyChat` y, si no hay
+conversación leída, a `Conversión omitida en cuenta ISV`. El nodo de conversión apunta a
+`POST /v1/tools/conversions`.
 
-**4.2 Stripe — una decisión.** `Enviar Flow conversión ManyChat` conserva el cuerpo de ManyChat
-(`subscriber_id` + `flow_ns`) apuntando a `/v1/tools/messages`, que no lo acepta. Nuestra plataforma
-tiene `POST /v1/tools/conversions` justo para eso: hay que elegir entre migrarlo o retirarlo.
+**4.5 Confirmar pago manual.** Los mismos arreglos de canal, verificación y multimedia.
 
-**4.2 y 4.5 — seis nodos para dos mensajes.** Cada variante (`IG IS`, `IG ISV`, `Tiktok ISV`) apunta
-**a la misma conversación**, y el `elegir cuenta de envío` sólo decide cuál corre. Es la misma idea de
-ManyChat: la cuenta era parte del emisor. Aquí el canal lo resuelve la conversación, así que el flujo
-puede quedarse con un nodo por mensaje.
+**7.1 Emisor Followup.** El flujo padre `7 Followup v2 - cola global 6 por minuto 09 a 20` llamaba a
+los subflujos con `workflowInputs.value: {}`, es decir, **sin ningún campo**: el subflujo recibía items
+vacíos, no encontraba `conversationId` y moría en `Validar tarea de seguimiento`. Ahora manda
+`conversationId`, `id`, `payload`, `scope`, `simulacion`, `subscriber_id` y `worker`. Los tres
+verificadores de cada subflujo leen nuestra forma.
+
+**Sara.** `Detectar imagen ManyChat2` solo miraba URLs de ManyChat escritas en el texto del mensaje, así
+que un comprobante enviado como archivo no llegaba a la validación de pagos. Ahora lee además los
+adjuntos de nuestro aviso (`weplash_evento.message.attachments`), con su tipo y su enlace firmado.
+
+**Pendiente y fuera de esta carpeta.** Sara llama por `workflowId` a flujos que **no están** en
+`Flujos_v2/`: `Inside_Spa_Conocimiento` (`vskrm14Pht5S1l3K`), `Call 'Mensqje de Errores'`
+(`coFiQ7L6lHV0PXji`), `Sucursal_Mas_Cercana` (`3RSEsUTsMydoFpc0`), `Cerrar_Conversacion_Y_Pausar` y
+`Ejecutar cierre sexual sin respuesta` (`rTomIKEa8xNx1ZH1`) y `Gestionar_Giftcard`
+(`dCwzXZrXtipWl7KP`). Si no existen ya en n8n con esos mismos identificadores, esas rutas fallan al
+ejecutarse.
