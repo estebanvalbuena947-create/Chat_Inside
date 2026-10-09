@@ -480,6 +480,9 @@ export class ZernioInboxWorker {
       if (event.event_type === 'comment.received') {
         await recordComment(supabase, event.payload, event.tenant_id);
       }
+      if (event.event_type === 'review.new' || event.event_type === 'review.updated') {
+        await recordGoogleBusinessReview(supabase, event.payload, event.tenant_id);
+      }
       if (event.event_type === 'conversation.started') {
         await recordConversationStarted(supabase, event.payload, event.tenant_id);
       }
@@ -959,6 +962,46 @@ export async function recordConversationStarted(
  * una: inventarla crearia dos conversaciones para la misma persona en cuanto llegara su mensaje
  * directo, que es el que trae el identificador real.
  */
+/** Guarda la reseña sin interpretar su texto ni publicar una respuesta. */
+export async function recordGoogleBusinessReview(
+  supabase: SupabaseServerClient,
+  payload: unknown,
+  tenantId: string
+): Promise<void> {
+  const row = payload as { account?: { id?: unknown }; review?: Record<string, unknown> };
+  const review = row.review;
+  const accountId = typeof row.account?.id === 'string' ? row.account.id : '';
+  const reviewId = typeof review?.id === 'string' ? review.id : '';
+  const rating = Number(review?.rating);
+  const createdAt = typeof review?.createdAt === 'string' ? review.createdAt : null;
+  if (
+    !accountId ||
+    !reviewId ||
+    !Number.isInteger(rating) ||
+    rating < 1 ||
+    rating > 5 ||
+    !createdAt
+  ) {
+    throw new ProcessingFailure('invalid_google_review_payload');
+  }
+  const reviewer = review?.reviewer as { name?: unknown } | undefined;
+  const { error } = await supabase.from('google_business_reviews').upsert(
+    {
+      body: typeof review?.text === 'string' ? review.text : null,
+      rating,
+      replied_at: review?.hasReply === true ? new Date().toISOString() : null,
+      review_updated_at: createdAt,
+      reviewer_name: typeof reviewer?.name === 'string' ? reviewer.name : null,
+      tenant_id: tenantId,
+      updated_at: new Date().toISOString(),
+      zernio_account_id: accountId,
+      provider_review_id: reviewId
+    },
+    { onConflict: 'tenant_id,provider_review_id' }
+  );
+  if (error) throw new ProcessingFailure('google_review_persist_failed');
+}
+
 export async function recordComment(
   supabase: SupabaseServerClient,
   payload: unknown,

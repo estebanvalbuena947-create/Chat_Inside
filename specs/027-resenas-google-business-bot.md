@@ -6,3 +6,9 @@ de cuatro o cinco estrellas sin contenido sensible; las restantes requieren tran
 
 Cada intento de respuesta usa una clave idempotente y vuelve a leer la reseña antes de publicar, pues
 Google conserva una única respuesta del propietario y una publicación nueva reemplaza la anterior.
+
+## Evento verificado
+
+Zernio entrega `review.new` con `id`, `event`, `review.id`, `review.rating`, `review.text`,
+`review.reviewer.name`, `review.createdAt`, `review.hasReply` y `account.id`. El identificador de
+reseña es el nombre completo de recurso de Google y debe tratarse como opaco.
