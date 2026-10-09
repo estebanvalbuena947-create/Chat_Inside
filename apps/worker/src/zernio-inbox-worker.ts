@@ -985,21 +985,32 @@ export async function recordGoogleBusinessReview(
     throw new ProcessingFailure('invalid_google_review_payload');
   }
   const reviewer = review?.reviewer as { name?: unknown } | undefined;
-  const { error } = await supabase.from('google_business_reviews').upsert(
-    {
-      body: typeof review?.text === 'string' ? review.text : null,
-      rating,
-      replied_at: review?.hasReply === true ? new Date().toISOString() : null,
-      review_updated_at: createdAt,
-      reviewer_name: typeof reviewer?.name === 'string' ? reviewer.name : null,
-      tenant_id: tenantId,
-      updated_at: new Date().toISOString(),
-      zernio_account_id: accountId,
-      provider_review_id: reviewId
-    },
-    { onConflict: 'tenant_id,provider_review_id' }
-  );
-  if (error) throw new ProcessingFailure('google_review_persist_failed');
+  const { data: persisted, error } = await supabase
+    .from('google_business_reviews')
+    .upsert(
+      {
+        body: typeof review?.text === 'string' ? review.text : null,
+        rating,
+        replied_at: review?.hasReply === true ? new Date().toISOString() : null,
+        review_updated_at: createdAt,
+        reviewer_name: typeof reviewer?.name === 'string' ? reviewer.name : null,
+        tenant_id: tenantId,
+        updated_at: new Date().toISOString(),
+        zernio_account_id: accountId,
+        provider_review_id: reviewId
+      },
+      { onConflict: 'tenant_id,provider_review_id' }
+    )
+    .select('id')
+    .single();
+  if (error || !persisted) throw new ProcessingFailure('google_review_persist_failed');
+  const { error: deliveryError } = await supabase
+    .from('google_review_deliveries')
+    .upsert(
+      { review_id: persisted.id, tenant_id: tenantId, updated_at: new Date().toISOString() },
+      { onConflict: 'review_id' }
+    );
+  if (deliveryError) throw new ProcessingFailure('google_review_delivery_enqueue_failed');
 }
 
 export async function recordComment(

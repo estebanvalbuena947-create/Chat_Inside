@@ -8,6 +8,7 @@ import {
 import { createZernioInboxWorker } from './zernio-inbox-worker';
 import { createZernioOutboundWorker } from './zernio-outbound-worker';
 import { createTapNotificationWorker } from './tap-notification-worker';
+import { sendPendingGoogleReviewDeliveries } from './google-review-notifier';
 import { startWorkerLoop } from './worker-loop';
 
 const startedAt = new Date().toISOString();
@@ -40,6 +41,7 @@ async function drainInbox(): Promise<void> {
   await outboundWorker.drain();
   // Los avisos a n8n son un efecto distinto del envio: su cola se drena aparte.
   if (tapWorker) await tapWorker.drain();
+  await sendPendingGoogleReviewDeliveries(supabase);
   // Las conversiones hacia Meta son otro efecto distinto y otra cola: se drenan aqui para que el
   // hecho de negocio no espere nunca al proveedor, y su entrega no dependa de la bandeja.
   if (conversionTransport) {
