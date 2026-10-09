@@ -4,8 +4,10 @@ type Delivery = { id: string; idempotency_key: string; review_id: string; tenant
 
 /** Entrega reseñas persistidas al flujo de n8n sin bloquear el webhook de Zernio. */
 export async function sendPendingGoogleReviewDeliveries(
-  supabase: SupabaseServerClient
+  supabase: SupabaseServerClient,
+  secret: string | undefined = process.env.N8N_GOOGLE_REVIEW_AUTH_SECRET
 ): Promise<void> {
+  if (!secret?.trim()) return;
   const { data: deliveries } = await supabase
     .from('google_review_deliveries')
     .select('id, tenant_id, review_id, idempotency_key')
@@ -30,6 +32,7 @@ export async function sendPendingGoogleReviewDeliveries(
       const response = await fetch(integration.webhook_url, {
         method: 'POST',
         headers: {
+          Authorization: `Bearer ${secret}`,
           'Content-Type': 'application/json',
           'Idempotency-Key': delivery.idempotency_key
         },

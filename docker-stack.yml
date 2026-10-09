@@ -63,6 +63,7 @@ services:
       # Sin las dos, el toque se guarda en la bandeja y no se avisa a nadie.
       N8N_AGENT_WEBHOOK_URL: ${N8N_AGENT_WEBHOOK_URL:-}
       N8N_AGENT_AUTH_SECRET: ${N8N_AGENT_AUTH_SECRET:-}
+      N8N_GOOGLE_REVIEW_AUTH_SECRET: ${N8N_GOOGLE_REVIEW_AUTH_SECRET:-}
     networks:
       - global
     deploy:
