@@ -155,15 +155,22 @@ puede tener la bandeja abierta, pero no recibe transferencias automáticas. La l
 solo sitio (`v_roles`, en `claim_next_active_advisor`); sumar otro rol es cambiar esa lista, sin tocar
 los flujos ni la API. Si se quiere derivar a una persona concreta, se manda su `userId`.
 
+**La presencia ordena, no descarta.** Primero se entrega a quien tiene la bandeja abierta en ese
+momento; si no hay nadie, la conversación se entrega igual al siguiente agente del turno, que la
+encontrará al abrir la bandeja. Es preferible que tenga dueño y espere a que la transferencia falle y
+el cliente se quede sin respuesta. El `422` queda para el único caso en que no hay a quién entregarla:
+un espacio sin ninguna membresía con el rol que atiende.
+
 **Si se incluye**, `userId` tiene que ser una **membresía del espacio** (tabla `memberships`): la API
 comprueba que esa persona pertenece al espacio antes de asignarle la conversación, y responde `422` si
 no.
 
 Errores propios de la rotación:
 
-- `422` **no hay asesores activos**: nadie tiene la bandeja abierta en ese momento. La conversación **no
-  cambia**: es un fallo visible a propósito, para que n8n avise en lugar de dejar la conversación
-  marcada como derivada a nadie.
+- `422` **no hay nadie que atienda**: el espacio no tiene ninguna membresía con el rol de agente. Que
+  nadie tenga la bandeja abierta **no** produce este error: la conversación se entrega al siguiente
+  agente del turno y le espera. Cuando sí ocurre, la conversación **no cambia**: es un fallo visible a
+  propósito, para que n8n avise en lugar de dejar la conversación marcada como derivada a nadie.
 - Repetir la misma petición no cambia de persona: si la conversación ya está asignada y el bot apagado,
   la respuesta `200` devuelve esa misma asignación sin gastar el turno de la rotación. Así un reintento
   de n8n por un timeout no mueve la conversación a otra asesora.

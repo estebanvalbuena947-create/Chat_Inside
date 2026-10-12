@@ -1059,8 +1059,13 @@ no obliga a tocar la API ni los flujos. La primera asignación de un espacio la 
 persona más bajo: es determinista y arbitrario, y está escrito para que nadie tenga que deducirlo del
 SQL.
 
-Si no hay nadie disponible, la transferencia **falla con 422** y la conversación no cambia: es
-preferible que n8n lo vea y avise a que la conversación quede marcada como derivada a nadie. Repetir la
+Si no hay nadie disponible, la conversación **se entrega igual** al siguiente agente del turno, que la
+encontrará al abrir la bandeja: la presencia ordena, no descarta. Repartir solo entre quien está mirando
+la bandeja parecía más fino, pero en la práctica dejaba la transferencia sin dueño y al cliente sin
+respuesta justo cuando el bot acababa de decidir que hacía falta una persona; que la conversación espere
+asignada es el mal menor, y el turno sigue siendo rotativo, así que el respaldo no descarga todo en la
+misma persona. La transferencia solo **falla con 422** cuando el espacio no tiene ninguna membresía con
+el rol que atiende, y entonces la conversación no cambia. Repetir la
 misma petición tampoco cambia de persona: si la conversación ya está asignada y el bot apagado, se
 devuelve esa misma asignación. Sin esa regla, un reintento de n8n por un timeout habría movido la
 conversación a la siguiente asesora, que es un fallo silencioso y difícil de explicar.

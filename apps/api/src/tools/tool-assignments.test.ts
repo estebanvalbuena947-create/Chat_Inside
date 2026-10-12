@@ -202,7 +202,26 @@ describe('asignaciones', () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ assigned_user_id: 'user-2' }));
   });
 
-  it('no pausa ni asigna si no hay asesor activo', async () => {
+  it('cuando no hay nadie en la bandeja, la funcion entrega la conversacion igual', async () => {
+    // El respaldo vive en la funcion SQL: sigue devolviendo una persona (el siguiente agente del
+    // turno) aunque nadie tenga presencia, para que la conversacion no quede sin dueno. Aqui se
+    // comprueba que la API escribe esa asignacion y apaga el bot.
+    const { insert, servicio, update } = crearServicio({ asesorActivo: 'agente-de-respaldo' });
+
+    const resultado = (await servicio.assign('Bearer token', { conversationId: 'conv-1' })) as {
+      automationMode: string;
+    };
+
+    expect(resultado.automationMode).toBe('paused');
+    expect(update.mock.calls[0]?.[0]).toMatchObject({ assigned_user_id: 'agente-de-respaldo' });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ assigned_user_id: 'agente-de-respaldo' })
+    );
+  });
+
+  it('sin ninguna persona que atienda, la transferencia falla en vez de quedar sin dueno', async () => {
+    // Este nulo no significa "nadie tiene la bandeja abierta": significa que el espacio no tiene
+    // ninguna membresia con el rol que atiende.
     const { servicio, update } = crearServicio({ asesorActivo: null });
 
     await expect(

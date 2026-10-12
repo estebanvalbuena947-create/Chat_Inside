@@ -109,8 +109,11 @@ export class ToolAssignmentsService {
       }
       userId = typeof data === 'string' ? data : '';
       if (!userId) {
+        // Solo se llega aqui si el espacio no tiene ninguna persona con el rol que atiende. Que
+        // nadie tenga la bandeja abierta NO es este caso: la funcion cae al respaldo y entrega la
+        // conversacion al siguiente agente del turno para que le espere.
         throw new UnprocessableEntityException(
-          'No hay asesores activos disponibles para la transferencia.'
+          'No hay ninguna persona que atienda en este espacio: la conversación no se puede transferir.'
         );
       }
     } else {
