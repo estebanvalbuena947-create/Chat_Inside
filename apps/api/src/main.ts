@@ -2,11 +2,12 @@ import 'dotenv/config';
 import 'reflect-metadata';
 import cors from '@fastify/cors';
 import { NestFactory } from '@nestjs/core';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
+import { createHttpAdapter } from './http-adapter';
 
 async function bootstrap(): Promise<void> {
-  const adapter = new FastifyAdapter({ bodyLimit: 262_144 });
+  const adapter = createHttpAdapter();
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
     rawBody: true
   });

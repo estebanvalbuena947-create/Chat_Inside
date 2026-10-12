@@ -1033,6 +1033,12 @@ falló, la respuesta lo dice tal cual, porque reintentar publicaría encima.
 Google, no el nombre completo. Ese detalle vive en el cliente del proveedor, para que ni el flujo ni la
 interfaz tengan que saberlo.
 
+**La ruta de herramientas admite el nombre completo del recurso.** El aviso que llega a n8n conserva
+el identificador opaco completo de Google y las herramientas lo aceptan como parametro de ruta. Como
+Fastify limita esos parametros a 100 caracteres por defecto y los nombres de recurso reales lo
+superan, el adaptador HTTP fija `maxParamLength` en 512. El limite sigue acotado; no se relaja el
+limite de cuerpo ni se modifica la autorizacion de las herramientas.
+
 ## El aviso al bot se reclama antes de entregarse (2026-10-12)
 
 Un audio disparó dos veces el webhook de n8n. La causa no era el proveedor: la cola de avisos era la
