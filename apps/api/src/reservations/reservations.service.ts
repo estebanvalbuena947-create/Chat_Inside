@@ -17,6 +17,7 @@ import {
 } from '@chat-zernio/contracts';
 import {
   buildReservationKpis,
+  isReservationToday,
   normalizeConfirmed,
   normalizeDecision,
   normalizeDraft,
@@ -194,6 +195,12 @@ export class ReservationsService {
       actualizadoEn: now.toISOString(),
       comprobantes: comprobantesNorm.map(toReceiptView),
       confirmadas: confirmadasNorm.map(toConfirmedView),
+      confirmadasHoy: confirmadasNorm
+        .filter((reservation) => isReservationToday(reservation.confirmadaEn, now))
+        .map(toConfirmedView),
+      creadasHoy: borradores
+        .filter((draft) => isReservationToday(draft.entroEn, now))
+        .map((draft) => toDraftView(draft, estados.get(draft.id) ?? 'pending')),
       decisiones: decisionesNorm.map(toDecisionView),
       kpis,
       preReservas: borradores.map((draft) => toDraftView(draft, estados.get(draft.id) ?? 'pending'))

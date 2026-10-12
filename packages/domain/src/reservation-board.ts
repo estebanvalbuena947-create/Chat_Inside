@@ -144,8 +144,7 @@ export function buildReservationKpis(
 
   /* «Hoy» se rige por la fecha en que la reserva se confirmo, no por la de la cita: una pre-reserva
      puede entrar hoy y tener cita en otra semana. */
-  const hoy = dayKeyInZone(now, options.timeZone);
-  const esDeHoy = (value: unknown) => dayKeyInZone(value, options.timeZone) === hoy;
+  const esDeHoy = (value: unknown) => isReservationToday(value, now, options.timeZone);
 
   const confirmadasHoy = confirmed.filter((row) => esDeHoy(row.confirmadaEn));
   const borradoresConfirmadosHoy = drafts.filter(
@@ -198,4 +197,10 @@ export function buildReservationKpis(
       ultimaDecisionEn: ultimaDecision ? new Date(ultimaDecision).toISOString() : null
     }
   };
+}
+
+/** La fecha operativa siempre se compara en la zona del negocio, no en la del navegador. */
+export function isReservationToday(value: unknown, now: Date, timeZone?: string): boolean {
+  const hoy = dayKeyInZone(now, timeZone);
+  return hoy !== null && dayKeyInZone(value, timeZone) === hoy;
 }

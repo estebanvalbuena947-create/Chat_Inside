@@ -4,6 +4,26 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-052 - Las listas de Reservas se filtran por fecha operativa en la API (2026-10-12)
+
+- **Fecha:** 2026-10-12
+- **Estado:** aceptada
+- **Contexto:** El tablero ya leía reservas confirmadas y pre-reservas, pero solo exponía indicadores.
+  Añadir listas de «hoy» en el navegador habría comparado fechas en la zona de cada asesora, por lo
+  que una misma reserva podía aparecer hoy para una persona y mañana para otra.
+- **Decisión:** La política queda en el dominio y la API devuelve dos listas aditivas: confirmadas
+  por fecha de confirmación y creadas por fecha de entrada de la pre-reserva, ambas evaluadas en
+  `America/Mexico_City`. La interfaz abre estas vistas en «Hoy» y puede pedir las listas completas
+  que ya recibe, sin volver a calcular la regla. Mientras está visible, vuelve a leer el tablero cada
+  30 segundos; no mantiene una conexión nueva a la base externa.
+- **Consecuencias:** Los indicadores y las listas usan la misma fecha operativa, incluso con personas
+  en otras zonas horarias. Filas sin fecha válida no se clasifican como «hoy», en vez de adivinar a
+  partir de la fecha de la cita. No hay migración ni exposición de la fuente externa.
+- **Cómo se verifica:** Prueba unitaria del borde de medianoche y comprobaciones de tipos para el
+  contrato, el servicio y la presentación.
+
+---
+
 ## ADR-051 - El identificador de la conversión es la referencia externa, y «Ganado» la encola
 
 - **Fecha:** 2026-10-08

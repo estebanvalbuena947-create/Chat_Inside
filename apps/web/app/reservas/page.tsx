@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 type Draft = {
+  creadaEn: string | null;
   id: number | null;
   nombre: string | null;
   servicio: string | null;
@@ -11,6 +12,15 @@ type Draft = {
   estado: string;
   monto: number;
   horarioProgramado: string | null;
+};
+type Confirmed = {
+  confirmadaEn: string | null;
+  horarioProgramado: string | null;
+  id: number | null;
+  monto: number;
+  nombre: string | null;
+  servicio: string | null;
+  sucursal: string | null;
 };
 type Receipt = {
   borradorId: number | null;
@@ -40,11 +50,14 @@ type Board = {
       nombre: string | null;
     }>;
   };
+  confirmadas: Confirmed[];
+  confirmadasHoy: Confirmed[];
+  creadasHoy: Draft[];
   preReservas: Draft[];
   comprobantes: Receipt[];
   decisiones: Decision[];
 };
-type Tab = 'summary' | 'drafts' | 'receipts' | 'history';
+type Tab = 'summary' | 'drafts' | 'confirmed' | 'created' | 'receipts' | 'history';
 const label: Record<string, string> = {
   confirmed: 'Confirmada',
   info: 'Información solicitada',
@@ -74,12 +87,13 @@ export default function ReservationsPanel(): React.ReactNode {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('summary');
+  const [todayOnly, setTodayOnly] = useState(true);
   const [selected, setSelected] = useState<Draft | null>(null);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (background = false) => {
+    if (!background) setLoading(true);
     setError(null);
     try {
       const res = await fetch('/api/reservations/board', { cache: 'no-store' });
@@ -89,11 +103,15 @@ export default function ReservationsPanel(): React.ReactNode {
     } catch {
       setError('El tablero de reservas no está disponible.');
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
   useEffect(() => {
     void load();
+    const refresh = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void load(true);
+    }, 30_000);
+    return () => window.clearInterval(refresh);
   }, [load]);
   function openDecision(draft: Draft | null): void {
     setSelected(draft);
@@ -126,6 +144,8 @@ export default function ReservationsPanel(): React.ReactNode {
     tab === 'summary'
       ? board?.preReservas.filter((row) => row.estadoMostrado !== 'confirmed')
       : board?.preReservas;
+  const confirmedRows = todayOnly ? board?.confirmadasHoy : board?.confirmadas;
+  const createdRows = todayOnly ? board?.creadasHoy : board?.preReservas;
   return (
     <section className={`reservations-view${integrated ? ' reservations-view-integrated' : ''}`}>
       <header className="reservations-header">
@@ -147,6 +167,8 @@ export default function ReservationsPanel(): React.ReactNode {
           [
             ['summary', 'Resumen'],
             ['drafts', 'Pre-reservas'],
+            ['confirmed', 'Confirmadas'],
+            ['created', 'Creadas'],
             ['receipts', 'Comprobantes'],
             ['history', 'Histórico']
           ] as Array<[Tab, string]>
@@ -161,6 +183,24 @@ export default function ReservationsPanel(): React.ReactNode {
           </button>
         ))}
       </nav>
+      {(tab === 'confirmed' || tab === 'created') && (
+        <div className="reservations-tabs" aria-label="Periodo de reservas">
+          <button
+            className={todayOnly ? 'active' : ''}
+            onClick={() => setTodayOnly(true)}
+            type="button"
+          >
+            Hoy
+          </button>
+          <button
+            className={!todayOnly ? 'active' : ''}
+            onClick={() => setTodayOnly(false)}
+            type="button"
+          >
+            Todas
+          </button>
+        </div>
+      )}
       {loading && <p>Cargando el tablero…</p>}
       {error && (
         <p role="alert" className="reservations-error">
@@ -190,6 +230,8 @@ export default function ReservationsPanel(): React.ReactNode {
           {(tab === 'summary' || tab === 'drafts') && (
             <Table rows={visibleDrafts ?? []} onManage={openDecision} />
           )}
+          {tab === 'confirmed' && <ConfirmedTable rows={confirmedRows ?? []} />}
+          {tab === 'created' && <CreatedTable rows={createdRows ?? []} onManage={openDecision} />}
           {tab === 'receipts' && (
             <section className="reservations-table">
               <h2>Comprobantes</h2>
@@ -256,6 +298,82 @@ export default function ReservationsPanel(): React.ReactNode {
           onDecide={decide}
         />
       )}
+    </section>
+  );
+}
+function ConfirmedTable({ rows }: { rows: Confirmed[] }): React.ReactNode {
+  return (
+    <section className="reservations-table">
+      <h2>Reservas confirmadas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Servicio</th>
+            <th>Sucursal</th>
+            <th>Cita</th>
+            <th>Confirmada</th>
+            <th>Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id ?? `${row.nombre}-${row.confirmadaEn}`}>
+              <td data-label="Cliente">{row.nombre ?? 'Sin nombre'}</td>
+              <td data-label="Servicio">{row.servicio ?? '—'}</td>
+              <td data-label="Sucursal">{row.sucursal ?? '—'}</td>
+              <td data-label="Cita">{date(row.horarioProgramado)}</td>
+              <td data-label="Confirmada">{date(row.confirmadaEn)}</td>
+              <td data-label="Valor">{money(row.monto)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+function CreatedTable({
+  rows,
+  onManage
+}: {
+  rows: Draft[];
+  onManage: (row: Draft) => void;
+}): React.ReactNode {
+  return (
+    <section className="reservations-table">
+      <h2>Pre-reservas creadas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Servicio</th>
+            <th>Creada</th>
+            <th>Cita</th>
+            <th>Estado</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id ?? `${row.nombre}-${row.creadaEn}`}>
+              <td data-label="Cliente">{row.nombre ?? 'Sin nombre'}</td>
+              <td data-label="Servicio">{row.servicio ?? '—'}</td>
+              <td data-label="Creada">{date(row.creadaEn)}</td>
+              <td data-label="Cita">{date(row.horarioProgramado)}</td>
+              <td data-label="Estado">
+                <span className={`reservation-status ${row.estadoMostrado}`}>
+                  {label[row.estadoMostrado] ?? row.estado}
+                </span>
+              </td>
+              <td>
+                <button onClick={() => onManage(row)} type="button">
+                  Gestionar
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }

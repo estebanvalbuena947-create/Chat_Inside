@@ -1051,6 +1051,8 @@ export const reservationKpisSchema = z.object({
 export const reservationsBoardResponseSchema = z.object({
   actualizadoEn: z.string(),
   confirmadas: z.array(reservationConfirmedSchema),
+  confirmadasHoy: z.array(reservationConfirmedSchema),
+  creadasHoy: z.array(reservationDraftSchema),
   decisiones: z.array(reservationDecisionSchema),
   kpis: reservationKpisSchema,
   preReservas: z.array(reservationDraftSchema),

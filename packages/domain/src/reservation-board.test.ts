@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildReservationKpis,
+  isReservationToday,
   indexByDraftId,
   indexDecisions,
   isConfirmed,
@@ -72,6 +73,15 @@ describe('el estado visible de una pre-reserva', () => {
       isReviewable(borrador({ estado_reserva: 'requiere_revision', reserva_confirmada: true }))
     ).toBe(false);
     expect(isConfirmed(borrador({ estado_reserva: 'confirmado' }))).toBe(true);
+  });
+});
+
+describe('dia operativo de reservas', () => {
+  it('compara las fechas en la zona del negocio, no en la del navegador', () => {
+    const ahora = new Date('2026-10-08T06:30:00.000Z'); // 00:30 en Ciudad de Mexico.
+    expect(isReservationToday('2026-10-08T00:15:00-06:00', ahora)).toBe(true);
+    expect(isReservationToday('2026-10-07T23:59:00-06:00', ahora)).toBe(false);
+    expect(isReservationToday(null, ahora)).toBe(false);
   });
 });
 
