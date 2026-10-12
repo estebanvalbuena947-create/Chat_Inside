@@ -48,6 +48,64 @@ describe('TenantMessageService', () => {
     ).resolves.toMatchObject({ items: [{ status: 'received' }] });
   });
 
+  it('reads the most recent history page and returns it in chronological order', async () => {
+    const newer = {
+      body: 'El mensaje más reciente',
+      created_at: '2026-08-13T00:02:00+00',
+      direction: 'outbound',
+      id: '55555555-5555-4555-8555-555555555555',
+      sender_type: 'automation',
+      sent_at: '2026-08-13T00:02:00+00',
+      source: 'dm',
+      status: 'sent'
+    };
+    const older = {
+      body: 'El primer mensaje del bloque reciente',
+      created_at: '2026-08-13T00:01:00+00',
+      direction: 'inbound',
+      id: '44444444-4444-4444-8444-444444444444',
+      sender_type: 'contact',
+      sent_at: '2026-08-13T00:01:00+00',
+      source: 'dm',
+      status: 'received'
+    };
+    const conversationQuery = {
+      eq: () => conversationQuery,
+      maybeSingle: async () => ({
+        data: { id: '33333333-3333-4333-8333-333333333333' },
+        error: null
+      }),
+      select: () => conversationQuery
+    };
+    const order = vi.fn(() => messagesQuery);
+    const messagesQuery = {
+      eq: () => messagesQuery,
+      limit: async () => ({ data: [newer, older], error: null }),
+      order,
+      select: () => messagesQuery
+    };
+    const service = new TenantMessageService(
+      { authenticate: async () => ({ userId: '22222222-2222-4222-8222-222222222222' }) } as never,
+      { assertMembership: async () => undefined } as never,
+      {
+        create: () => ({
+          from: (table: string) => (table === 'conversations' ? conversationQuery : messagesQuery)
+        })
+      } as never,
+      {} as never
+    );
+
+    const result = await service.list(
+      'Bearer valid.jwt',
+      '11111111-1111-4111-8111-111111111111',
+      '33333333-3333-4333-8333-333333333333',
+      { limit: 100 }
+    );
+
+    expect(order).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(result.items.map((message) => message.body)).toEqual([older.body, newer.body]);
+  });
+
   it('does not query message history when tenant membership is rejected', async () => {
     const create = vi.fn();
     const service = new TenantMessageService(

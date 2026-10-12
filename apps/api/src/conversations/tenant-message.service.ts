@@ -214,11 +214,15 @@ export class TenantMessageService {
       )
       .eq('tenant_id', tenantId)
       .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
+      // Se limita el historial por los mensajes mas recientes. Ordenar ascendente antes del limite
+      // dejaba una conversacion larga congelada en sus primeros mensajes aunque ya tuviera actividad.
+      .order('created_at', { ascending: false })
       .limit(query.limit);
     if (messagesError)
       throw new InternalServerErrorException('No fue posible cargar el historial.');
-    const persistedMessages = (messages ?? []) as PersistedMessage[];
+    // La pantalla se lee cronologicamente, asi que se devuelve el bloque reciente de nuevo en orden
+    // ascendente. La consulta descendente es solo la forma correcta de aplicar el limite.
+    const persistedMessages = [...((messages ?? []) as PersistedMessage[])].reverse();
     const signedUrls = await signMediaUrls(
       supabase,
       persistedMessages.flatMap((message) => readAttachmentPaths(message))
