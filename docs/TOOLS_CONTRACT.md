@@ -230,6 +230,43 @@ El bot decide la sede mientras conversa; aquí la deja fijada.
 { "branchSlug": "lomas" }
 ```
 
+## 6 bis. Cerrar la conversación y apagar el bot — `POST /v1/tools/conversations/{id}/close`
+
+Es lo que el bot necesita cuando decide **no seguir hablando**: cerrar el hilo y dejar de responder. Va
+en una sola llamada a propósito: cerrar sin apagar dejaría al bot contestando en una conversación
+cerrada, y apagar sin cerrar la dejaría pendiente de atención cuando ya no lo está.
+
+```json
+{ "pauseBot": true }
+```
+
+`pauseBot` es `true` por defecto; con `false` cierra el hilo **sin** tocar el interruptor del bot, para
+cuando el negocio quiera cerrar la conversación y dejar al bot disponible si el cliente vuelve a
+escribir. Respuesta:
+
+```json
+{ "conversationId": "uuid", "status": "resolved", "automationMode": "paused", "tenantId": "uuid" }
+```
+
+La fecha de cierre se sella al cerrar y **se limpia al reabrir**, que es lo que permite contar cuántas
+se cerraron en un periodo. Un mensaje entrante del cliente reabre la conversación por sí solo.
+
+Repetirlo es inofensivo: si ya está cerrada, la respuesta devuelve el estado vigente sin escribir nada.
+Si alguien movió la conversación entre la lectura y la escritura, la respuesta es `409` en lugar de
+pisar el cambio en silencio. Errores: `404` conversación inexistente · `422` falta el identificador.
+
+## 6 ter. Encender o apagar el bot — `POST /v1/tools/conversations/{id}/automation`
+
+Sirve para lo contrario: pausar un hilo que sigue abierto —por ejemplo mientras una persona lo
+atiende— y volver a encenderlo después.
+
+```json
+{ "mode": "paused" }
+```
+
+`mode` es `auto`, `suggest` o `paused`. Responde lo mismo que el cierre, sin `pauseBot`. Igual que
+aquel, es idempotente y responde `409` si la conversación cambió.
+
 ## 7. Etiquetas — `POST /v1/tools/conversations/{id}/labels`
 
 ```json

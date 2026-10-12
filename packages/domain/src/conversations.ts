@@ -8,6 +8,25 @@ export function handoffToHuman(): AutomationMode {
   return 'paused';
 }
 
+export type ConversationStatusPatch = {
+  resolved_at: string | null;
+  status: ConversationStatus;
+};
+
+/**
+ * Lo que se escribe al cambiar el estado de una conversacion.
+ *
+ * La fecha de cierre se pone al cerrar y **se limpia al reabrir**: es lo que permite decir cuantas se
+ * cerraron en un periodo, y no cuantas estan cerradas hoy. La regla vive aqui porque la escriben dos
+ * caminos distintos --la bandeja y el bot-- y tienen que dejar el mismo dato.
+ */
+export function conversationStatusPatch(
+  status: ConversationStatus,
+  now: string = new Date().toISOString()
+): ConversationStatusPatch {
+  return { resolved_at: status === 'resolved' ? now : null, status };
+}
+
 export type AgentInvocationEligibility =
   | { allowed: true }
   | { allowed: false; reason: 'automation_not_auto' };

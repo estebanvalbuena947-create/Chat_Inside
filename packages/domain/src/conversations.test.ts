@@ -4,6 +4,7 @@ import {
   ATTENTION_THRESHOLDS,
   attentionLevel,
   clampReadMark,
+  conversationStatusPatch,
   handoffToHuman,
   needsAttention,
   nextReadMark
@@ -20,6 +21,19 @@ describe('conversation policies', () => {
 
   it('pauses automation when transferring to a human', () => {
     expect(handoffToHuman()).toBe('paused');
+  });
+
+  it('sella la fecha al cerrar y la limpia al reabrir', () => {
+    const ahora = '2026-10-09T20:00:00.000Z';
+
+    expect(conversationStatusPatch('resolved', ahora)).toEqual({
+      resolved_at: ahora,
+      status: 'resolved'
+    });
+    // Reabrir no puede dejar la fecha de cierre: contaria como cerrada en un periodo en el que no lo
+    // estuvo, y las metricas de cierre dejarian de significar lo que dicen.
+    expect(conversationStatusPatch('open', ahora).resolved_at).toBeNull();
+    expect(conversationStatusPatch('pending', ahora).resolved_at).toBeNull();
   });
 });
 

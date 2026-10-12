@@ -21,6 +21,29 @@ export class ToolConversationsController {
     return this.service.setBranch(request.headers.authorization, conversationId, request.body);
   }
 
+  /**
+   * Cierra la conversacion y, salvo que se pida lo contrario, apaga el bot.
+   *
+   * Es lo que el bot necesita para dejar de hablar: `{ "pauseBot": false }` cierra el hilo dejando el
+   * bot disponible para el proximo mensaje del cliente.
+   */
+  @Post(':conversationId/close')
+  async close(
+    @Param('conversationId') conversationId: string,
+    @Req() request: FastifyRequest
+  ): Promise<unknown> {
+    return this.service.close(request.headers.authorization, conversationId, request.body);
+  }
+
+  /** Apaga o enciende el bot sin cerrar la conversacion: `{ "mode": "paused" | "auto" }`. */
+  @Post(':conversationId/automation')
+  async setAutomation(
+    @Param('conversationId') conversationId: string,
+    @Req() request: FastifyRequest
+  ): Promise<unknown> {
+    return this.service.setAutomation(request.headers.authorization, conversationId, request.body);
+  }
+
   @Get(':conversationId')
   async read(
     @Param('conversationId') conversationId: string,

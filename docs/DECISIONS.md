@@ -1008,6 +1008,33 @@ reserva y comprobante, e inserta el historial en una única transacción. La cla
 impide repetir el efecto ante reintentos. La migración externa es aditiva y el dashboard anterior sigue
 funcionando durante la transición.
 
+## El bot puede cerrar la conversación y apagar la automatización (2026-10-12)
+
+El flujo de Sara tenía una herramienta para dejar de atender —cerrar y no volver a responder ante una
+solicitud sexual explícita— que llamaba a un subflujo de n8n que no está versionado en el repositorio.
+Además, y esto era lo de fondo, la plataforma no ofrecía ninguna forma de hacerlo: las únicas
+herramientas del bot eran enviar, asignar (que apaga el bot **y** deriva a una persona) y escribir
+campos. Cerrar la conversación y el interruptor del bot existían, pero solo los usaba la bandeja.
+
+Se exponen dos acciones con la credencial de máquina: `POST /v1/tools/conversations/{id}/close` con
+`{ pauseBot }` —cerrar y, por defecto, apagar— y `…/automation` con `{ mode }` para encender o apagar
+sin tocar el estado. El cierre va en una sola llamada porque los dos efectos van juntos en la práctica:
+cerrar sin apagar deja al bot respondiendo en un hilo cerrado, y apagar sin cerrar deja pendiente de
+atención algo que ya no lo está. `pauseBot: false` cubre el caso contrario: cerrar y seguir disponibles
+si el cliente vuelve.
+
+Dos decisiones de forma. La primera: el bot **no manda versión**. La bandeja la exige porque dos
+personas pueden editar a la vez; el bot no la conoce, así que la acción lee el estado, escribe solo si
+cambia y responde con lo que quedó. Si alguien movió la conversación en el medio, la respuesta es un
+conflicto visible en lugar de un pisotazo silencioso, y un reintento de n8n no se convierte en un error,
+que es lo que pasaría si exigiéramos la versión. La segunda: la regla de «cerrar sella la fecha y
+reabrir la limpia» se movió al dominio, porque ahora la escriben dos caminos —la bandeja y el bot— y
+tenían que dejar el mismo dato.
+
+Con esto los dos nodos de Sara llaman a nuestra API y el subflujo que faltaba deja de hacer falta para
+esta función. El resto de flujos auxiliares que Sara referencia y no están versionados (conocimiento,
+mensaje de errores, sucursal más cercana, gift cards) siguen pendientes de conectar.
+
 ## La transferencia sin persona concreta se reparte por rotación entre quien tiene la bandeja abierta (2026-10-09)
 
 El bot derivaba siempre a la misma persona, fijada en tres nodos de n8n con un UUID escrito a mano:

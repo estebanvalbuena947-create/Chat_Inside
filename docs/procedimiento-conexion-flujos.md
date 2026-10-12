@@ -49,7 +49,7 @@ https://chat.insidespa.com.mx/auth/password
 
 Es **el** paso. Los demás dependen de él.
 
-El flujo `Flujos_v2/Sara ZNO - (v2).json` **ya
+El flujo `Flujos_v2/1 Sara ZNO - (v2).json` **ya
 trae el nodo** `Traducir aviso de WEPLASH1` entre el webhook y el resto. El archivo
 `Flujos_v2/nodo-traductor-entrada.json` es la **fuente de verdad** del código: si hay que pegarlo a
 mano, se copia de ahí, y su nota explica qué hace.
@@ -350,7 +350,11 @@ adjuntos de nuestro aviso (`weplash_evento.message.attachments`), con su tipo y 
 
 **Pendiente y fuera de esta carpeta.** Sara llama por `workflowId` a flujos que **no están** en
 `Flujos_v2/`: `Inside_Spa_Conocimiento` (`vskrm14Pht5S1l3K`), `Call 'Mensqje de Errores'`
-(`coFiQ7L6lHV0PXji`), `Sucursal_Mas_Cercana` (`3RSEsUTsMydoFpc0`), `Cerrar_Conversacion_Y_Pausar` y
-`Ejecutar cierre sexual sin respuesta` (`rTomIKEa8xNx1ZH1`) y `Gestionar_Giftcard`
+(`coFiQ7L6lHV0PXji`), `Sucursal_Mas_Cercana` (`3RSEsUTsMydoFpc0`) y `Gestionar_Giftcard`
 (`dCwzXZrXtipWl7KP`). Si no existen ya en n8n con esos mismos identificadores, esas rutas fallan al
 ejecutarse.
+
+El de **cierre y pausa** (`10 Cerrar conversación y pausar Sara`, `rTomIKEa8xNx1ZH1`) ya no hace falta:
+sus dos nodos en Sara llaman a `POST /v1/tools/conversations/{id}/close`, que cierra la conversación y
+apaga el bot en una sola llamada. La herramienta del agente conserva su descripción palabra por
+palabra, así que el modelo la sigue eligiendo en los mismos casos.

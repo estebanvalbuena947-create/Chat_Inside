@@ -10,6 +10,7 @@ import {
 import {
   attentionLevel,
   clampReadMark,
+  conversationStatusPatch,
   decodeInboxCursor,
   encodeInboxCursor,
   needsAttention,
@@ -705,10 +706,10 @@ export class TenantConversationService {
       supabase
         .from('conversations')
         .update({
-          // La fecha de cierre se escribe aqui y se limpia al reabrir: es lo que permite decir
-          // cuantas se cerraron EN UN PERIODO, y no cuantas estan cerradas hoy.
-          resolved_at: input.status === 'resolved' ? new Date().toISOString() : null,
-          status: input.status,
+          // Cerrar y su fecha son una regla del dominio, la misma que usa el bot al cerrar una
+          // conversacion: se sella la fecha al cerrar y se limpia al reabrir, para poder decir
+          // cuantas se cerraron EN UN PERIODO y no cuantas estan cerradas hoy.
+          ...conversationStatusPatch(input.status),
           status_version: input.statusVersion + 1,
           updated_at: new Date().toISOString()
         })

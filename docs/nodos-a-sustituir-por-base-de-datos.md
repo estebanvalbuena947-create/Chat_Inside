@@ -16,7 +16,7 @@ alrededor, que es el dato del que salió el texto. No es una lista de tareas.
 Dos avisos sobre el registro:
 
 - El flujo de Sara cambió de archivo; donde la columna «Flujo» dice
-  `Sara IG ISV - comprobantes optimizados y cierre automático.json`, hoy es `Sara ZNO - (v2).json`
+  `Sara IG ISV - comprobantes optimizados y cierre automático.json`, hoy es `1 Sara ZNO - (v2).json`
   (mismo flujo, nombre interno «Sara IG ISV - comprobantes optimizados y cierre automático (v2 WEPLASH)»).
 - Los nombres de nodo de la tabla venían con la codificación rota, porque se transcribieron de la copia
   dañada. Aquí se muestran ya limpios, y la ronda arregló esa misma codificación en los flujos; no se

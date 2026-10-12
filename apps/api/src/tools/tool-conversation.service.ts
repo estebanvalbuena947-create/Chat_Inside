@@ -1,25 +1,35 @@
 import {
+  ConflictException,
   Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
   UnprocessableEntityException
 } from '@nestjs/common';
-import { whatsappServiceWindow } from '@chat-zernio/domain';
+import {
+  conversationStatusPatch,
+  handoffToHuman,
+  whatsappServiceWindow
+} from '@chat-zernio/domain';
+import type { AutomationMode, ConversationStatus } from '@chat-zernio/contracts';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { ToolTokenService, type ToolIdentity } from './tool-token.service';
 
 /**
- * Lectura de conversaciones para el bot.
+ * Conversaciones para el bot: leerlas y cerrarlas.
  *
  * Es el primer extremo del contrato de herramientas: n8n se autentica con su credencial de maquina y
  * consulta una conversacion con su historial para decidir que responder.
  *
- * Dos reglas:
+ * Cuatro reglas:
  *   1. El espacio sale SIEMPRE del token, nunca de la peticion. Una credencial pertenece a un
- *      espacio y no puede leer los de otro.
- *   2. Solo lectura. Este servicio no escribe nada: el bot decide, y el envio es otro extremo que
- *      ademas esta apagado en modo sombra.
+ *      espacio y no puede leer ni cerrar los de otro.
+ *   2. La lectura no escribe nada: el bot decide, y el envio es otro extremo.
+ *   3. Cerrar y pausar SI se puede, pero solo estas dos cosas: ni asignar (eso es `assignments`) ni
+ *      cambiar la sede (eso es un dato del negocio que el bot fija mientras conversa).
+ *   4. Las dos escrituras son idempotentes y no piden version: el bot no la conoce. Repetir el mismo
+ *      cierre no cambia nada, y si otra persona movio la conversacion en el medio, la respuesta lo
+ *      dice en lugar de pisarla en silencio.
  */
 
 /** Cuantos mensajes se devuelven como maximo, del mas reciente hacia atras. */
@@ -204,6 +214,148 @@ export class ToolConversationService {
               Date.now()
             )
           : null
+    };
+  }
+
+  /**
+   * Cierra la conversacion y, por defecto, apaga el bot.
+   *
+   * Es la accion que el bot necesita cuando decide no seguir hablando: cerrar y no volver a
+   * contestar. Las dos cosas van en la misma llamada a proposito: cerrar sin apagar dejaria al bot
+   * respondiendo en un hilo cerrado, y apagar sin cerrar dejaria la conversacion como pendiente de
+   * atencion cuando ya no lo esta. `pauseBot: false` cierra sin tocar el interruptor, para el caso en
+   * que el negocio quiera cerrar el hilo y que el bot siga disponible si el cliente escribe.
+   */
+  async close(authorization: unknown, conversationId: string, rawBody: unknown): Promise<unknown> {
+    const identity = await this.toolTokenService.authenticate(authorization);
+    this.toolTokenService.assertScope(identity, 'conversations');
+    if (!conversationId) throw new UnprocessableEntityException('Hace falta conversationId.');
+
+    const cuerpo = (rawBody ?? {}) as { pauseBot?: unknown };
+    const pausar = cuerpo.pauseBot !== false;
+
+    const estado = await this.escribir(
+      identity,
+      conversationId,
+      { status: 'resolved' },
+      pausar ? handoffToHuman() : null
+    );
+    console.log(
+      JSON.stringify({
+        automationMode: estado.automationMode,
+        conversationId,
+        event: 'tools.conversation_closed',
+        status: estado.status,
+        tenantId: identity.tenantId
+      })
+    );
+    return { ...estado, tenantId: identity.tenantId };
+  }
+
+  /**
+   * Enciende o apaga el bot sin tocar el estado de la conversacion.
+   *
+   * Sirve para lo contrario que el cierre: pausar un hilo que sigue abierto --por ejemplo mientras
+   * una persona lo atiende-- y volver a encenderlo despues.
+   */
+  async setAutomation(
+    authorization: unknown,
+    conversationId: string,
+    rawBody: unknown
+  ): Promise<unknown> {
+    const identity = await this.toolTokenService.authenticate(authorization);
+    this.toolTokenService.assertScope(identity, 'conversations');
+    if (!conversationId) throw new UnprocessableEntityException('Hace falta conversationId.');
+
+    const cuerpo = (rawBody ?? {}) as { mode?: unknown };
+    const modo = cuerpo.mode;
+    if (modo !== 'auto' && modo !== 'suggest' && modo !== 'paused') {
+      throw new UnprocessableEntityException('mode tiene que ser auto, suggest o paused.');
+    }
+
+    const estado = await this.escribir(identity, conversationId, {}, modo);
+    return { ...estado, tenantId: identity.tenantId };
+  }
+
+  /**
+   * Escribe el estado y/o el interruptor del bot sobre una conversacion del espacio del token.
+   *
+   * Lee primero: asi la operacion es idempotente --repetirla devuelve el estado vigente sin escribir--
+   * y no hace falta que el bot conozca la version. La escritura sigue llevando el filtro de version,
+   * de modo que si alguien movio la conversacion entre la lectura y la escritura la respuesta es un
+   * conflicto visible, no un pisotazo.
+   */
+  private async escribir(
+    identity: ToolIdentity,
+    conversationId: string,
+    estado: { status?: ConversationStatus },
+    modo: AutomationMode | null
+  ): Promise<{ automationMode: string; conversationId: string; status: string }> {
+    const supabase = this.supabaseServerClientFactory.create();
+    const { data: actual, error: lecturaError } = await supabase
+      .from('conversations')
+      .select('id, status, status_version, automation_mode, automation_version')
+      .eq('tenant_id', identity.tenantId)
+      .eq('id', conversationId)
+      .maybeSingle();
+    if (lecturaError) {
+      throw new InternalServerErrorException('No fue posible leer la conversacion.');
+    }
+    if (!actual) throw new NotFoundException('La conversacion no existe en este espacio.');
+
+    const fila = actual as Record<string, unknown>;
+    const statusActual = String(fila.status ?? 'open') as ConversationStatus;
+    const modoActual = String(fila.automation_mode ?? 'auto');
+    const versionStatus = Number(fila.status_version ?? 1);
+    const versionModo = Number(fila.automation_version ?? 1);
+
+    const cambiaEstado = estado.status !== undefined && estado.status !== statusActual;
+    const cambiaModo = modo !== null && modo !== modoActual;
+    if (!cambiaEstado && !cambiaModo) {
+      return {
+        automationMode: modoActual,
+        conversationId: String(fila.id ?? conversationId),
+        status: statusActual
+      };
+    }
+
+    const parche: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (cambiaEstado) {
+      Object.assign(parche, conversationStatusPatch(estado.status as ConversationStatus));
+      parche.status_version = versionStatus + 1;
+    }
+    if (cambiaModo) {
+      parche.automation_mode = modo;
+      parche.automation_version = versionModo + 1;
+    }
+
+    let consulta = supabase
+      .from('conversations')
+      .update(parche)
+      .eq('tenant_id', identity.tenantId)
+      .eq('id', conversationId);
+    // Solo se filtra por las versiones que se estan cambiando: exigir la del otro campo obligaria al
+    // bot a conocer un dato que no necesita y haria fallar el cierre por un cambio de asignacion.
+    if (cambiaEstado) consulta = consulta.eq('status_version', versionStatus);
+    if (cambiaModo) consulta = consulta.eq('automation_version', versionModo);
+
+    const { data: escrita, error: escrituraError } = await consulta
+      .select('id, status, automation_mode')
+      .maybeSingle();
+    if (escrituraError) {
+      throw new InternalServerErrorException('No fue posible actualizar la conversacion.');
+    }
+    if (!escrita) {
+      throw new ConflictException(
+        'La conversacion cambio mientras se actualizaba. Vuelve a leerla antes de intentarlo.'
+      );
+    }
+
+    const resultado = escrita as Record<string, unknown>;
+    return {
+      automationMode: String(resultado.automation_mode ?? 'auto'),
+      conversationId: String(resultado.id ?? conversationId),
+      status: String(resultado.status ?? 'open')
     };
   }
 }

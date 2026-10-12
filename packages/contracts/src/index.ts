@@ -628,6 +628,27 @@ export const toolBranchUpdateSchema = z.object({
   branchSlug: z.string().trim().min(2).max(41)
 });
 
+/**
+ * Cerrar una conversacion desde el bot.
+ *
+ * `pauseBot` va por defecto en `true`: cerrar y seguir contestando es el estado que nadie quiere. La
+ * respuesta trae el estado resultante para que el flujo pueda dejarlo registrado.
+ */
+export const toolConversationCloseSchema = z.object({
+  pauseBot: z.boolean().default(true)
+});
+
+export const toolConversationAutomationSchema = z.object({
+  mode: automationModeSchema
+});
+
+export const toolConversationStateResponseSchema = z.object({
+  automationMode: automationModeSchema,
+  conversationId: z.uuid(),
+  status: conversationStatusSchema,
+  tenantId: z.uuid()
+});
+
 export const toolLabelsSchema = z.object({
   labels: z.array(z.string().trim().min(1).max(64)).min(1).max(20)
 });

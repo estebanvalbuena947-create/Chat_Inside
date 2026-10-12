@@ -24,7 +24,7 @@ Ronda aplicada sobre `Flujos_v2/`. Vale para los tres hallazgos de abajo:
   `item.status`, no `status: 'success'`.
 - **El flujo de Sara cambió de archivo.** El antiguo
   `Sara IG ISV - comprobantes optimizados y cierre automático (v2 WEPLASH).json` se retiró y su lugar lo
-  ocupa `Sara ZNO - (v2).json`, con el mismo flujo y el nombre interno
+  ocupa `1 Sara ZNO - (v2).json`, con el mismo flujo y el nombre interno
   «Sara IG ISV - comprobantes optimizados y cierre automático (v2 WEPLASH)». La fila de la tabla se
   actualizó a ese nombre.
 
@@ -86,23 +86,23 @@ resueltos**; el detalle de abajo se conserva como registro de lo que se encontr�
 | 7.1 Emisor Followup v2 IG_IS.json                             | Enviar seguimiento por el canal del bot    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
 | 7.1 Emisor Followup v2 IG_ISV.json                            | Enviar seguimiento por el canal del bot    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
 | 7.1 Emisor Followup v2 IG_ISV.json                            | Cargar mensaje de seguimiento              | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Multimedia_Valle                           | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Multimedia_Juarez                          | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Multimedia_Lomas                           | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Transferir_al_asesor                       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Foto_Deposito                              | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Send Flow                                  | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Set AI Answers                             | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Guardar mensaje comprobante                | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Enviar mensaje comprobante pendiente       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Guardar mensaje imagen no relacionada      | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Enviar aclaración imagen no relacionada    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Guardar mensaje revisión Banxico           | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Enviar mensaje revisión Banxico            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | catalogo_pdf                               | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | foto_accesorios                            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Cargar campos Banxico alternativo          | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Enviar plantilla Banxico alternativa       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Enviar foto_accesorios Banxico alternativa | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Transferir por consulta inconsistente      | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
-| Sara ZNO - (v2).json                                          | Avisar al asesor del cambio pendiente      | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Multimedia_Valle                           | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Multimedia_Juarez                          | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Multimedia_Lomas                           | GET    | `{{…}}`  | GET con cuerpo de mensaje: incoherente                             | Pide catalogo pero manda un flujo: hay que separarlo en dos pasos  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Transferir_al_asesor                       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Foto_Deposito                              | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Send Flow                                  | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Set AI Answers                             | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Guardar mensaje comprobante                | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Enviar mensaje comprobante pendiente       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Guardar mensaje imagen no relacionada      | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Enviar aclaración imagen no relacionada    | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Guardar mensaje revisión Banxico           | POST   | `{{…}}`  | Envio sin contenido reconocible                                    | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Enviar mensaje revisión Banxico            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | catalogo_pdf                               | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | foto_accesorios                            | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Cargar campos Banxico alternativo          | GET    | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Enviar plantilla Banxico alternativa       | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Enviar foto_accesorios Banxico alternativa | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Transferir por consulta inconsistente      | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
+| 1 Sara ZNO - (v2).json                                        | Avisar al asesor del cambio pendiente      | POST   | `{{…}}`  | Usa subscriber_id de ManyChat: debe ser contactId o conversationId |
