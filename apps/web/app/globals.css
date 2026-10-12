@@ -4120,3 +4120,86 @@ div:has(#won-dialog-title) button:not([aria-label]) {
   color: #8a6d3b;
   font-weight: 700;
 }
+
+/* --- Reseñas de Google: el apartado donde una persona responde las de una a tres estrellas ---- */
+.review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+  margin: 18px 0 0;
+  max-width: 880px;
+  padding: 0;
+}
+.review-item {
+  background: #fff;
+  border: 1px solid #e2ddd2;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+}
+.review-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.review-stars {
+  color: #c9973f;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+.review-date {
+  color: #8a8578;
+  font-size: 11px;
+  margin-left: auto;
+}
+.review-body {
+  color: #2f3a35;
+  line-height: 1.5;
+  margin: 0;
+}
+.review-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.review-field span {
+  color: #4a5568;
+  font-size: 10px;
+  font-weight: 700;
+}
+.review-field textarea {
+  border: 1px solid #ddd5c7;
+  border-radius: 7px;
+  color: #21443b;
+  font: inherit;
+  padding: 9px 11px;
+  resize: vertical;
+}
+.review-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.review-hint {
+  color: #8a8578;
+  font-size: 11px;
+}
+.primary-button {
+  background: #21443b;
+  border: 1px solid #21443b;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+}
+.primary-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

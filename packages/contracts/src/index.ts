@@ -649,6 +649,59 @@ export const toolConversationStateResponseSchema = z.object({
   tenantId: z.uuid()
 });
 
+/**
+ * Responder una resena de Google desde el bot.
+ *
+ * Se responde con un texto escrito en la peticion o con una plantilla guardada en el espacio: la
+ * segunda opcion deja el texto en la base, donde cambiarlo es editar una fila y no un flujo. Las
+ * variables rellenan los huecos `{nombre}` de la plantilla, y si falta alguna la respuesta es 422 con
+ * la lista: el servidor no inventa el nombre de nadie.
+ */
+export const toolReviewReplySchema = z
+  .object({
+    comment: z.string().trim().min(1).max(4000).optional(),
+    templateCode: z.string().trim().min(1).max(80).optional(),
+    variables: z.record(z.string(), z.string().max(200)).optional()
+  })
+  .refine((value) => Boolean(value.comment) !== Boolean(value.templateCode), {
+    message: 'La respuesta se escribe con comment o con templateCode, no con los dos.'
+  });
+
+export const toolReviewReplyResponseSchema = z.object({
+  repliedAt: z.string(),
+  reviewId: z.string().min(1),
+  source: z.enum(['bot', 'advisor']),
+  tenantId: z.uuid()
+});
+
+export const toolReviewRouteResponseSchema = z.object({
+  reviewId: z.string().min(1),
+  routedToHumanAt: z.string(),
+  tenantId: z.uuid()
+});
+
+/** La respuesta que escribe una persona desde la bandeja de resenas. */
+export const replyToGoogleReviewSchema = z.object({
+  comment: z.string().trim().min(1).max(4000)
+});
+
+/** Una resena tal como la muestra la bandeja. */
+export const googleReviewItemSchema = z.object({
+  body: z.string().nullable(),
+  id: z.uuid(),
+  rating: z.number().int().min(1).max(5),
+  repliedAt: z.string().nullable(),
+  replyComment: z.string().nullable(),
+  replySource: z.enum(['bot', 'advisor']).nullable(),
+  reviewUpdatedAt: z.string(),
+  reviewerName: z.string().nullable(),
+  routedToHumanAt: z.string().nullable()
+});
+
+export const googleReviewListResponseSchema = z.object({
+  items: z.array(googleReviewItemSchema)
+});
+
 export const toolLabelsSchema = z.object({
   labels: z.array(z.string().trim().min(1).max(64)).min(1).max(20)
 });
@@ -659,6 +712,12 @@ export type ToolBranch = z.infer<typeof toolBranchSchema>;
 export type ToolBranchListResponse = z.infer<typeof toolBranchListResponseSchema>;
 export type ToolBranchMediaResponse = z.infer<typeof toolBranchMediaResponseSchema>;
 export type ToolConversation = z.infer<typeof toolConversationSchema>;
+export type ToolReviewReply = z.infer<typeof toolReviewReplySchema>;
+export type ToolReviewReplyResponse = z.infer<typeof toolReviewReplyResponseSchema>;
+export type ToolReviewRouteResponse = z.infer<typeof toolReviewRouteResponseSchema>;
+export type GoogleReviewItem = z.infer<typeof googleReviewItemSchema>;
+export type GoogleReviewListResponse = z.infer<typeof googleReviewListResponseSchema>;
+export type ReplyToGoogleReview = z.infer<typeof replyToGoogleReviewSchema>;
 export type ToolSendMessage = z.infer<typeof toolSendMessageSchema>;
 export type ToolSendMessageResponse = z.infer<typeof toolSendMessageResponseSchema>;
 

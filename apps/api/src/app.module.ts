@@ -23,6 +23,9 @@ import { InternalLabelService } from './organization/internal-label.service';
 import { RealtimeEventsController } from './realtime/realtime-events.controller';
 import { TenantRealtimeService } from './realtime/tenant-realtime.service';
 import { MeController } from './tenants/me.controller';
+import { GoogleReviewsController } from './reviews/google-reviews.controller';
+import { GoogleReviewsService } from './reviews/google-reviews.service';
+import { ToolReviewsController } from './tools/tool-reviews.controller';
 import { AdvisorPresenceController } from './tenants/advisor-presence.controller';
 import { AdvisorPresenceService } from './tenants/advisor-presence.service';
 import { TenantAccessService } from './tenants/tenant-access.service';
@@ -78,6 +81,8 @@ import { ReservationsService } from './reservations/reservations.service';
     ReservationsController,
     MeController,
     AdvisorPresenceController,
+    GoogleReviewsController,
+    ToolReviewsController,
     RealtimeEventsController,
     TenantsController,
     ZernioWebhookController,
@@ -88,6 +93,7 @@ import { ReservationsService } from './reservations/reservations.service';
     RequestAuthenticator,
     TenantAccessService,
     AdvisorPresenceService,
+    GoogleReviewsService,
     TenantConversationService,
     ContactProfileService,
     ConversationMediaService,

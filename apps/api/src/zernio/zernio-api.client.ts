@@ -112,6 +112,17 @@ function whatsappTemplatesErrorFrom(status: number, payload: unknown): Error {
 }
 
 /**
+ * Un fallo al responder una resena. El 400 suele ser concreto y accionable: la cuenta no tiene sede
+ * seleccionada, o el identificador de la resena no es el que espera Google.
+ */
+function reviewErrorFrom(status: number, payload: unknown): Error {
+  const mensaje = readText(payload, 'error') ?? 'Zernio rechazo la respuesta de la resena.';
+  if (status === 403) return new ForbiddenException(mensaje);
+  if (status === 400 || status === 404 || status === 422) return new BadRequestException(mensaje);
+  return new ServiceUnavailableException(mensaje);
+}
+
+/**
  * Lectura tolerante de las plantillas.
  *
  * Se toma solo lo que el contrato necesita y se ignora el resto: el proveedor puede agregar campos
@@ -124,6 +135,20 @@ function whatsappTemplatesErrorFrom(status: number, payload: unknown): Error {
  * rellenarlo, la plantilla no se puede enviar sin valores.
  */
 const TEMPLATE_PLACEHOLDER = /\{\{[^{}]*\}\}/g;
+
+/**
+ * El identificador que espera Zernio: el ultimo tramo del nombre de recurso de Google.
+ *
+ * Google nombra una resena `accounts/123/locations/456/reviews/AbC`; el extremo del proveedor quiere
+ * solo `AbC`. Se toma el ultimo tramo no vacio y se descarta el resto.
+ */
+export function shortReviewId(providerReviewId: string): string {
+  const tramos = String(providerReviewId ?? '')
+    .split('/')
+    .map((tramo) => tramo.trim())
+    .filter((tramo) => tramo.length > 0);
+  return tramos.length > 0 ? (tramos[tramos.length - 1] as string) : '';
+}
 
 function collectTexts(value: unknown, out: string[]): void {
   if (typeof value === 'string') {
@@ -483,6 +508,36 @@ export class ZernioApiClient {
         }))
       };
     });
+  }
+
+  /**
+   * Publica la respuesta del propietario a una resena de Google.
+   *
+   * Contrato leido en docs.zernio.com (`/google-business/reply-to-google-business-review`):
+   * `POST /v1/accounts/{accountId}/gmb-reviews/{reviewId}/reply` con `{ comment }`.
+   *
+   * Dos cosas que hay que respetar y que no son obvias:
+   *   - `reviewId` es el ULTIMO tramo del nombre de recurso de Google, no el nombre completo. Aqui se
+   *     corta, para que quien llama pueda pasar lo que guarda la base.
+   *   - Google conserva UNA sola respuesta del propietario: repetir la llamada REEMPLAZA la anterior,
+   *     incluida una que alguien haya escrito a mano. Por eso este metodo no decide: quien llama tiene
+   *     que haber leido antes la resena.
+   */
+  async replyToGoogleReview(input: {
+    accountId: string;
+    comment: string;
+    providerReviewId: string;
+  }): Promise<{ reviewId: string }> {
+    const reviewId = shortReviewId(input.providerReviewId);
+    if (!reviewId) throw new BadRequestException('La resena no tiene identificador de Google.');
+
+    const response = await this.request(
+      `/v1/accounts/${encodeURIComponent(input.accountId)}/gmb-reviews/${encodeURIComponent(reviewId)}/reply`,
+      { body: JSON.stringify({ comment: input.comment }), method: 'POST' }
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw reviewErrorFrom(response.status, payload);
+    return { reviewId: readText(payload, 'reviewId') ?? reviewId };
   }
 
   private async commentAction(

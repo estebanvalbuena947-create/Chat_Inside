@@ -282,6 +282,53 @@ aquel, es idempotente y responde `409` si la conversación cambió.
 
 Crea la etiqueta si no existe en el espacio (con su color pastel) y la aplica.
 
+## 7 bis. Reseñas de Google — `POST /v1/tools/reviews/{id}/reply` y `…/route`
+
+`{id}` acepta nuestro identificador o el **nombre de recurso de Google** que llega en el aviso
+(`accounts/…/locations/…/reviews/AbC`), para que el flujo no tenga que traducir nada.
+
+### Responder
+
+```json
+{ "templateCode": "resena_google_positiva", "variables": { "nombre": "Marta" } }
+```
+
+o, con el texto escrito en la petición:
+
+```json
+{ "comment": "Gracias por tu visita, Marta." }
+```
+
+La plantilla sale de la tabla de plantillas del espacio y sus huecos `{nombre}` se rellenan aquí: un
+hueco sin valor responde `422` con la lista de los que faltan, porque publicar en Google un texto con
+`{nombre}` a la vista es peor que fallar.
+
+Respuesta `200`:
+
+```json
+{
+  "reviewId": "accounts/…/reviews/AbC",
+  "repliedAt": "2026-10-12T18:20:00.000Z",
+  "source": "bot",
+  "tenantId": "uuid"
+}
+```
+
+**Google conserva una sola respuesta del propietario**: publicar otra reemplaza la anterior, incluida
+una escrita a mano, y no hay historial. Por eso una reseña que ya tiene respuesta responde `409` y no
+se toca nada. Errores: `404` reseña inexistente en el espacio · `422` texto o plantilla inválidos.
+
+### Derivar a una persona
+
+`POST /v1/tools/reviews/{id}/route`, sin cuerpo. Marca la reseña como pendiente de una persona y la
+deja en el apartado **Reseñas** de la interfaz. Es idempotente: repetirlo conserva el momento en que
+se derivó. Es lo que usa el bot con las de una a tres estrellas.
+
+### Verlas
+
+`GET /v1/tools/reviews?pending=false` devuelve las del espacio; por defecto, las que siguen sin
+respuesta. Sirve para comprobar desde n8n que una reseña quedó registrada.
+
 ## 8. Conversión ganada — `POST /v1/tools/conversions`
 
 Sustituye al nodo **CAPI de ManyChat**: cuando el pago se confirma —solo, o aprobado a mano— el flujo

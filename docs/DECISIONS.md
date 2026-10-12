@@ -1008,6 +1008,31 @@ reserva y comprobante, e inserta el historial en una única transacción. La cla
 impide repetir el efecto ante reintentos. La migración externa es aditiva y el dashboard anterior sigue
 funcionando durante la transición.
 
+## Las reseñas de Google: el bot contesta las buenas y las malas las contesta una persona (2026-10-12)
+
+El bot responde solo las de cuatro y cinco estrellas, y solo con el texto de una plantilla del espacio.
+Las de una a tres se derivan a una persona y esperan en el apartado **Reseñas** de la interfaz. La
+razón no es técnica: una queja con nombre y apellidos contestada con una frase de plantilla se lee como
+lo que es, y hace más daño que no contestar. Y al revés, una felicitación agradecida en el mismo día es
+justo lo que se espera de un negocio que está pendiente.
+
+**El texto vive en una plantilla, no en el flujo.** El bot no escribe la respuesta: pide la plantilla
+`resena_google_positiva` y el servidor rellena sus huecos. Cambiar cómo se agradece una reseña es
+editar una fila, no abrir n8n, y de paso el texto no se puede publicar a medias: un hueco sin valor
+responde 422 en lugar de salir un `{nombre}` a la vista de todo el mundo.
+
+**Una sola respuesta, y no se pisa.** Google conserva una única respuesta del propietario: publicar
+otra reemplaza la anterior, incluida una escrita a mano en la interfaz de Google, y no hay historial
+que consultar después. Por eso la regla es la misma en los dos caminos —el del bot y el de la
+persona—: antes de publicar se lee la reseña, y si ya tiene respuesta la operación se rechaza con un
+conflicto. Además, la reseña se marca como respondida **después** de que el proveedor acepte: si algo
+falla, sigue pendiente y se puede reintentar sin miedo; y si la publicación salió bien pero el registro
+falló, la respuesta lo dice tal cual, porque reintentar publicaría encima.
+
+**El identificador se recorta en el adaptador.** Zernio quiere el último tramo del nombre de recurso de
+Google, no el nombre completo. Ese detalle vive en el cliente del proveedor, para que ni el flujo ni la
+interfaz tengan que saberlo.
+
 ## El aviso al bot se reclama antes de entregarse (2026-10-12)
 
 Un audio disparó dos veces el webhook de n8n. La causa no era el proveedor: la cola de avisos era la

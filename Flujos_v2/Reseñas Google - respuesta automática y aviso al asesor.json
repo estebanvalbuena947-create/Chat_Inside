@@ -1,0 +1,215 @@
+{
+  "name": "Reseñas Google - respuesta automática y aviso al asesor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reseñas_google",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [-304, -16],
+      "id": "e5a880ba-1a4b-4e7e-9414-581e1c93c0c1",
+      "name": "Webhook",
+      "webhookId": "306fab1c-9f38-4235-b198-346a6abcab56",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "keRrMQ0TLJuLGXKp",
+          "name": "reseñas"
+        }
+      },
+      "notes": "Lo llama el trabajador de WEPLASH cuando una reseña nueva o modificada queda guardada. Lleva la cabecera Authorization que valida la credencial \"reseñas\"."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aviso del trabajador: { event: 'google.review.received', tenantId, review: {...} }.\n// El cuerpo llega en la raiz; se admite tambien bajo 'body' porque el nodo Webhook no siempre\n// envuelve igual segun como se publique el flujo.\nconst entrada = $input.first().json ?? {};\nconst aviso = entrada.body ?? entrada;\nconst resena = aviso.review ?? {};\n\nconst rating = Number(resena.rating ?? 0);\nconst nombre = String(resena.reviewer_name ?? '').trim();\nconst providerReviewId = String(resena.provider_review_id ?? '').trim();\n\nif (!providerReviewId) {\n  throw new Error('El aviso llego sin identificador de resena: no se puede responder ni derivar.');\n}\n\n// Google guarda UNA sola respuesta del propietario. Si la resena ya tiene respuesta -- porque una\n// persona la contesto a mano en Google -- este flujo no publica nada.\nconst yaRespondida = Boolean(resena.replied_at);\n\nreturn [{\n  json: {\n    provider_review_id: providerReviewId,\n    rating,\n    reviewer_name: nombre,\n    resena_texto: String(resena.body ?? ''),\n    ya_respondida: yaRespondida,\n    responder_automatico: !yaRespondida && rating >= 4,\n    derivar_a_asesor: !yaRespondida && rating > 0 && rating <= 3,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-80, -16],
+      "id": "b7c1a2f0-0000-4000-8000-000000000001",
+      "name": "Leer aviso de reseña",
+      "notes": "Traduce el aviso a lo que decide el flujo. La regla de Google -- una sola respuesta por resena -- se comprueba aqui una vez."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1a2b3c4d-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.responder_automatico }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [144, -16],
+      "id": "c8d2b3a1-0000-4000-8000-000000000003",
+      "name": "IF respuesta automatica",
+      "notes": "Cuatro y cinco estrellas se contestan solas. De una a tres estrellas las responde una persona."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/reviews/{{ $json.provider_review_id }}/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WEPLASH_TOOL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"templateCode\": \"resena_google_positiva\", \"variables\": { \"nombre\": $json.reviewer_name } } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [368, -112],
+      "id": "d9e3c4b2-0000-4000-8000-000000000004",
+      "name": "Responder automaticamente",
+      "notes": "El texto NO va aqui: se pide la plantilla 'resena_google_positiva' del espacio y el servidor rellena {nombre}. Cambiar la respuesta es editar una fila, no este flujo."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json || {};\nlet b = r.body ?? r;\nif (typeof b === 'string') { try { b = JSON.parse(b); } catch { b = {}; } }\nconst status = Number(r.statusCode ?? 0);\nconst publicada = !r.error && status >= 200 && status < 300 && b.source === 'bot';\n\nif (!publicada) {\n  const motivo = String(b.message ?? r.error?.message ?? 'sin detalle').replace(/https?:\\/\\/\\S+/g, '[URL]').slice(0, 300);\n  throw new Error('No se pudo publicar la respuesta de la resena (' + (status || 'sin respuesta') + '): ' + motivo);\n}\n\nreturn [{ json: { ...$('Leer aviso de reseña').first().json, respuesta_publicada: true, respondida_en: b.repliedAt ?? null } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [592, -112],
+      "id": "ea4d5c3b-0000-4000-8000-000000000005",
+      "name": "Validar respuesta",
+      "notes": "Un fallo aqui deja la ejecucion marcada y visible en n8n: la resena se queda sin responder, no a medias."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/reviews/{{ $json.provider_review_id }}/route",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WEPLASH_TOOL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": false,
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [368, 112],
+      "id": "fb5e6d4c-0000-4000-8000-000000000006",
+      "name": "Derivar al asesor",
+      "notes": "Deja la resena esperando respuesta en la bandeja de resenas de la interfaz. El aviso ya lo tiene el equipo: la resena aparece con lo que escribio el cliente."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json || {};\nlet b = r.body ?? r;\nif (typeof b === 'string') { try { b = JSON.parse(b); } catch { b = {}; } }\nconst status = Number(r.statusCode ?? 0);\nconst derivada = !r.error && status >= 200 && status < 300 && Boolean(b.routedToHumanAt);\n\nif (!derivada) {\n  const motivo = String(b.message ?? r.error?.message ?? 'sin detalle').replace(/https?:\\/\\/\\S+/g, '[URL]').slice(0, 300);\n  throw new Error('No se pudo derivar la resena (' + (status || 'sin respuesta') + '): ' + motivo);\n}\n\nreturn [{ json: { ...$('Leer aviso de reseña').first().json, derivada_al_asesor: true, derivada_en: b.routedToHumanAt } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [592, 112],
+      "id": "ac6f7e5d-0000-4000-8000-000000000007",
+      "name": "Validar derivacion",
+      "notes": "Si esto falla, la resena no esta en la bandeja: hay que verlo, no darlo por hecho."
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [816, -16],
+      "id": "bd708f6e-0000-4000-8000-000000000008",
+      "name": "Fin"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Leer aviso de reseña", "type": "main", "index": 0 }]]
+    },
+    "Leer aviso de reseña": {
+      "main": [[{ "node": "IF respuesta automatica", "type": "main", "index": 0 }]]
+    },
+    "IF respuesta automatica": {
+      "main": [
+        [{ "node": "Responder automaticamente", "type": "main", "index": 0 }],
+        [{ "node": "Derivar al asesor", "type": "main", "index": 0 }]
+      ]
+    },
+    "Responder automaticamente": {
+      "main": [[{ "node": "Validar respuesta", "type": "main", "index": 0 }]]
+    },
+    "Derivar al asesor": {
+      "main": [[{ "node": "Validar derivacion", "type": "main", "index": 0 }]]
+    },
+    "Validar respuesta": {
+      "main": [[{ "node": "Fin", "type": "main", "index": 0 }]]
+    },
+    "Validar derivacion": {
+      "main": [[{ "node": "Fin", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "event": "google.review.received",
+          "review": {
+            "body": "El masaje estuvo bien pero la sala olia a humedad.",
+            "provider_review_id": "accounts/123/locations/456/reviews/AbC123",
+            "rating": 3,
+            "replied_at": null,
+            "review_updated_at": "2026-10-12T18:00:00.000Z",
+            "reviewer_name": "Marta",
+            "zernio_account_id": "cuenta-1"
+          },
+          "tenantId": "b8b53c64-00c4-4739-a7ac-b8fc84ea0b72"
+        }
+      }
+    ]
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
+  }
+}

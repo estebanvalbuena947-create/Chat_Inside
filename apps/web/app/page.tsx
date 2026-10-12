@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
+import GoogleReviewsPanel from './resenas/page';
 import ReservationsPanel from './reservas/page';
 
 type Conversation = {
@@ -286,9 +287,9 @@ function SidebarIcon({ paths }: { paths: string[] }) {
 export default function HomePage(): React.ReactNode {
   const [inbox, setInbox] = useState<InboxState>({ kind: 'loading' });
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'inbox' | 'media' | 'metrics' | 'reservations'>(
-    'inbox'
-  );
+  const [activeView, setActiveView] = useState<
+    'inbox' | 'media' | 'metrics' | 'reservations' | 'reviews'
+  >('inbox');
   const [metricsDays, setMetricsDays] = useState<number>(30);
   const [metrics, setMetrics] = useState<MetricsState>({ kind: 'loading' });
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
@@ -2382,6 +2383,22 @@ export default function HomePage(): React.ReactNode {
               <span className="nav-label">Reservas</span>
             </button>
           )}
+          {/* La ven todos, incluidos los asesores: son quienes responden las de una a tres estrellas. */}
+          <button
+            aria-current={activeView === 'reviews' ? 'page' : undefined}
+            className={'nav-item ' + (activeView === 'reviews' ? 'active' : '')}
+            onClick={() => {
+              closeOverlays();
+              setActiveView('reviews');
+            }}
+            title="Reseñas"
+            type="button"
+          >
+            <SidebarIcon
+              paths={['M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.6 9.7l5.8-.8z']}
+            />
+            <span className="nav-label">Reseñas</span>
+          </button>
           <button
             aria-current={activeView === 'inbox' ? 'page' : undefined}
             aria-label="Bandeja"
@@ -3846,6 +3863,7 @@ export default function HomePage(): React.ReactNode {
         </div>
       )}
       {activeView === 'reservations' && <ReservationsPanel />}
+      {activeView === 'reviews' && <GoogleReviewsPanel />}
       {activeView === 'media' && (
         <section className="media-view" aria-label="Comprobantes de pago">
           <header className="media-view-header">
