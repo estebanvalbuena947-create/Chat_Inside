@@ -1008,6 +1008,31 @@ reserva y comprobante, e inserta el historial en una única transacción. La cla
 impide repetir el efecto ante reintentos. La migración externa es aditiva y el dashboard anterior sigue
 funcionando durante la transición.
 
+## El aviso al bot se reclama antes de entregarse (2026-10-12)
+
+Un audio disparó dos veces el webhook de n8n. La causa no era el proveedor: la cola de avisos era la
+única del trabajador que **no reclamaba** su fila. Seleccionaba los pendientes y solo los marcaba como
+enviados **después** de que n8n respondiera; como el aviso tarda segundos —lee los adjuntos, firma los
+enlaces y espera al webhook—, y el reloj del bucle insistía cada cinco segundos sin esperar a que el
+ciclo anterior terminara, un segundo ciclo volvía a ver la misma fila pendiente y la entregaba otra
+vez. En la base no dejaba rastro: los dos ciclos leían los mismos intentos y escribían el mismo número,
+así que parecía una entrega única y correcta.
+
+Se aplicó el mismo protocolo que ya usaba la cola de salida, que existe precisamente por esto:
+`status = 'processing'` con `processing_started_at` al tomarla, de modo que la fila sale de la cola en
+cuanto alguien la reclama; ninguna otra iteración la ve. Al terminar se cierra como enviada, y si el
+envío falla vuelve a pendiente con su intento contado —el intento se cuenta al reclamar, para que el
+presupuesto cubra también el que se quedó a medias—. Un reclamo más viejo que cinco minutos se devuelve
+a la cola: perder el aviso no es aceptable, repetirlo sí.
+
+Además, el bucle dejó de solapar ciclos: el reloj puede insistir cada cinco segundos, pero un ciclo no
+empieza hasta que el anterior termina. Un tic que llega mientras otro corre se salta, y lo que quedara
+pendiente lo recoge el siguiente. Las colas reclaman sus propias filas, así que el daño ya estaba
+acotado, pero el trabajo se duplicaba y algunos efectos salían dos veces.
+
+Eran dos capas del mismo problema y se corrigen las dos: el reclamo protege frente a cualquier
+concurrencia —incluido un segundo proceso— y la guarda del bucle evita el solapamiento que lo provocó.
+
 ## El bot puede cerrar la conversación y apagar la automatización (2026-10-12)
 
 El flujo de Sara tenía una herramienta para dejar de atender —cerrar y no volver a responder ante una

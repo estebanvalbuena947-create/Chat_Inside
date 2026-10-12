@@ -136,11 +136,76 @@ type PendingDelivery = {
   tenant_id: string;
 };
 
+/**
+ * Toma la fila para si antes de entregarla.
+ *
+ * Sin esto, el aviso se entregaba DOS veces cuando un ciclo tardaba mas que el intervalo del bucle:
+ * la fila seguia pendiente mientras el aviso viajaba a n8n, asi que el ciclo siguiente la volvia a
+ * tomar. En la base no se notaba -- los dos ciclos leian los mismos intentos y escribian el mismo
+ * numero--, pero n8n recibia dos veces el mismo mensaje. Con el reclamo, la fila sale de la cola en
+ * cuanto alguien la toma.
+ *
+ * Devuelve el numero de intento que le toca, o `null` si otro ciclo se le adelanto.
+ */
+export async function claimDelivery(
+  supabase: SupabaseServerClient,
+  delivery: PendingDelivery
+): Promise<number | null> {
+  const intento = (delivery.attempts ?? 0) + 1;
+  const { data, error } = await supabase
+    .from('bot_deliveries')
+    .update({
+      attempts: intento,
+      processing_started_at: new Date().toISOString(),
+      status: 'processing',
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', delivery.id)
+    .eq('status', 'pending')
+    .is('processing_started_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return intento;
+}
+
+/**
+ * Devuelve a la cola un aviso cuyo reclamo quedo abandonado por una caida del proceso.
+ *
+ * Sin esto, un aviso que se estaba entregando cuando el trabajador murio quedaria en `processing`
+ * para siempre y el bot no se enteraria de ese mensaje. La entrega es "al menos una vez": repetirla
+ * es aceptable, perderla no.
+ */
+export async function reclaimAbandonedBotDeliveries(
+  supabase: SupabaseServerClient,
+  now: number = Date.now()
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('bot_deliveries')
+    .update({
+      processing_started_at: null,
+      status: 'pending',
+      updated_at: new Date(now).toISOString()
+    })
+    .eq('status', 'processing')
+    .lt('processing_started_at', new Date(now - ABANDONED_CLAIM_MS).toISOString())
+    .select('id');
+
+  if (error) return 0;
+  return Array.isArray(data) ? data.length : 0;
+}
+
+/** Cuanto puede tardar un aviso antes de dar su reclamo por abandonado. */
+export const ABANDONED_CLAIM_MS = 5 * 60_000;
+
 /** Entrega una tanda de avisos pendientes. El transporte llega por parametro, para poder probarlo. */
 export async function sendPendingBotDeliveries(input: {
   deliver: (url: string, body: InboundBotNotification) => Promise<void>;
   supabase: SupabaseServerClient;
 }): Promise<BotDeliveryOutcome[]> {
+  await reclaimAbandonedBotDeliveries(input.supabase);
+
   const { data: pendientes, error } = await input.supabase
     .from('bot_deliveries')
     .select('id, tenant_id, message_id, conversation_id, attempts')
@@ -153,7 +218,10 @@ export async function sendPendingBotDeliveries(input: {
   const resultados: BotDeliveryOutcome[] = [];
 
   for (const fila of pendientes as PendingDelivery[]) {
-    const intentos = fila.attempts ?? 0;
+    // El reclamo va ANTES de leer nada mas: la fila sale de la cola y otro ciclo no la puede tomar.
+    const intento = await claimDelivery(input.supabase, fila);
+    if (intento === null) continue;
+    const intentos = intento;
 
     const { data: integracion } = await input.supabase
       .from('bot_integrations')
@@ -166,6 +234,7 @@ export async function sendPendingBotDeliveries(input: {
         .from('bot_deliveries')
         .update({
           last_error: 'El bot no esta activo en este espacio.',
+          processing_started_at: null,
           status: 'skipped',
           updated_at: new Date().toISOString()
         })
@@ -247,9 +316,9 @@ export async function sendPendingBotDeliveries(input: {
       await input.supabase
         .from('bot_deliveries')
         .update({
-          attempts: intentos + 1,
           delivered_at: new Date().toISOString(),
           last_error: null,
+          processing_started_at: null,
           status: 'sent',
           updated_at: new Date().toISOString()
         })
@@ -260,9 +329,9 @@ export async function sendPendingBotDeliveries(input: {
       await input.supabase
         .from('bot_deliveries')
         .update({
-          attempts: intentos + 1,
           last_error: motivo,
-          status: shouldRetryBotDelivery(intentos + 1) ? 'pending' : 'failed',
+          processing_started_at: null,
+          status: shouldRetryBotDelivery(intentos) ? 'pending' : 'failed',
           updated_at: new Date().toISOString()
         })
         .eq('id', fila.id);

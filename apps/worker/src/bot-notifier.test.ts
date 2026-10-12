@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { buildInboundNotification, shouldRetryBotDelivery } from './bot-notifier';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  buildInboundNotification,
+  claimDelivery,
+  reclaimAbandonedBotDeliveries,
+  shouldRetryBotDelivery
+} from './bot-notifier';
 
 const base = {
   conversation: {
@@ -105,5 +110,78 @@ describe('aviso al bot', () => {
     expect(shouldRetryBotDelivery(0)).toBe(true);
     expect(shouldRetryBotDelivery(4)).toBe(true);
     expect(shouldRetryBotDelivery(5)).toBe(false);
+  });
+});
+
+/**
+ * El reclamo de la fila antes de entregarla.
+ *
+ * Es lo que impide que el mismo aviso salga dos veces. El sintoma que lo destapo: un audio disparo
+ * dos veces el webhook de n8n, porque la fila seguia pendiente mientras el aviso viajaba y un ciclo
+ * solapado la volvio a tomar. En la base no se notaba -- los dos ciclos escribian el mismo numero de
+ * intentos--, asi que la prueba comprueba el reclamo en si, no su rastro.
+ */
+describe('reclamo del aviso', () => {
+  function doble(respuesta: unknown) {
+    const maybeSingle = vi.fn().mockResolvedValue(respuesta);
+    const cadena: Record<string, unknown> = {
+      eq: () => cadena,
+      is: () => cadena,
+      maybeSingle,
+      select: () => cadena,
+      update: () => cadena
+    };
+    const supabase = { from: vi.fn(() => cadena) } as unknown as Parameters<
+      typeof claimDelivery
+    >[0];
+    return { maybeSingle, supabase };
+  }
+
+  it('toma la fila pendiente y devuelve el intento que le toca', async () => {
+    const { maybeSingle, supabase } = doble({ data: { id: 'delivery-1' }, error: null });
+
+    const intento = await claimDelivery(supabase, {
+      attempts: 0,
+      conversation_id: 'conv-1',
+      id: 'delivery-1',
+      message_id: 'msg-1',
+      tenant_id: 'tenant-1'
+    });
+
+    expect(intento).toBe(1);
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
+    // El intento se cuenta al reclamar, no al terminar: asi el presupuesto cubre tambien el que se
+    // quedo a medias si el proceso muere.
+    const parche = (supabase.from as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+    expect(parche).toBeGreaterThan(0);
+  });
+
+  it('si otro ciclo se adelanto, no entrega nada', async () => {
+    const { supabase } = doble({ data: null, error: null });
+
+    const intento = await claimDelivery(supabase, {
+      attempts: 0,
+      conversation_id: 'conv-1',
+      id: 'delivery-1',
+      message_id: 'msg-1',
+      tenant_id: 'tenant-1'
+    });
+
+    expect(intento).toBeNull();
+  });
+
+  it('un reclamo abandonado vuelve a la cola: perder el aviso no es aceptable', async () => {
+    const filas = [{ id: 'delivery-1' }, { id: 'delivery-2' }];
+    const cadena: Record<string, unknown> = {
+      eq: () => cadena,
+      lt: () => cadena,
+      select: () => Promise.resolve({ data: filas, error: null }),
+      update: () => cadena
+    };
+    const supabase = { from: vi.fn(() => cadena) } as unknown as Parameters<
+      typeof reclaimAbandonedBotDeliveries
+    >[0];
+
+    expect(await reclaimAbandonedBotDeliveries(supabase)).toBe(2);
   });
 });
