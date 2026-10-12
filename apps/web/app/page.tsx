@@ -523,6 +523,10 @@ export default function HomePage(): React.ReactNode {
       : null;
   const selectedConversation =
     conversations.find((item) => item.id === selectedConversationId) ?? null;
+  // La lista lateral ya recibe `lastMessageAt` cuando entra actividad nueva. Usarlo además como
+  // dependencia del historial evita que el hilo abierto quede detrás si se pierde una señal SSE:
+  // ambos paneles vuelven a leer la misma fuente de verdad, sin duplicar mensajes en memoria.
+  const selectedConversationLastMessageAt = selectedConversation?.lastMessageAt ?? null;
   const tenant = inbox.kind === 'ready' ? inbox.tenant : null;
   const tenantId = tenant?.id ?? null;
   const selectedLabelFilter = internalLabels.find((label) => label.id === labelFilterId) ?? null;
@@ -1097,7 +1101,7 @@ export default function HomePage(): React.ReactNode {
     return () => {
       active = false;
     };
-  }, [historyReloadVersion, selectedConversationId]);
+  }, [historyReloadVersion, selectedConversationId, selectedConversationLastMessageAt]);
 
   useEffect(() => {
     if (!selectedConversationId) {
@@ -4488,6 +4492,20 @@ function tramosDeEspera(responseTime: MetricsPayload['responseTime']) {
   ];
 }
 
+type WaitFilter = 'all' | 'ok' | 'aviso' | 'alto' | 'sin-datos';
+
+/** El filtro usa los umbrales recibidos: la UI no vuelve a decidir qué es una espera larga. */
+function matchesWaitFilter(
+  participant: MetricsPayload['participants'][number],
+  filter: WaitFilter,
+  thresholds: MetricsPayload['responseTime']['thresholds']
+): boolean {
+  return (
+    filter === 'all' ||
+    colorDeEspera(participant.averageFirstResponseSeconds, thresholds) === filter
+  );
+}
+
 /**
  * Panel de actividad: cuantos mensajes llegan, por donde, y cuantas conversaciones se cerraron.
  *
@@ -4507,19 +4525,53 @@ function MetricsPanel({
     state.kind === 'ready'
       ? Math.max(1, ...state.data.messagesPerDay.map((dia) => dia.received + dia.sent))
       : 1;
-  const [selectedParticipant, setSelectedParticipant] = useState<
-    MetricsPayload['participants'][number] | null
-  >(null);
+  const [waitFilter, setWaitFilter] = useState<WaitFilter>('all');
+  const matchingAdvisors =
+    state.kind === 'ready'
+      ? state.data.participants.filter(
+          (participant) =>
+            participant.kind === 'advisor' &&
+            matchesWaitFilter(participant, waitFilter, state.data.responseTime.thresholds)
+        )
+      : [];
+  const participants =
+    state.kind === 'ready'
+      ? state.data.participants.filter(
+          (participant) =>
+            participant.kind === 'bot' ||
+            matchesWaitFilter(participant, waitFilter, state.data.responseTime.thresholds)
+        )
+      : [];
 
   return (
     <section className="metrics-panel">
       <div className="metrics-period">
-        <span className="metrics-card-label">Periodo</span>
-        <select onChange={(event) => onChangeDays(Number(event.target.value))} value={days}>
-          <option value={7}>Ultimos 7 dias</option>
-          <option value={30}>Ultimos 30 dias</option>
-          <option value={90}>Ultimos 90 dias</option>
-        </select>
+        <label className="metrics-select-label">
+          <span className="metrics-card-label">Periodo</span>
+          <select
+            aria-label="Periodo de las métricas"
+            onChange={(event) => onChangeDays(Number(event.target.value))}
+            value={days}
+          >
+            <option value={7}>Últimos 7 días</option>
+            <option value={30}>Últimos 30 días</option>
+            <option value={90}>Últimos 90 días</option>
+          </select>
+        </label>
+        <label className="metrics-select-label">
+          <span className="metrics-card-label">Tiempo de espera</span>
+          <select
+            aria-label="Filtrar asesores por tiempo de espera"
+            onChange={(event) => setWaitFilter(event.target.value as WaitFilter)}
+            value={waitFilter}
+          >
+            <option value="all">Todos los tiempos</option>
+            <option value="ok">Menos de 5 min</option>
+            <option value="aviso">De 5 a 10 min</option>
+            <option value="alto">Más de 10 min</option>
+            <option value="sin-datos">Sin respuestas medidas</option>
+          </select>
+        </label>
       </div>
 
       {state.kind === 'loading' && <p className="metrics-note">Cargando actividad...</p>}
@@ -4575,8 +4627,14 @@ function MetricsPanel({
             <h3>Actividad por asesor y Bot</h3>
             {state.data.participants.length === 0 ? (
               <p className="metrics-note">Sin respuestas del Bot ni de asesores en este periodo.</p>
-            ) : (
-              state.data.participants.map((participant) => (
+            ) : matchingAdvisors.length === 0 &&
+              state.data.participants.some((participant) => participant.kind === 'advisor') ? (
+              <p className="metrics-note">
+                No hay asesores que coincidan con este tiempo de espera.
+              </p>
+            ) : null}
+            {participants.length > 0 &&
+              participants.map((participant) => (
                 <div className="metrics-row" key={participant.label}>
                   <span className="metrics-row-name">
                     <span
@@ -4593,38 +4651,26 @@ function MetricsPanel({
                     <span />
                   </span>
                   <span className="metrics-row-values">
-                    {participant.messagesSent} respuestas enviadas
+                    {participant.kind === 'advisor' ? (
+                      <>
+                        <strong>{esperaEnPalabras(participant.averageFirstResponseSeconds)}</strong>{' '}
+                        de espera promedio · {participant.firstResponses} medidas ·{' '}
+                        {participant.messagesSent} enviadas
+                      </>
+                    ) : (
+                      <>{participant.messagesSent} respuestas enviadas</>
+                    )}
                   </span>
-                  <button
-                    className="metrics-detail-button"
-                    onClick={() => setSelectedParticipant(participant)}
-                    type="button"
-                  >
-                    Detalles
-                  </button>
                 </div>
-              ))
-            )}
+              ))}
           </div>
-          {selectedParticipant && (
-            <div className="metrics-participant-detail">
-              <button onClick={() => setSelectedParticipant(null)} type="button">
-                ×
-              </button>
-              <h3>{selectedParticipant.label}</h3>
-              <p>
-                Tiempo promedio de primera respuesta:{' '}
-                <strong>{esperaEnPalabras(selectedParticipant.averageFirstResponseSeconds)}</strong>
-              </p>
-              <p>
-                {selectedParticipant.firstResponses} conversaciones medidas ·{' '}
-                {selectedParticipant.messagesSent} respuestas enviadas
-              </p>
-            </div>
-          )}
 
           <div className="metrics-block">
             <h3>Cuánto esperó el cliente</h3>
+            <p className="metrics-note">
+              Esta métrica mide solo la primera respuesta de un asesor. Las respuestas del bot no se
+              incluyen.
+            </p>
             {state.data.responseTime.conversations === 0 ? (
               <p className="metrics-note">
                 Ningún asesor respondió en este periodo, así que no hay espera que medir.

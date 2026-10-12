@@ -3284,18 +3284,47 @@ h2 {
   align-items: center;
   background: #fff;
   border: 1px solid var(--brand-dolar);
-  border-radius: 12px;
+  border-radius: 16px;
   display: flex;
   gap: 12px;
-  padding: 12px 18px;
+  padding: 12px;
+}
+
+.metrics-select-label {
+  display: grid;
+  gap: 5px;
+  min-width: 190px;
 }
 
 .metrics-period select {
-  background: #fff;
-  border: 1px solid var(--brand-dolar);
-  border-radius: 8px;
+  appearance: none;
+  background: linear-gradient(135deg, #fff 0%, #f4f5ee 100%);
+  border: 1px solid #c8c6b5;
+  border-radius: 10px;
   color: var(--brand-tinta);
-  padding: 7px 12px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 38px 9px 12px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--brand-matcha-oscuro) 50%),
+    linear-gradient(135deg, var(--brand-matcha-oscuro) 50%, transparent 50%),
+    linear-gradient(135deg, #fff 0%, #f4f5ee 100%);
+  background-position:
+    calc(100% - 16px) 52%,
+    calc(100% - 11px) 52%,
+    0 0;
+  background-repeat: no-repeat;
+  background-size:
+    5px 5px,
+    5px 5px,
+    100% 100%;
+}
+
+.metrics-period select:focus-visible {
+  border-color: var(--brand-matcha-oscuro);
+  box-shadow: 0 0 0 3px rgba(101, 117, 78, 0.2);
+  outline: 0;
 }
 
 .metrics-cards {
@@ -3423,39 +3452,13 @@ h2 {
     grid-row: 2;
     margin-bottom: 6px;
   }
-  .metrics-detail-button {
-    grid-column: 1 / -1;
-    justify-self: start;
+  .metrics-period {
+    align-items: stretch;
+    flex-direction: column;
   }
-}
-.metrics-detail-button {
-  background: #fff;
-  border: 1px solid #cfc6b6;
-  border-radius: 5px;
-  color: #315f52;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 4px 7px;
-}
-.metrics-participant-detail {
-  background: #f7fbf8;
-  border: 1px solid #b9d5c9;
-  border-radius: 8px;
-  margin: 12px 0;
-  padding: 14px;
-  position: relative;
-}
-.metrics-participant-detail h3 {
-  margin-top: 0;
-}
-.metrics-participant-detail button {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font-size: 20px;
-  position: absolute;
-  right: 8px;
-  top: 4px;
+  .metrics-select-label {
+    min-width: 0;
+  }
 }
 
 .metrics-note {
