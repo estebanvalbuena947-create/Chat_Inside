@@ -13,7 +13,7 @@ inferirla desde los indicadores o abrir registros no relacionados.
 ## Resultado esperado
 
 Los administradores y supervisores pueden abrir las vistas **Confirmadas** y **Creadas** en Reservas,
-ver por defecto las filas operativas de hoy y alternar a todas las disponibles. Mientras la pantalla
+ver por defecto las filas operativas de hoy, seleccionar otra fecha mediante un calendario y alternar a todas las disponibles. Mientras la pantalla
 está visible, se actualiza cada 30 segundos y conserva el botón de actualización manual.
 
 ## No objetivos
@@ -30,9 +30,9 @@ está visible, se actualiza cada 30 segundos y conserva el botón de actualizaci
 
 ## Reglas e invariantes
 
-1. «Hoy» se calcula en `America/Mexico_City`, la zona operativa del negocio, en el servidor.
+1. «Hoy» y cualquier fecha elegida se calculan en `America/Mexico_City`, la zona operativa del negocio, en el servidor.
 2. Una confirmada se clasifica por su fecha de confirmación; una creada, por la entrada de la
-   pre-reserva; ninguna se clasifica por el horario de la cita.
+   pre-reserva. Las citas agendadas se clasifican por su horario programado.
 3. La UI solo consume el BFF existente y presenta las listas que calcula la API autorizada.
 
 ## Datos, seguridad y rollback

@@ -17,6 +17,8 @@ import {
 } from '@chat-zernio/contracts';
 import {
   buildReservationKpis,
+  dayKeyInZone,
+  isReservationOnDay,
   isReservationToday,
   normalizeConfirmed,
   normalizeDecision,
@@ -134,7 +136,8 @@ export class ReservationsService {
   async board(
     authorization: unknown,
     tenantId: string,
-    now: Date = new Date()
+    now: Date = new Date(),
+    operationalDay?: string
   ): Promise<ReservationsBoardResponse> {
     const identity = await this.requestAuthenticator.authenticate(authorization);
     // Solo quien gestiona reservas: un agente no ve dinero ni decide comprobantes.
@@ -188,18 +191,34 @@ export class ReservationsService {
       confirmadasNorm,
       decisionesNorm,
       comprobantesNorm,
-      { now }
+      { now, operationalDay }
     );
+
+    const selectedDay = operationalDay ?? dayKeyInZone(now);
+    if (!selectedDay)
+      throw new InternalServerErrorException('No fue posible calcular la fecha operativa.');
 
     return reservationsBoardResponseSchema.parse({
       actualizadoEn: now.toISOString(),
+      operationalDate: selectedDay,
       comprobantes: comprobantesNorm.map(toReceiptView),
+      citasAgendadasFecha: confirmadasNorm
+        .filter((reservation) => isReservationOnDay(reservation.horarioProgramado, selectedDay))
+        .map(toConfirmedView),
       confirmadas: confirmadasNorm.map(toConfirmedView),
       confirmadasHoy: confirmadasNorm
-        .filter((reservation) => isReservationToday(reservation.confirmadaEn, now))
+        .filter((reservation) =>
+          operationalDay
+            ? isReservationOnDay(reservation.confirmadaEn, operationalDay)
+            : isReservationToday(reservation.confirmadaEn, now)
+        )
         .map(toConfirmedView),
       creadasHoy: borradores
-        .filter((draft) => isReservationToday(draft.entroEn, now))
+        .filter((draft) =>
+          operationalDay
+            ? isReservationOnDay(draft.entroEn, operationalDay)
+            : isReservationToday(draft.entroEn, now)
+        )
         .map((draft) => toDraftView(draft, estados.get(draft.id) ?? 'pending')),
       decisiones: decisionesNorm.map(toDecisionView),
       kpis,

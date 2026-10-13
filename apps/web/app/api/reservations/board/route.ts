@@ -7,7 +7,7 @@ import { createClient } from '../../../../lib/supabase/server';
  * El navegador no habla con la API ni con el proyecto de reservas: esta ruta resuelve la sesion y el
  * espacio, y reenvia la lectura. La API es la que decide si el rol alcanza, no esta ruta.
  */
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const apiUrl = process.env.INTERNAL_API_URL;
   if (!apiUrl) {
     return NextResponse.json(
@@ -39,7 +39,9 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'No perteneces a ningun espacio.' }, { status: 403 });
     }
 
-    const response = await fetch(`${base}/v1/tenants/${tenant.id}/reservations/board`, {
+    const date = request.nextUrl.searchParams.get('date');
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    const response = await fetch(`${base}/v1/tenants/${tenant.id}/reservations/board${query}`, {
       cache: 'no-store',
       headers
     });

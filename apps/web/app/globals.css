@@ -3768,6 +3768,30 @@ h2 {
   color: #0e5847;
   font-weight: 700;
 }
+.reservations-date-filter {
+  align-items: end;
+  display: flex;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+.reservations-date-filter button,
+.reservations-date-filter input {
+  background: #fff;
+  border: 1px solid #ddd5c7;
+  border-radius: 7px;
+  color: #21443b;
+  padding: 8px 12px;
+}
+.reservations-date-filter button.active {
+  background: #e9f2ed;
+  font-weight: 700;
+}
+.reservations-date-filter label {
+  color: #776f62;
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+}
 .reservations-cards {
   display: grid;
   gap: 12px;

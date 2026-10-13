@@ -6,10 +6,12 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req
 } from '@nestjs/common';
 import {
   decideReservationSchema,
+  reservationBoardQuerySchema,
   tenantIdSchema,
   type DecideReservationResponse,
   type ReservationsBoardResponse
@@ -32,11 +34,19 @@ export class ReservationsController {
   @Get('board')
   async board(
     @Param('tenantId') tenantId: string,
+    @Query() query: unknown,
     @Req() request: FastifyRequest
   ): Promise<ReservationsBoardResponse> {
     const parsedTenantId = tenantIdSchema.safeParse(tenantId);
+    const parsedQuery = reservationBoardQuerySchema.safeParse(query);
     if (!parsedTenantId.success) throw new BadRequestException('El tenant no es válido.');
-    return this.reservationsService.board(request.headers.authorization, parsedTenantId.data);
+    if (!parsedQuery.success) throw new BadRequestException('La fecha operativa no es válida.');
+    return this.reservationsService.board(
+      request.headers.authorization,
+      parsedTenantId.data,
+      new Date(),
+      parsedQuery.data.date
+    );
   }
 
   @Post('drafts/:draftId/decision')

@@ -122,7 +122,7 @@ export function buildReservationKpis(
   confirmed: ReservationConfirmed[],
   decisions: ReservationDecision[],
   receipts: ReservationReceipt[],
-  options: { now: Date; timeZone?: string }
+  options: { now: Date; operationalDay?: string; timeZone?: string }
 ): { estados: Map<number | null, ReservationStatus>; kpis: ReservationKpis } {
   const { now } = options;
   const porDecision = indexDecisions(decisions);
@@ -144,7 +144,10 @@ export function buildReservationKpis(
 
   /* «Hoy» se rige por la fecha en que la reserva se confirmo, no por la de la cita: una pre-reserva
      puede entrar hoy y tener cita en otra semana. */
-  const esDeHoy = (value: unknown) => isReservationToday(value, now, options.timeZone);
+  const esDeHoy = (value: unknown) =>
+    options.operationalDay
+      ? isReservationOnDay(value, options.operationalDay, options.timeZone)
+      : isReservationToday(value, now, options.timeZone);
 
   const confirmadasHoy = confirmed.filter((row) => esDeHoy(row.confirmadaEn));
   const borradoresConfirmadosHoy = drafts.filter(
@@ -200,7 +203,11 @@ export function buildReservationKpis(
 }
 
 /** La fecha operativa siempre se compara en la zona del negocio, no en la del navegador. */
+export function isReservationOnDay(value: unknown, day: string, timeZone?: string): boolean {
+  return dayKeyInZone(value, timeZone) === day;
+}
+
 export function isReservationToday(value: unknown, now: Date, timeZone?: string): boolean {
   const hoy = dayKeyInZone(now, timeZone);
-  return hoy !== null && dayKeyInZone(value, timeZone) === hoy;
+  return hoy !== null && isReservationOnDay(value, hoy, timeZone);
 }

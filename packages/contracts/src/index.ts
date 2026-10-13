@@ -1056,8 +1056,18 @@ export const reservationKpisSchema = z.object({
   comprobantesPorRevisar: z.number().int()
 });
 
+/** Fecha operativa elegida en el tablero; se interpreta en la zona del negocio. */
+export const reservationBoardQuerySchema = z.object({
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+});
+
 export const reservationsBoardResponseSchema = z.object({
   actualizadoEn: z.string(),
+  operationalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  citasAgendadasFecha: z.array(reservationConfirmedSchema),
   confirmadas: z.array(reservationConfirmedSchema),
   confirmadasHoy: z.array(reservationConfirmedSchema),
   creadasHoy: z.array(reservationDraftSchema),

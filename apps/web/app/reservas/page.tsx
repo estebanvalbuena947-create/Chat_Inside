@@ -39,6 +39,8 @@ type Decision = {
 };
 type Board = {
   actualizadoEn: string;
+  operationalDate: string;
+  citasAgendadasFecha: Confirmed[];
   kpis: {
     porGestionar: number;
     confirmadasHoy: number;
@@ -87,25 +89,29 @@ export default function ReservationsPanel(): React.ReactNode {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('summary');
-  const [todayOnly, setTodayOnly] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selected, setSelected] = useState<Draft | null>(null);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
-  const load = useCallback(async (background = false) => {
-    if (!background) setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/reservations/board', { cache: 'no-store' });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) setError(payload.error ?? 'No fue posible cargar las reservas.');
-      else setBoard(payload as Board);
-    } catch {
-      setError('El tablero de reservas no está disponible.');
-    } finally {
-      if (!background) setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (background = false) => {
+      if (!background) setLoading(true);
+      setError(null);
+      try {
+        const query = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : '';
+        const res = await fetch(`/api/reservations/board${query}`, { cache: 'no-store' });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) setError(payload.error ?? 'No fue posible cargar las reservas.');
+        else setBoard(payload as Board);
+      } catch {
+        setError('El tablero de reservas no está disponible.');
+      } finally {
+        if (!background) setLoading(false);
+      }
+    },
+    [selectedDate]
+  );
   useEffect(() => {
     void load();
     const refresh = window.setInterval(() => {
@@ -144,8 +150,9 @@ export default function ReservationsPanel(): React.ReactNode {
     tab === 'summary'
       ? board?.preReservas.filter((row) => row.estadoMostrado !== 'confirmed')
       : board?.preReservas;
-  const confirmedRows = todayOnly ? board?.confirmadasHoy : board?.confirmadas;
-  const createdRows = todayOnly ? board?.creadasHoy : board?.preReservas;
+  // La API ya aplica la fecha operativa: la interfaz no vuelve a clasificar instantes por zona local.
+  const confirmedRows = board?.confirmadasHoy;
+  const createdRows = board?.creadasHoy;
   const draftsByDay = board
     ? [...board.preReservas]
         .filter((draft) => draft.creadaEn)
@@ -193,24 +200,23 @@ export default function ReservationsPanel(): React.ReactNode {
           </button>
         ))}
       </nav>
-      {(tab === 'confirmed' || tab === 'created') && (
-        <div className="reservations-tabs" aria-label="Periodo de reservas">
-          <button
-            className={todayOnly ? 'active' : ''}
-            onClick={() => setTodayOnly(true)}
-            type="button"
-          >
-            Hoy
-          </button>
-          <button
-            className={!todayOnly ? 'active' : ''}
-            onClick={() => setTodayOnly(false)}
-            type="button"
-          >
-            Todas
-          </button>
-        </div>
-      )}
+      <div className="reservations-date-filter" aria-label="Filtro de fecha de reservas">
+        <button
+          className={!selectedDate ? 'active' : ''}
+          onClick={() => setSelectedDate(null)}
+          type="button"
+        >
+          Hoy
+        </button>
+        <label>
+          <span>Fecha</span>
+          <input
+            type="date"
+            value={selectedDate ?? ''}
+            onChange={(event) => setSelectedDate(event.target.value || null)}
+          />
+        </label>
+      </div>
       {loading && <p>Cargando el tablero…</p>}
       {error && (
         <p role="alert" className="reservations-error">
@@ -222,13 +228,18 @@ export default function ReservationsPanel(): React.ReactNode {
           <div className="reservations-cards">
             {[
               ['Pre-reservas por gestionar', board.kpis.porGestionar],
-              ['Confirmadas hoy', board.kpis.confirmadasHoy],
               [
-                'Citas agendadas',
-                board.confirmadas.filter((reservation) => Boolean(reservation.horarioProgramado))
-                  .length
+                selectedDate ? `Confirmadas · ${board.operationalDate}` : 'Confirmadas hoy',
+                board.kpis.confirmadasHoy
               ],
-              ['Ingresos confirmados hoy', money(board.kpis.montoConfirmadoHoy)],
+              [
+                selectedDate ? `Citas · ${board.operationalDate}` : 'Citas agendadas hoy',
+                board.citasAgendadasFecha.length
+              ],
+              [
+                selectedDate ? `Ingresos · ${board.operationalDate}` : 'Ingresos confirmados hoy',
+                money(board.kpis.montoConfirmadoHoy)
+              ],
               ['Comprobantes por revisar', board.kpis.comprobantesPorRevisar]
             ].map(([text, value]) => (
               <article key={String(text)}>

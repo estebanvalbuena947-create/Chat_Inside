@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildReservationKpis,
+  isReservationOnDay,
   isReservationToday,
   indexByDraftId,
   indexDecisions,
@@ -82,6 +83,11 @@ describe('dia operativo de reservas', () => {
     expect(isReservationToday('2026-10-08T00:15:00-06:00', ahora)).toBe(true);
     expect(isReservationToday('2026-10-07T23:59:00-06:00', ahora)).toBe(false);
     expect(isReservationToday(null, ahora)).toBe(false);
+  });
+
+  it('permite comparar contra una fecha elegida sin usar la zona del navegador', () => {
+    expect(isReservationOnDay('2026-10-08T00:15:00-06:00', '2026-10-08')).toBe(true);
+    expect(isReservationOnDay('2026-10-07T23:59:00-06:00', '2026-10-08')).toBe(false);
   });
 });
 
