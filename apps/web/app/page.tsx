@@ -4607,7 +4607,7 @@ function MetricsPanel({
             </div>
           </div>
 
-          <div className="metrics-block">
+          <div className="metrics-block metrics-advisor-chart">
             <h3>Actividad por asesor y Bot</h3>
             {state.data.participants.length === 0 ? (
               <p className="metrics-note">Sin respuestas del Bot ni de asesores en este periodo.</p>
@@ -4644,7 +4644,7 @@ function MetricsPanel({
             )}
           </div>
 
-          <div className="metrics-block">
+          <div className="metrics-block metrics-wait-chart">
             <h3>Cuánto esperó el cliente</h3>
             <p className="metrics-note">
               Esta métrica mide solo la primera respuesta de un asesor. Las respuestas del bot no se
@@ -4655,17 +4655,18 @@ function MetricsPanel({
                 Ningún asesor respondió en este periodo, así que no hay espera que medir.
               </p>
             ) : (
-              tramosDeEspera(state.data.responseTime).map((tramo) => (
-                <div className="metrics-row" key={tramo.clave}>
-                  <span className="metrics-row-name">
-                    <span className={'metrics-dot ' + tramo.color} />
-                    {tramo.etiqueta}
-                  </span>
-                  <span className="metrics-row-values">
-                    {tramo.valor} {tramo.valor === 1 ? 'conversación' : 'conversaciones'}
-                  </span>
-                </div>
-              ))
+              <div className="metrics-wait-cards">
+                {tramosDeEspera(state.data.responseTime).map((tramo) => (
+                  <div className={'metrics-wait-card ' + tramo.color} key={tramo.clave}>
+                    <span className="metrics-row-name">
+                      <span className={'metrics-dot ' + tramo.color} />
+                      {tramo.etiqueta}
+                    </span>
+                    <strong>{tramo.valor}</strong>
+                    <span>{tramo.valor === 1 ? 'conversación' : 'conversaciones'}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -4712,10 +4713,21 @@ function MetricsPanel({
                   const total = canal.received + canal.sent;
                   return (
                     <div className={`metrics-channel-card channel-${channel}`} key={canal.platform}>
-                      <div className="metrics-channel-title"><span className="metrics-channel-dot" /><strong>{channelPlatformLabel(canal.platform)}</strong></div>
+                      <div className="metrics-channel-title">
+                        <span className="metrics-channel-dot" />
+                        <strong>{channelPlatformLabel(canal.platform)}</strong>
+                      </div>
                       <p className="metrics-channel-total">{total.toLocaleString('es-CO')}</p>
-                      <p className="metrics-note">{canal.received} recibidos · {canal.sent} enviados</p>
-                      <span className="metrics-channel-bar"><span style={{ width: `${total ? Math.round((canal.sent / total) * 100) : 0}%` }} /></span>
+                      <p className="metrics-note">
+                        {canal.received} recibidos · {canal.sent} enviados
+                      </p>
+                      <span className="metrics-channel-bar">
+                        <span
+                          style={{
+                            width: `${total ? Math.round((canal.sent / total) * 100) : 0}%`
+                          }}
+                        />
+                      </span>
                     </div>
                   );
                 })}
