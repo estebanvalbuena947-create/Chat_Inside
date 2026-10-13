@@ -195,21 +195,28 @@ export default function ReservationsPanel(): React.ReactNode {
         ))}
       </nav>
       <div className="reservations-date-filter" aria-label="Filtro de fecha de reservas">
-        <button
-          className={!selectedDate ? 'active' : ''}
-          onClick={() => setSelectedDate(null)}
-          type="button"
-        >
-          Hoy
-        </button>
-        <label>
-          <span>Fecha</span>
-          <input
-            type="date"
-            value={selectedDate ?? ''}
-            onChange={(event) => setSelectedDate(event.target.value || null)}
-          />
-        </label>
+        <div className="date-filter-intro">
+          <span className="date-filter-eyebrow">Vista operativa</span>
+          <strong>Filtrar reservas</strong>
+        </div>
+        <div className="date-filter-controls">
+          <button
+            aria-pressed={!selectedDate}
+            className={!selectedDate ? 'active' : ''}
+            onClick={() => setSelectedDate(null)}
+            type="button"
+          >
+            Hoy
+          </button>
+          <label className="date-filter-field">
+            <span>Elegir fecha</span>
+            <input
+              type="date"
+              value={selectedDate ?? ''}
+              onChange={(event) => setSelectedDate(event.target.value || null)}
+            />
+          </label>
+        </div>
       </div>
       {loading && <p>Cargando el tablero…</p>}
       {error && (

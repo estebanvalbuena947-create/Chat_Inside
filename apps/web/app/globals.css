@@ -4812,3 +4812,143 @@ button:not(:disabled):active {
   cursor: default;
   opacity: 0.6;
 }
+
+/* Shared operational date filters */
+.metrics-period,
+.reservations-date-filter {
+  align-items: center;
+  background: linear-gradient(135deg, #fffdf9 0%, #f4efe5 100%);
+  border: 0;
+  border-radius: 18px;
+  box-shadow:
+    0 3px 6px rgb(56 48 33 / 5%),
+    0 14px 32px rgb(56 48 33 / 10%);
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.date-filter-intro {
+  display: grid;
+  gap: 2px;
+  min-width: 138px;
+}
+
+.date-filter-eyebrow {
+  color: var(--brand-caoba);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.date-filter-intro strong {
+  color: var(--brand-tinta);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.date-filter-controls {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  justify-content: flex-end;
+}
+
+.metrics-select-label,
+.reservations-date-filter .date-filter-field {
+  display: grid;
+  gap: 5px;
+  min-width: 174px;
+}
+
+.metrics-select-label > span,
+.reservations-date-filter .date-filter-field > span {
+  color: var(--brand-tinta-suave);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.metrics-period select,
+.metrics-select-label input,
+.reservations-date-filter input {
+  background-color: #fffdf9;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 1px rgb(97 79 55 / 17%);
+  color: var(--brand-tinta);
+  min-height: 44px;
+  padding: 10px 38px 10px 12px;
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.metrics-select-label input,
+.reservations-date-filter input {
+  padding-right: 12px;
+}
+
+.metrics-period select:hover,
+.metrics-select-label input:hover,
+.reservations-date-filter input:hover {
+  box-shadow: inset 0 0 0 1px rgb(97 79 55 / 32%);
+}
+
+.metrics-period select:focus-visible,
+.metrics-select-label input:focus-visible,
+.reservations-date-filter input:focus-visible {
+  box-shadow: 0 0 0 3px rgb(101 117 78 / 22%);
+  outline: 0;
+}
+
+.reservations-date-filter button {
+  align-self: end;
+  background: #ece6d9;
+  border: 0;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 1px rgb(97 79 55 / 12%);
+  color: var(--brand-tinta);
+  font-weight: 700;
+  min-height: 44px;
+  padding: 10px 18px;
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.reservations-date-filter button:hover {
+  box-shadow: 0 5px 12px rgb(56 48 33 / 15%);
+  transform: translateY(-1px);
+}
+
+.reservations-date-filter button.active {
+  background: var(--brand-matcha-oscuro);
+  box-shadow: 0 6px 14px rgb(63 78 46 / 25%);
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  .metrics-period,
+  .reservations-date-filter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .date-filter-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-select-label,
+  .reservations-date-filter .date-filter-field,
+  .reservations-date-filter button {
+    min-width: 0;
+    width: 100%;
+  }
+}

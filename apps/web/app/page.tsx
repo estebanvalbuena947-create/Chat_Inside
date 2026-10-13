@@ -4558,28 +4558,34 @@ function MetricsPanel({
   return (
     <section className="metrics-panel">
       <div className="metrics-period">
-        <label className="metrics-select-label">
-          <span className="metrics-card-label">Periodo</span>
-          <select
-            aria-label="Periodo de las métricas"
-            onChange={(event) => onChangeDays(Number(event.target.value))}
-            value={days}
-          >
-            <option value={1}>Hoy</option>
-            <option value={7}>Últimos 7 días</option>
-            <option value={30}>Últimos 30 días</option>
-            <option value={90}>Últimos 90 días</option>
-          </select>
-        </label>
-        <label className="metrics-select-label">
-          <span className="metrics-card-label">Fecha</span>
-          <input
-            aria-label="Fecha de las métricas"
-            type="date"
-            value={date ?? ''}
-            onChange={(event) => onChangeDate(event.target.value || null)}
-          />
-        </label>
+        <div className="date-filter-intro">
+          <span className="date-filter-eyebrow">Actividad</span>
+          <strong>Filtrar métricas</strong>
+        </div>
+        <div className="date-filter-controls">
+          <label className="metrics-select-label">
+            <span className="metrics-card-label">Periodo</span>
+            <select
+              aria-label="Periodo de las métricas"
+              onChange={(event) => onChangeDays(Number(event.target.value))}
+              value={days}
+            >
+              <option value={1}>Hoy</option>
+              <option value={7}>Últimos 7 días</option>
+              <option value={30}>Últimos 30 días</option>
+              <option value={90}>Últimos 90 días</option>
+            </select>
+          </label>
+          <label className="metrics-select-label date-filter-field">
+            <span className="metrics-card-label">Fecha específica</span>
+            <input
+              aria-label="Fecha de las métricas"
+              type="date"
+              value={date ?? ''}
+              onChange={(event) => onChangeDate(event.target.value || null)}
+            />
+          </label>
+        </div>
       </div>
 
       {state.kind === 'loading' && <p className="metrics-note">Cargando actividad...</p>}
