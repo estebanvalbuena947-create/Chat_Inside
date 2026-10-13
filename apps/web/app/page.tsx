@@ -139,6 +139,7 @@ type HistoryState =
   | { kind: 'ready'; messages: Message[] };
 type ConversationFilter = 'all' | Conversation['status'];
 type AssignmentScope = 'all' | 'assigned_to_me';
+type AttentionFilter = 'all' | 'no_wait' | NonNullable<Conversation['attentionLevel']>;
 
 function initials(name: string): string {
   return name
@@ -312,6 +313,7 @@ export default function HomePage(): React.ReactNode {
   const [continuationError, setContinuationError] = useState<string | null>(null);
   const [readMarkError, setReadMarkError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ConversationFilter>('all');
+  const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>('all');
   const [assignmentScope, setAssignmentScope] = useState<AssignmentScope>('all');
   // Bandeja de mensajes directos o de comentarios: la bandeja abre en mensajes.
   const [conversationKind, setConversationKind] = useState<'messages' | 'comments'>('messages');
@@ -513,7 +515,12 @@ export default function HomePage(): React.ReactNode {
   const conversations = inbox.kind === 'ready' ? inbox.conversations : [];
   const normalizedSearch = search.trim();
   const visibleConversations = conversations.filter(
-    (conversation) => statusFilter === 'all' || conversation.status === statusFilter
+    (conversation) =>
+      (statusFilter === 'all' || conversation.status === statusFilter) &&
+      (attentionFilter === 'all' ||
+        (attentionFilter === 'no_wait'
+          ? conversation.attentionLevel === null
+          : conversation.attentionLevel === attentionFilter))
   );
   // El historial llega ordenado del mas antiguo al mas nuevo: el primero es el inicio real
   // de la conversacion, y por eso no hace falta una columna nueva en la base.
@@ -2642,6 +2649,21 @@ export default function HomePage(): React.ReactNode {
             <option value="pending">Pendientes</option>
             <option value="resolved">Resueltas</option>
           </select>
+          <label className="status-select-label" htmlFor="conversation-attention-filter">
+            Espera
+          </label>
+          <select
+            className="status-select"
+            id="conversation-attention-filter"
+            onChange={(event) => setAttentionFilter(event.target.value as AttentionFilter)}
+            value={attentionFilter}
+          >
+            <option value="all">Todos los tiempos</option>
+            <option value="ok">Dentro del tiempo normal</option>
+            <option value="aviso">Empieza a demorarse</option>
+            <option value="alto">Urgente</option>
+            <option value="no_wait">Sin espera pendiente</option>
+          </select>
           <button
             aria-pressed={assignmentScope === 'assigned_to_me'}
             className={`tab ${assignmentScope === 'assigned_to_me' ? 'selected' : ''}`}
@@ -2672,7 +2694,7 @@ export default function HomePage(): React.ReactNode {
           {inbox.kind === 'ready' &&
             conversations.length > 0 &&
             visibleConversations.length === 0 && (
-              <p className="inbox-state">No encontramos conversaciones con esa búsqueda.</p>
+              <p className="inbox-state">No hay conversaciones que coincidan con los filtros.</p>
             )}
           {visibleConversations.map((conversation) => (
             <button
@@ -4492,20 +4514,6 @@ function tramosDeEspera(responseTime: MetricsPayload['responseTime']) {
   ];
 }
 
-type WaitFilter = 'all' | 'ok' | 'aviso' | 'alto' | 'sin-datos';
-
-/** El filtro usa los umbrales recibidos: la UI no vuelve a decidir qué es una espera larga. */
-function matchesWaitFilter(
-  participant: MetricsPayload['participants'][number],
-  filter: WaitFilter,
-  thresholds: MetricsPayload['responseTime']['thresholds']
-): boolean {
-  return (
-    filter === 'all' ||
-    colorDeEspera(participant.averageFirstResponseSeconds, thresholds) === filter
-  );
-}
-
 /**
  * Panel de actividad: cuantos mensajes llegan, por donde, y cuantas conversaciones se cerraron.
  *
@@ -4525,24 +4533,6 @@ function MetricsPanel({
     state.kind === 'ready'
       ? Math.max(1, ...state.data.messagesPerDay.map((dia) => dia.received + dia.sent))
       : 1;
-  const [waitFilter, setWaitFilter] = useState<WaitFilter>('all');
-  const matchingAdvisors =
-    state.kind === 'ready'
-      ? state.data.participants.filter(
-          (participant) =>
-            participant.kind === 'advisor' &&
-            matchesWaitFilter(participant, waitFilter, state.data.responseTime.thresholds)
-        )
-      : [];
-  const participants =
-    state.kind === 'ready'
-      ? state.data.participants.filter(
-          (participant) =>
-            participant.kind === 'bot' ||
-            matchesWaitFilter(participant, waitFilter, state.data.responseTime.thresholds)
-        )
-      : [];
-
   return (
     <section className="metrics-panel">
       <div className="metrics-period">
@@ -4556,20 +4546,6 @@ function MetricsPanel({
             <option value={7}>Últimos 7 días</option>
             <option value={30}>Últimos 30 días</option>
             <option value={90}>Últimos 90 días</option>
-          </select>
-        </label>
-        <label className="metrics-select-label">
-          <span className="metrics-card-label">Tiempo de espera</span>
-          <select
-            aria-label="Filtrar asesores por tiempo de espera"
-            onChange={(event) => setWaitFilter(event.target.value as WaitFilter)}
-            value={waitFilter}
-          >
-            <option value="all">Todos los tiempos</option>
-            <option value="ok">Menos de 5 min</option>
-            <option value="aviso">De 5 a 10 min</option>
-            <option value="alto">Más de 10 min</option>
-            <option value="sin-datos">Sin respuestas medidas</option>
           </select>
         </label>
       </div>
@@ -4627,14 +4603,8 @@ function MetricsPanel({
             <h3>Actividad por asesor y Bot</h3>
             {state.data.participants.length === 0 ? (
               <p className="metrics-note">Sin respuestas del Bot ni de asesores en este periodo.</p>
-            ) : matchingAdvisors.length === 0 &&
-              state.data.participants.some((participant) => participant.kind === 'advisor') ? (
-              <p className="metrics-note">
-                No hay asesores que coincidan con este tiempo de espera.
-              </p>
-            ) : null}
-            {participants.length > 0 &&
-              participants.map((participant) => (
+            ) : (
+              state.data.participants.map((participant) => (
                 <div className="metrics-row" key={participant.label}>
                   <span className="metrics-row-name">
                     <span
@@ -4662,7 +4632,8 @@ function MetricsPanel({
                     )}
                   </span>
                 </div>
-              ))}
+              ))
+            )}
           </div>
 
           <div className="metrics-block">

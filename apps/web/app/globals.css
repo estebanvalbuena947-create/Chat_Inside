@@ -3398,8 +3398,10 @@ h2 {
   color: var(--brand-tinta-suave);
   font-variant-numeric: tabular-nums;
   grid-column: 3;
+  min-width: 0;
+  overflow-wrap: anywhere;
   text-align: right;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .metrics-bar {
