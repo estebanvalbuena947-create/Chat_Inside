@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 type Draft = {
@@ -83,7 +83,6 @@ const date = (value: string | null) =>
 
 export default function ReservationsPanel(): React.ReactNode {
   const pathname = usePathname();
-  const router = useRouter();
   const integrated = pathname === '/';
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -167,11 +166,6 @@ export default function ReservationsPanel(): React.ReactNode {
     <section className={`reservations-view${integrated ? ' reservations-view-integrated' : ''}`}>
       <header className="reservations-header">
         <div>
-          {integrated && (
-            <button className="metrics-back" onClick={() => router.replace('/')} type="button">
-              Volver a bandeja
-            </button>
-          )}
           <p className="reservations-kicker">OPERACIÓN DE RESERVAS</p>
           <h1>Buenos días</h1>
         </div>
