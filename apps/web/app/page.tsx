@@ -4706,14 +4706,20 @@ function MetricsPanel({
             {state.data.messagesByChannel.length === 0 ? (
               <p className="metrics-note">Sin actividad en este periodo.</p>
             ) : (
-              state.data.messagesByChannel.map((canal) => (
-                <div className="metrics-row" key={canal.platform}>
-                  <span className="metrics-row-name">{canal.platform}</span>
-                  <span className="metrics-row-values">
-                    {canal.received} recibidos · {canal.sent} enviados
-                  </span>
-                </div>
-              ))
+              <div className="metrics-channel-chart">
+                {state.data.messagesByChannel.map((canal) => {
+                  const channel = canal.platform.toLocaleLowerCase('es-CO');
+                  const total = canal.received + canal.sent;
+                  return (
+                    <div className={`metrics-channel-card channel-${channel}`} key={canal.platform}>
+                      <div className="metrics-channel-title"><span className="metrics-channel-dot" /><strong>{channelPlatformLabel(canal.platform)}</strong></div>
+                      <p className="metrics-channel-total">{total.toLocaleString('es-CO')}</p>
+                      <p className="metrics-note">{canal.received} recibidos · {canal.sent} enviados</p>
+                      <span className="metrics-channel-bar"><span style={{ width: `${total ? Math.round((canal.sent / total) * 100) : 0}%` }} /></span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </>
