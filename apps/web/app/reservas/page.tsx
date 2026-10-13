@@ -353,6 +353,7 @@ function ConfirmedTable({ rows }: { rows: Confirmed[] }): React.ReactNode {
       <table>
         <thead>
           <tr>
+            <th>Creada</th>
             <th>Cliente</th>
             <th>Servicio</th>
             <th>Sucursal</th>
@@ -448,6 +449,7 @@ function Table({
             <tr key={row.id ?? row.nombre}>
               {/* `data-label` repite el encabezado en cada celda: en el telefono la tabla se convierte
                   en tarjetas y cada dato necesita decir de que columna viene. */}
+              <td data-label="Creada">{date(row.creadaEn)}</td>
               <td data-label="Cliente">{row.nombre ?? 'Sin nombre'}</td>
               <td data-label="Servicio">{row.servicio ?? '—'}</td>
               <td data-label="Cita">{date(row.horarioProgramado)}</td>
