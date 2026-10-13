@@ -292,6 +292,7 @@ export default function HomePage(): React.ReactNode {
     'inbox' | 'media' | 'metrics' | 'reservations' | 'reviews'
   >('inbox');
   const [metricsDays, setMetricsDays] = useState<number>(30);
+  const [metricsDate, setMetricsDate] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricsState>({ kind: 'loading' });
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -914,7 +915,10 @@ export default function HomePage(): React.ReactNode {
     const controller = new AbortController();
     void (async () => {
       try {
-        const response = await fetch('/api/metrics?days=' + String(metricsDays), {
+        const query = metricsDate
+          ? '?date=' + encodeURIComponent(metricsDate)
+          : '?days=' + String(metricsDays);
+        const response = await fetch('/api/metrics' + query, {
           cache: 'no-store',
           signal: controller.signal
         });
@@ -936,7 +940,7 @@ export default function HomePage(): React.ReactNode {
       }
     })();
     return () => controller.abort();
-  }, [activeView, metricsDays]);
+  }, [activeView, metricsDate, metricsDays]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => setMediaSearch(mediaSearchInput.trim()), 350);
@@ -3889,7 +3893,16 @@ export default function HomePage(): React.ReactNode {
             </button>
             <h1>Actividad</h1>
           </div>
-          <MetricsPanel days={metricsDays} onChangeDays={setMetricsDays} state={metrics} />
+          <MetricsPanel
+            date={metricsDate}
+            days={metricsDays}
+            onChangeDate={setMetricsDate}
+            onChangeDays={(days) => {
+              setMetricsDate(null);
+              setMetricsDays(days);
+            }}
+            state={metrics}
+          />
         </div>
       )}
       {activeView === 'reservations' && <ReservationsPanel />}
@@ -4526,11 +4539,15 @@ function tramosDeEspera(responseTime: MetricsPayload['responseTime']) {
  * se alcanzo el tope de lectura, se dice explicitamente en lugar de mostrar un numero falso.
  */
 function MetricsPanel({
+  date,
   days,
+  onChangeDate,
   onChangeDays,
   state
 }: {
+  date: string | null;
   days: number;
+  onChangeDate: (date: string | null) => void;
   onChangeDays: (days: number) => void;
   state: MetricsState;
 }) {
@@ -4553,6 +4570,15 @@ function MetricsPanel({
             <option value={30}>Últimos 30 días</option>
             <option value={90}>Últimos 90 días</option>
           </select>
+        </label>
+        <label className="metrics-select-label">
+          <span className="metrics-card-label">Fecha</span>
+          <input
+            aria-label="Fecha de las métricas"
+            type="date"
+            value={date ?? ''}
+            onChange={(event) => onChangeDate(event.target.value || null)}
+          />
         </label>
       </div>
 

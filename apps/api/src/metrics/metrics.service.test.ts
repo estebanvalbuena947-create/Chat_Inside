@@ -2,6 +2,7 @@ import { ATTENTION_THRESHOLDS } from '@chat-zernio/domain';
 import { describe, expect, it } from 'vitest';
 import {
   leerPorPaginas,
+  operationalDayRange,
   summarizeClosure,
   summarizeMessages,
   summarizeResponseTimes,
@@ -103,6 +104,15 @@ describe('resumen de actividad', () => {
   it('marca el resultado como minimo cuando se alcanzo el tope de lectura', () => {
     const r = summarizeMessages([], opciones({ truncated: true }));
     expect(r.truncated).toBe(true);
+  });
+});
+
+describe('día operativo del Dashboard', () => {
+  it('delimita la fecha elegida en la zona del negocio', () => {
+    expect(operationalDayRange('2026-10-08')).toEqual({
+      start: '2026-10-08T06:00:00.000Z',
+      end: '2026-10-09T06:00:00.000Z'
+    });
   });
 });
 

@@ -1,11 +1,12 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import {
   metricsSummarySchema,
+  type MetricsSummaryQuery,
   type MetricsClosure,
   type MetricsResponseTime,
   type MetricsSummary
 } from '@chat-zernio/contracts';
-import { ATTENTION_THRESHOLDS } from '@chat-zernio/domain';
+import { ATTENTION_THRESHOLDS, BUSINESS_TIME_ZONE } from '@chat-zernio/domain';
 import { RequestAuthenticator } from '../auth/request-authenticator';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantAccessService } from '../tenants/tenant-access.service';
@@ -21,6 +22,39 @@ const MAX_ROWS = 20000;
  * pareja.
  */
 const RESPONSE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+/** Límites de un día operativo, no del huso del navegador ni del servidor. */
+export function operationalDayRange(day: string, timeZone = BUSINESS_TIME_ZONE) {
+  const offsetAt = (instant: Date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+      minute: '2-digit',
+      month: '2-digit',
+      second: '2-digit',
+      timeZone,
+      year: 'numeric'
+    }).formatToParts(instant);
+    const value = (kind: string) => Number(parts.find((part) => part.type === kind)?.value);
+    return (
+      Date.UTC(
+        value('year'),
+        value('month') - 1,
+        value('day'),
+        value('hour'),
+        value('minute'),
+        value('second')
+      ) - instant.getTime()
+    );
+  };
+  const startAtUtc = Date.parse(`${day}T00:00:00.000Z`);
+  const endAtUtc = startAtUtc + 24 * 60 * 60 * 1000;
+  return {
+    end: new Date(endAtUtc - offsetAt(new Date(endAtUtc))).toISOString(),
+    start: new Date(startAtUtc - offsetAt(new Date(startAtUtc))).toISOString()
+  };
+}
 
 export type MetricRow = {
   createdAt: string;
@@ -268,12 +302,23 @@ export class MetricsService {
     private readonly supabaseServerClientFactory: SupabaseServerClientFactory
   ) {}
 
-  async summary(authorization: unknown, tenantId: string, days: number): Promise<MetricsSummary> {
+  async summary(
+    authorization: unknown,
+    tenantId: string,
+    query: MetricsSummaryQuery
+  ): Promise<MetricsSummary> {
     const identity = await this.requestAuthenticator.authenticate(authorization);
     await this.tenantAccessService.assertMembership(identity.userId, tenantId);
 
     const ahora = Date.now();
-    const desde = new Date(ahora - days * 24 * 60 * 60 * 1000).toISOString();
+    const days = query.date ? 1 : query.days;
+    const period = query.date
+      ? operationalDayRange(query.date)
+      : {
+          end: new Date(ahora).toISOString(),
+          start: new Date(ahora - days * 24 * 60 * 60 * 1000).toISOString()
+        };
+    const desde = period.start;
     const supabase = this.supabaseServerClientFactory.create();
 
     const actividad = await leerPorPaginas<Record<string, unknown>>(
@@ -283,6 +328,7 @@ export class MetricsService {
           .select('created_at, direction, sender_type, channel_account:channel_accounts(platform)')
           .eq('tenant_id', tenantId)
           .gte('created_at', desde)
+          .lt('created_at', period.end)
           .order('created_at', { ascending: false })
           .range(desdeFila, hastaFila),
       MAX_ROWS,
@@ -297,10 +343,8 @@ export class MetricsService {
           .from('messages')
           .select('conversation_id, created_at, direction, sender_type, sender_user_id')
           .eq('tenant_id', tenantId)
-          .gte(
-            'created_at',
-            new Date(ahora - days * 24 * 60 * 60 * 1000 - RESPONSE_LOOKBACK_MS).toISOString()
-          )
+          .gte('created_at', new Date(Date.parse(desde) - RESPONSE_LOOKBACK_MS).toISOString())
+          .lt('created_at', period.end)
           .order('created_at', { ascending: true })
           .range(desdeFila, hastaFila),
       MAX_ROWS,
@@ -317,6 +361,7 @@ export class MetricsService {
           .eq('tenant_id', tenantId)
           .eq('status', 'resolved')
           .gte('resolved_at', desde)
+          .lt('resolved_at', period.end)
           .order('resolved_at', { ascending: false })
           .range(desdeFila, hastaFila),
       MAX_ROWS,

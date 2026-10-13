@@ -26,6 +26,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const base = apiUrl.replace(/\/$/, '');
   const headers = { Authorization: `Bearer ${session.access_token}` };
   const days = Number(request.nextUrl.searchParams.get('days') ?? '30');
+  const date = request.nextUrl.searchParams.get('date');
+  const query = date
+    ? `date=${encodeURIComponent(date)}`
+    : `days=${Number.isFinite(days) ? days : 30}`;
 
   try {
     const tenantsResponse = await fetch(`${base}/v1/tenants`, { cache: 'no-store', headers });
@@ -38,10 +42,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'No perteneces a ningun espacio.' }, { status: 403 });
     }
 
-    const response = await fetch(
-      `${base}/v1/tenants/${tenant.id}/metrics/summary?days=${Number.isFinite(days) ? days : 30}`,
-      { cache: 'no-store', headers }
-    );
+    const response = await fetch(`${base}/v1/tenants/${tenant.id}/metrics/summary?${query}`, {
+      cache: 'no-store',
+      headers
+    });
     const payload = (await response.json().catch(() => ({}))) as unknown;
     if (!response.ok) {
       return NextResponse.json(

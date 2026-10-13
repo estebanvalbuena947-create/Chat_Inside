@@ -15,6 +15,6 @@ export class MetricsController {
     @Req() request: FastifyRequest
   ): Promise<MetricsSummary> {
     const query = metricsSummaryQuerySchema.parse(rawQuery);
-    return this.service.summary(request.headers.authorization, tenantId, query.days);
+    return this.service.summary(request.headers.authorization, tenantId, query);
   }
 }

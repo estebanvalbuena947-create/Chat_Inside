@@ -3302,6 +3302,13 @@ h2 {
   gap: 5px;
   min-width: 190px;
 }
+.metrics-select-label input {
+  background: #fff;
+  border: 1px solid #ddd5c7;
+  border-radius: 7px;
+  color: #21443b;
+  padding: 8px 10px;
+}
 
 .metrics-period select {
   appearance: none;

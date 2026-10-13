@@ -752,6 +752,10 @@ export type CommentReplyResponse = z.infer<typeof commentReplyResponseSchema>;
    ------------------------------------------------------------------------------------------------ */
 
 export const metricsSummaryQuerySchema = z.object({
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   days: z.coerce.number().int().min(1).max(90).default(30)
 });
 

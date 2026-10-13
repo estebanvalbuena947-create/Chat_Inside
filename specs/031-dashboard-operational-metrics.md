@@ -6,7 +6,8 @@
 ## Regla
 
 El Dashboard cuenta mensajes por dirección y por actor durante el período solicitado. El período
-admite un día, siete, treinta o noventa días. Los mensajes entrantes son solo los de dirección
+admite un día, siete, treinta o noventa días, o una fecha elegida con calendario; esta fecha se
+delimita en la zona operativa del negocio por la API. Los mensajes entrantes son solo los de dirección
 `inbound`; los enviados por Bot son `outbound` con `sender_type = automation`; los enviados por
 asesor son `outbound` con `sender_type = agent`.
 
