@@ -375,7 +375,6 @@ function ConfirmedTable({ rows }: { rows: Confirmed[] }): React.ReactNode {
       <table>
         <thead>
           <tr>
-            <th>Creada</th>
             <th>Cliente</th>
             <th>Servicio</th>
             <th>Sucursal</th>
@@ -413,9 +412,9 @@ function CreatedTable({
       <table>
         <thead>
           <tr>
+            <th>Creada</th>
             <th>Cliente</th>
             <th>Servicio</th>
-            <th>Creada</th>
             <th>Cita</th>
             <th>Estado</th>
             <th />
@@ -424,9 +423,9 @@ function CreatedTable({
         <tbody>
           {rows.map((row) => (
             <tr key={row.id ?? `${row.nombre}-${row.creadaEn}`}>
+              <td data-label="Creada">{date(row.creadaEn)}</td>
               <td data-label="Cliente">{row.nombre ?? 'Sin nombre'}</td>
               <td data-label="Servicio">{row.servicio ?? '—'}</td>
-              <td data-label="Creada">{date(row.creadaEn)}</td>
               <td data-label="Cita">{date(row.horarioProgramado)}</td>
               <td data-label="Estado">
                 <span className={`reservation-status ${row.estadoMostrado}`}>
