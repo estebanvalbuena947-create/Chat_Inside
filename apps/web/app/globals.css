@@ -4381,6 +4381,313 @@ div:has(#won-dialog-title) button:not([aria-label]) {
   font-weight: 700;
 }
 
+/* Sistema visual operativo: conserva la paleta Inside Spa y unifica todas las superficies. */
+:root {
+  --ui-canvas: #f7f4ed;
+  --ui-surface: #fffdf9;
+  --ui-surface-muted: #f5f1e8;
+  --ui-border: #d9d1c2;
+  --ui-border-strong: #c4b8a5;
+  --ui-shadow-sm: 0 1px 2px rgb(48 43 34 / 7%);
+  --ui-shadow-md: 0 10px 28px rgb(61 52 37 / 10%);
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 12px;
+  --ui-radius-lg: 18px;
+}
+
+body {
+  background: var(--ui-canvas);
+  color: var(--brand-tinta);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgb(101 117 78 / 35%);
+  outline-offset: 2px;
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.workspace,
+.workspace.sidebar-open,
+.reservations-view,
+.metrics-view,
+.media-view {
+  background: var(--ui-canvas) !important;
+}
+
+.workspace .primary-nav,
+.workspace.sidebar-open .primary-nav {
+  background: linear-gradient(180deg, #596846 0%, var(--brand-matcha-oscuro) 100%) !important;
+  box-shadow: 8px 0 24px rgb(39 48 29 / 12%);
+}
+
+.workspace .primary-nav .nav-item {
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  min-height: 42px;
+}
+
+.workspace .primary-nav .nav-item:hover,
+.workspace .primary-nav .nav-item.active,
+.workspace .primary-nav .nav-item[aria-current='page'] {
+  background: rgb(255 253 249 / 16%) !important;
+  border-color: rgb(255 253 249 / 20%);
+}
+
+.workspace .inbox-column,
+.workspace .conversation-panel,
+.workspace .conversation-details,
+.workspace .messages-panel {
+  background: var(--ui-surface) !important;
+  border-color: var(--ui-border) !important;
+}
+
+.inbox-header,
+.conversation-header {
+  border-bottom-color: var(--ui-border) !important;
+}
+
+.workspace h1,
+.workspace h2,
+.reservations-view h1,
+.metrics-view h1,
+.media-view h1 {
+  color: var(--brand-matcha-oscuro) !important;
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.025em;
+}
+
+.eyebrow,
+.reservations-kicker {
+  color: var(--brand-caoba) !important;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.search-box,
+.workspace .status-select,
+.workspace input:not([type='checkbox']):not([type='radio']),
+.workspace select,
+.workspace textarea {
+  background: var(--ui-surface-muted) !important;
+  border: 1px solid var(--ui-border) !important;
+  border-radius: var(--ui-radius-sm) !important;
+  color: var(--brand-tinta) !important;
+}
+
+.search-box:focus-within,
+.workspace input:focus,
+.workspace select:focus,
+.workspace textarea:focus {
+  background: var(--ui-surface) !important;
+  border-color: var(--brand-matcha) !important;
+  box-shadow: 0 0 0 3px rgb(101 117 78 / 15%) !important;
+  outline: 0;
+}
+
+.inbox-tabs,
+.reservations-tabs {
+  gap: 4px;
+  padding-bottom: 8px;
+}
+
+.inbox-tabs .tab,
+.reservations-tabs button {
+  border-radius: 999px !important;
+  min-height: 36px;
+  padding: 8px 12px !important;
+}
+
+.inbox-tabs .tab.selected,
+.reservations-tabs button.active {
+  background: var(--brand-matcha-tenue) !important;
+  border-bottom-color: transparent !important;
+  color: var(--brand-matcha-oscuro) !important;
+}
+
+.conversation-card,
+.conversation-row,
+.conversation-item {
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm) !important;
+  margin-bottom: 4px;
+}
+
+.conversation-card:hover,
+.conversation-row:hover,
+.conversation-item:hover {
+  background: var(--ui-surface-muted) !important;
+  border-color: var(--ui-border) !important;
+}
+
+.conversation-card.selected,
+.conversation-row.selected,
+.conversation-item.selected {
+  background: var(--brand-matcha-tenue) !important;
+  border-color: rgb(101 117 78 / 30%) !important;
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.message-row .bubble {
+  border-radius: 14px !important;
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.message-row.incoming .bubble {
+  background: var(--ui-surface) !important;
+}
+
+.message-row.outgoing .bubble {
+  background: #edf1e6 !important;
+  border-color: #cad4bb !important;
+}
+
+.composer {
+  background: var(--ui-surface) !important;
+  border-top-color: var(--ui-border) !important;
+  box-shadow: 0 -8px 24px rgb(48 43 34 / 5%);
+}
+
+.composer textarea {
+  background: var(--ui-surface-muted) !important;
+  border-color: var(--ui-border) !important;
+}
+
+.workspace .send-button,
+.primary-button,
+.reservation-actions button,
+.reservation-actions button:last-child {
+  background: var(--brand-matcha) !important;
+  border: 1px solid var(--brand-matcha-oscuro) !important;
+  border-radius: var(--ui-radius-sm) !important;
+  box-shadow: 0 2px 5px rgb(79 92 61 / 20%);
+  color: #fff !important;
+  font-weight: 700;
+}
+
+.workspace .send-button:hover,
+.primary-button:hover,
+.reservation-actions button:hover {
+  background: var(--brand-matcha-oscuro) !important;
+}
+
+.metrics-panel,
+.reservations-view,
+.media-view {
+  padding: clamp(20px, 3vw, 36px);
+}
+
+.metrics-card,
+.reservations-cards article,
+.reservations-table,
+.metrics-block,
+.settings-card,
+.review-item,
+.reservations-daily-chart {
+  background: var(--ui-surface) !important;
+  border: 1px solid var(--ui-border) !important;
+  border-radius: var(--ui-radius-md) !important;
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.metrics-card:hover,
+.settings-card:hover,
+.review-item:hover {
+  border-color: var(--ui-border-strong) !important;
+  box-shadow: var(--ui-shadow-md);
+  transform: translateY(-1px);
+}
+
+.metrics-card-label,
+.metrics-note,
+.reservations-cards span,
+.reservations-table th,
+.review-date {
+  color: var(--brand-tinta-suave) !important;
+}
+
+.metrics-card-value,
+.reservations-cards strong {
+  color: var(--brand-matcha-oscuro) !important;
+}
+
+.reservations-date-filter {
+  align-items: end;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-sm);
+  padding: 10px;
+}
+
+.reservations-date-filter button,
+.reservations-date-filter input,
+.metrics-select-label input {
+  min-height: 38px;
+}
+
+.reservations-table th {
+  background: var(--ui-surface-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.reservations-table tr:hover td {
+  background: #faf8f2;
+}
+
+@media (max-width: 760px) {
+  .metrics-panel,
+  .reservations-view,
+  .media-view {
+    padding: 16px 14px 28px;
+  }
+
+  .reservations-date-filter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reservations-date-filter button,
+  .reservations-date-filter input {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* --- Reseñas de Google: el apartado donde una persona responde las de una a tres estrellas ---- */
 .review-list {
   display: flex;
