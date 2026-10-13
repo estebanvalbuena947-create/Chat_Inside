@@ -26,6 +26,7 @@ export type MetricRow = {
   createdAt: string;
   direction: string;
   platform: string | null;
+  senderType?: string | null;
 };
 
 export type ResponseRow = {
@@ -184,10 +185,16 @@ export function summarizeMessages(
 ): MetricsSummary {
   const porDia = new Map<string, { received: number; sent: number }>();
   const porCanal = new Map<string, { received: number; sent: number }>();
+  let inbound = 0;
+  let byBot = 0;
+  let byAdvisor = 0;
 
   for (const fila of rows) {
     const dia = fila.createdAt.slice(0, 10);
     const esEntrante = fila.direction === 'inbound';
+    if (esEntrante) inbound += 1;
+    else if (fila.senderType === 'automation') byBot += 1;
+    else if (fila.senderType === 'agent') byAdvisor += 1;
     const plataforma = fila.platform ?? 'sin canal';
 
     const acumuladoDia = porDia.get(dia) ?? { received: 0, sent: 0 };
@@ -204,6 +211,7 @@ export function summarizeMessages(
   return metricsSummarySchema.parse({
     closedConversations: options.closure.byAdvisor + options.closure.byBot,
     closure: options.closure,
+    messageBreakdown: { inbound, byBot, byAdvisor },
     messagesByChannel: [...porCanal.entries()]
       .map(([platform, conteo]) => ({ platform, ...conteo }))
       .sort((a, b) => b.received + b.sent - (a.received + a.sent)),
@@ -272,7 +280,7 @@ export class MetricsService {
       (desdeFila, hastaFila) =>
         supabase
           .from('messages')
-          .select('created_at, direction, channel_account:channel_accounts(platform)')
+          .select('created_at, direction, sender_type, channel_account:channel_accounts(platform)')
           .eq('tenant_id', tenantId)
           .gte('created_at', desde)
           .order('created_at', { ascending: false })
@@ -369,6 +377,7 @@ export class MetricsService {
       actividad.filas.map((fila) => ({
         createdAt: String(fila.created_at),
         direction: String(fila.direction),
+        senderType: typeof fila.sender_type === 'string' ? fila.sender_type : null,
         platform:
           (fila.channel_account as { platform?: unknown } | null)?.platform !== undefined
             ? ((fila.channel_account as { platform?: string | null }).platform ?? null)

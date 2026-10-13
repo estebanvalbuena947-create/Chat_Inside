@@ -769,6 +769,13 @@ export const metricsChannelSchema = z.object({
   sent: z.number().int()
 });
 
+/** Conteo de mensajes por dirección y responsable, calculado por la API. */
+export const metricsMessageBreakdownSchema = z.object({
+  byAdvisor: z.number().int(),
+  byBot: z.number().int(),
+  inbound: z.number().int()
+});
+
 /**
  * Quien atendio una conversacion cerrada.
  *
@@ -815,6 +822,7 @@ export type MetricsParticipant = z.infer<typeof metricsParticipantSchema>;
 export const metricsSummarySchema = z.object({
   closedConversations: z.number().int(),
   closure: metricsClosureSchema,
+  messageBreakdown: metricsMessageBreakdownSchema,
   messagesByChannel: z.array(metricsChannelSchema),
   messagesPerDay: z.array(metricsDaySchema),
   participants: z.array(metricsParticipantSchema),

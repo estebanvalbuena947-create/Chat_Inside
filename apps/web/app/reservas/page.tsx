@@ -146,6 +146,16 @@ export default function ReservationsPanel(): React.ReactNode {
       : board?.preReservas;
   const confirmedRows = todayOnly ? board?.confirmadasHoy : board?.confirmadas;
   const createdRows = todayOnly ? board?.creadasHoy : board?.preReservas;
+  const draftsByDay = board
+    ? [...board.preReservas]
+        .filter((draft) => draft.creadaEn)
+        .reduce<Record<string, number>>((totals, draft) => {
+          const day = draft.creadaEn?.slice(0, 10);
+          if (day) totals[day] = (totals[day] ?? 0) + 1;
+          return totals;
+        }, {})
+    : {};
+  const maxDraftsByDay = Math.max(1, ...Object.values(draftsByDay));
   return (
     <section className={`reservations-view${integrated ? ' reservations-view-integrated' : ''}`}>
       <header className="reservations-header">
@@ -213,6 +223,11 @@ export default function ReservationsPanel(): React.ReactNode {
             {[
               ['Pre-reservas por gestionar', board.kpis.porGestionar],
               ['Confirmadas hoy', board.kpis.confirmadasHoy],
+              [
+                'Citas agendadas',
+                board.confirmadas.filter((reservation) => Boolean(reservation.horarioProgramado))
+                  .length
+              ],
               ['Ingresos confirmados hoy', money(board.kpis.montoConfirmadoHoy)],
               ['Comprobantes por revisar', board.kpis.comprobantesPorRevisar]
             ].map(([text, value]) => (
@@ -222,6 +237,24 @@ export default function ReservationsPanel(): React.ReactNode {
               </article>
             ))}
           </div>
+          {tab === 'summary' && Object.keys(draftsByDay).length > 0 && (
+            <section className="reservations-daily-chart">
+              <h2>Pre-reservas por día</h2>
+              <div>
+                {Object.entries(draftsByDay).map(([day, total]) => (
+                  <article key={day} title={`${day}: ${total} pre-reservas`}>
+                    <span>{total}</span>
+                    <i
+                      style={{
+                        height: `${Math.max(10, Math.round((total / maxDraftsByDay) * 100))}%`
+                      }}
+                    />
+                    <small>{day.slice(-2)}</small>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
           {board.kpis.retencionesPorVencer.length > 0 && (
             <aside className="reservations-hold">
               Hay retenciones próximas a vencer. Revísalas antes de que se libere el horario.

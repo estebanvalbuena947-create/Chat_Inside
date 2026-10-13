@@ -4440,6 +4440,7 @@ type MetricsPayload = {
   closure: { byAdvisor: number; byBot: number };
   error?: string;
   messagesByChannel: Array<{ platform: string; received: number; sent: number }>;
+  messageBreakdown: { inbound: number; byBot: number; byAdvisor: number };
   messagesPerDay: Array<{ date: string; received: number; sent: number }>;
   participants: Array<{
     averageFirstResponseSeconds: number | null;
@@ -4547,6 +4548,7 @@ function MetricsPanel({
             onChange={(event) => onChangeDays(Number(event.target.value))}
             value={days}
           >
+            <option value={1}>Hoy</option>
             <option value={7}>Últimos 7 días</option>
             <option value={30}>Últimos 30 días</option>
             <option value={90}>Últimos 90 días</option>
@@ -4564,6 +4566,21 @@ function MetricsPanel({
               <span className="metrics-card-icon">↗</span>
               <p className="metrics-card-label">Mensajes en el periodo</p>
               <p className="metrics-card-value">{state.data.totalMessages}</p>
+            </div>
+            <div className="metrics-card metrics-card-visual blue">
+              <span className="metrics-card-icon">↓</span>
+              <p className="metrics-card-label">Mensajes entrantes</p>
+              <p className="metrics-card-value">{state.data.messageBreakdown.inbound}</p>
+            </div>
+            <div className="metrics-card metrics-card-visual purple">
+              <span className="metrics-card-icon">✦</span>
+              <p className="metrics-card-label">Enviados por Bot</p>
+              <p className="metrics-card-value">{state.data.messageBreakdown.byBot}</p>
+            </div>
+            <div className="metrics-card metrics-card-visual green">
+              <span className="metrics-card-icon">◌</span>
+              <p className="metrics-card-label">Enviados por asesor</p>
+              <p className="metrics-card-value">{state.data.messageBreakdown.byAdvisor}</p>
             </div>
             <div className="metrics-card metrics-card-visual purple">
               <span className="metrics-card-icon">✓</span>

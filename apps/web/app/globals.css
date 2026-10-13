@@ -3792,6 +3792,46 @@ h2 {
   font-size: 23px;
   margin-top: 8px;
 }
+.reservations-daily-chart {
+  background: #fff;
+  border: 1px solid var(--brand-dolar);
+  border-radius: 14px;
+  margin: 18px 0;
+  padding: 18px;
+}
+.reservations-daily-chart h2 {
+  color: var(--brand-matcha-oscuro);
+  font-size: 15px;
+  margin: 0 0 14px;
+}
+.reservations-daily-chart > div {
+  align-items: end;
+  display: flex;
+  gap: 9px;
+  height: 180px;
+  overflow-x: auto;
+}
+.reservations-daily-chart article {
+  align-items: center;
+  display: flex;
+  flex: 1 0 30px;
+  flex-direction: column;
+  height: 100%;
+  justify-content: end;
+  min-width: 30px;
+}
+.reservations-daily-chart article span,
+.reservations-daily-chart small {
+  color: var(--brand-tinta-suave);
+  font-size: 10px;
+}
+.reservations-daily-chart article i {
+  background: linear-gradient(180deg, #f5a6c1, #dc5a8c);
+  border-radius: 7px 7px 2px 2px;
+  display: block;
+  margin: 5px 0;
+  width: 100%;
+}
 .reservations-hold {
   background: #fff2df;
   border: 1px solid #eabf77;

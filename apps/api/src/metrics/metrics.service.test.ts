@@ -11,10 +11,16 @@ import {
 
 const DESDE = '2026-10-01T00:00:00.000Z';
 
-const fila = (createdAt: string, direction: string, platform: string | null): MetricRow => ({
+const fila = (
+  createdAt: string,
+  direction: string,
+  platform: string | null,
+  senderType?: string
+): MetricRow => ({
   createdAt,
   direction,
-  platform
+  platform,
+  senderType
 });
 
 const mensaje = (
@@ -50,6 +56,19 @@ describe('resumen de actividad', () => {
       { date: '2026-10-02', received: 1, sent: 0 }
     ]);
     expect(r.totalMessages).toBe(3);
+  });
+
+  it('separa mensajes entrantes, del bot y de asesores', () => {
+    const r = summarizeMessages(
+      [
+        fila('2026-10-01T10:00:00.000Z', 'inbound', 'instagram', 'contact'),
+        fila('2026-10-01T10:01:00.000Z', 'outbound', 'instagram', 'automation'),
+        fila('2026-10-01T10:02:00.000Z', 'outbound', 'instagram', 'agent'),
+        fila('2026-10-01T10:03:00.000Z', 'outbound', 'instagram', 'system')
+      ],
+      opciones()
+    );
+    expect(r.messageBreakdown).toEqual({ inbound: 1, byBot: 1, byAdvisor: 1 });
   });
 
   it('agrupa por plataforma y ordena de mayor a menor actividad', () => {
