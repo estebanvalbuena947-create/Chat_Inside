@@ -4560,18 +4560,21 @@ function MetricsPanel({
       {state.kind === 'ready' && (
         <>
           <div className="metrics-cards">
-            <div className="metrics-card">
+            <div className="metrics-card metrics-card-visual blue">
+              <span className="metrics-card-icon">↗</span>
               <p className="metrics-card-label">Mensajes en el periodo</p>
               <p className="metrics-card-value">{state.data.totalMessages}</p>
             </div>
-            <div className="metrics-card">
+            <div className="metrics-card metrics-card-visual purple">
+              <span className="metrics-card-icon">✓</span>
               <p className="metrics-card-label">Conversaciones cerradas</p>
               <p className="metrics-card-value">{state.data.closedConversations}</p>
               <p className="metrics-hint">
                 {state.data.closure.byBot} por el bot · {state.data.closure.byAdvisor} por un asesor
               </p>
             </div>
-            <div className="metrics-card">
+            <div className="metrics-card metrics-card-visual amber">
+              <span className="metrics-card-icon">◷</span>
               <p className="metrics-card-label">Respuesta del asesor</p>
               <p className="metrics-card-value">
                 {esperaEnPalabras(state.data.responseTime.averageSeconds)}
@@ -4597,7 +4600,8 @@ function MetricsPanel({
                 {state.data.responseTime.conversations} conversaciones medidas
               </p>
             </div>
-            <div className="metrics-card">
+            <div className="metrics-card metrics-card-visual green">
+              <span className="metrics-card-icon">◉</span>
               <p className="metrics-card-label">Canales con actividad</p>
               <p className="metrics-card-value">{state.data.messagesByChannel.length}</p>
             </div>
@@ -4676,22 +4680,24 @@ function MetricsPanel({
             {state.data.messagesPerDay.length === 0 ? (
               <p className="metrics-note">Sin actividad en este periodo.</p>
             ) : (
-              state.data.messagesPerDay.map((dia) => (
-                <div className="metrics-row" key={dia.date}>
-                  <span className="metrics-row-name">{dia.date}</span>
-                  <span
-                    className="metrics-bar"
-                    style={{
-                      width: String(Math.round(((dia.received + dia.sent) / maximo) * 100)) + '%'
-                    }}
+              <div className="metrics-column-chart" aria-label="Mensajes por día">
+                {state.data.messagesPerDay.map((dia) => (
+                  <div
+                    className="metrics-column"
+                    key={dia.date}
+                    title={`${dia.received} recibidos · ${dia.sent} enviados`}
                   >
-                    <span />
-                  </span>
-                  <span className="metrics-row-values">
-                    {dia.received} recibidos · {dia.sent} enviados
-                  </span>
-                </div>
-              ))
+                    <span className="metrics-column-value">{dia.received + dia.sent}</span>
+                    <span
+                      className="metrics-column-bar"
+                      style={{
+                        height: `${Math.max(8, Math.round(((dia.received + dia.sent) / maximo) * 100))}%`
+                      }}
+                    />
+                    <span className="metrics-column-label">{dia.date.slice(-2)}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
