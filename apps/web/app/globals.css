@@ -4662,6 +4662,36 @@ button:not(:disabled):active {
   letter-spacing: 0.06em;
 }
 
+.reservations-sort-button {
+  align-items: center;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  font: inherit;
+  font-weight: inherit;
+  gap: 4px;
+  letter-spacing: inherit;
+  padding: 0;
+  text-transform: inherit;
+}
+
+.reservations-sort-button span {
+  color: var(--brand-matcha-oscuro);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.reservations-sort-button:hover,
+.reservations-sort-button:focus-visible {
+  color: var(--brand-matcha-oscuro);
+}
+
+.reservations-sort-button:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid rgb(101 117 78 / 45%);
+  outline-offset: 3px;
+}
+
 .reservations-table tr:hover td {
   background: #faf8f2;
 }

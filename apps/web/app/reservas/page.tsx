@@ -60,6 +60,7 @@ type Board = {
   decisiones: Decision[];
 };
 type Tab = 'summary' | 'drafts' | 'confirmed' | 'created' | 'receipts' | 'history';
+type CreationOrder = 'asc' | 'desc';
 const label: Record<string, string> = {
   confirmed: 'Confirmada',
   info: 'Información solicitada',
@@ -80,6 +81,11 @@ const date = (value: string | null) =>
         new Date(value)
       )
     : '—';
+const creationTime = (value: string | null): number | null => {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
 
 export default function ReservationsPanel(): React.ReactNode {
   const pathname = usePathname();
@@ -89,6 +95,7 @@ export default function ReservationsPanel(): React.ReactNode {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('summary');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [creationOrder, setCreationOrder] = useState<CreationOrder>('desc');
   const [selected, setSelected] = useState<Draft | null>(null);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
@@ -149,6 +156,14 @@ export default function ReservationsPanel(): React.ReactNode {
     tab === 'summary'
       ? board?.preReservas.filter((row) => row.estadoMostrado !== 'confirmed')
       : board?.preReservas;
+  const orderedVisibleDrafts = [...(visibleDrafts ?? [])].sort((left, right) => {
+    const leftTime = creationTime(left.creadaEn);
+    const rightTime = creationTime(right.creadaEn);
+    if (leftTime === null && rightTime === null) return 0;
+    if (leftTime === null) return 1;
+    if (rightTime === null) return -1;
+    return creationOrder === 'desc' ? rightTime - leftTime : leftTime - rightTime;
+  });
   // La API ya aplica la fecha operativa: la interfaz no vuelve a clasificar instantes por zona local.
   const confirmedRows = board?.confirmadasHoy;
   const createdRows = board?.creadasHoy;
@@ -273,7 +288,14 @@ export default function ReservationsPanel(): React.ReactNode {
             </aside>
           )}
           {(tab === 'summary' || tab === 'drafts') && (
-            <Table rows={visibleDrafts ?? []} onManage={openDecision} />
+            <Table
+              creationOrder={creationOrder}
+              onManage={openDecision}
+              onToggleCreationOrder={() =>
+                setCreationOrder((current) => (current === 'desc' ? 'asc' : 'desc'))
+              }
+              rows={orderedVisibleDrafts}
+            />
           )}
           {tab === 'confirmed' && <ConfirmedTable rows={confirmedRows ?? []} />}
           {tab === 'created' && <CreatedTable rows={createdRows ?? []} onManage={openDecision} />}
@@ -424,9 +446,13 @@ function CreatedTable({
   );
 }
 function Table({
+  creationOrder,
+  onToggleCreationOrder,
   rows,
   onManage
 }: {
+  creationOrder: CreationOrder;
+  onToggleCreationOrder: () => void;
   rows: Draft[];
   onManage: (row: Draft) => void;
 }): React.ReactNode {
@@ -436,6 +462,18 @@ function Table({
       <table>
         <thead>
           <tr>
+            <th aria-sort={creationOrder === 'desc' ? 'descending' : 'ascending'} scope="col">
+              <button
+                aria-label={`Ordenar por fecha de creación: ${
+                  creationOrder === 'desc' ? 'más antigua primero' : 'más reciente primero'
+                }`}
+                className="reservations-sort-button"
+                onClick={onToggleCreationOrder}
+                type="button"
+              >
+                Creada <span aria-hidden="true">{creationOrder === 'desc' ? '↓' : '↑'}</span>
+              </button>
+            </th>
             <th>Cliente</th>
             <th>Servicio</th>
             <th>Cita</th>
