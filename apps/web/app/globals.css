@@ -2667,12 +2667,14 @@ h2 {
   flex-wrap: wrap;
   overflow-x: visible;
 }
-/* Los estados se reparten a lo ancho de la fila. */
+/* Estado y espera se leen como campos, no como una fila de controles mezclados. */
 .inbox-tabs.status-tabs {
-  justify-content: space-between;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .inbox-tabs.status-tabs .tab {
-  flex: 1 1 0;
+  grid-column: 1 / -1;
   text-align: center;
 }
 
@@ -2700,15 +2702,20 @@ h2 {
 .inbox-tabs.kind-tabs {
   border-bottom: 0;
 }
-/* Estado en desplegable: un solo "Todas" y sin filas que se partan. */
+/* Los dos filtros permanecen alineados también en la columna estrecha de la bandeja. */
+.status-filter-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
 .status-select-label {
-  align-self: center;
   color: #6b7280;
   font-size: 11px;
   font-weight: 600;
 }
 .status-select {
-  align-self: center;
+  min-width: 0;
+  width: 100%;
   padding: 3px 8px;
   border: 1px solid #e1e4ea;
   border-radius: 999px;

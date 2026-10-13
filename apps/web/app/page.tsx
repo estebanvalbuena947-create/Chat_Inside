@@ -2635,35 +2635,39 @@ export default function HomePage(): React.ReactNode {
         </div>
 
         <div className="inbox-tabs status-tabs" aria-label="Estado de las conversaciones">
-          <label className="status-select-label" htmlFor="conversation-status-filter">
-            Estado
-          </label>
-          <select
-            className="status-select"
-            id="conversation-status-filter"
-            onChange={(event) => setStatusFilter(event.target.value as ConversationFilter)}
-            value={statusFilter}
-          >
-            <option value="all">Todas</option>
-            <option value="open">Abiertas</option>
-            <option value="pending">Pendientes</option>
-            <option value="resolved">Resueltas</option>
-          </select>
-          <label className="status-select-label" htmlFor="conversation-attention-filter">
-            Espera
-          </label>
-          <select
-            className="status-select"
-            id="conversation-attention-filter"
-            onChange={(event) => setAttentionFilter(event.target.value as AttentionFilter)}
-            value={attentionFilter}
-          >
-            <option value="all">Todos los tiempos</option>
-            <option value="ok">Dentro del tiempo normal</option>
-            <option value="aviso">Empieza a demorarse</option>
-            <option value="alto">Urgente</option>
-            <option value="no_wait">Sin espera pendiente</option>
-          </select>
+          <div className="status-filter-field">
+            <label className="status-select-label" htmlFor="conversation-status-filter">
+              Estado
+            </label>
+            <select
+              className="status-select"
+              id="conversation-status-filter"
+              onChange={(event) => setStatusFilter(event.target.value as ConversationFilter)}
+              value={statusFilter}
+            >
+              <option value="all">Todas</option>
+              <option value="open">Abiertas</option>
+              <option value="pending">Pendientes</option>
+              <option value="resolved">Resueltas</option>
+            </select>
+          </div>
+          <div className="status-filter-field">
+            <label className="status-select-label" htmlFor="conversation-attention-filter">
+              Espera
+            </label>
+            <select
+              className="status-select"
+              id="conversation-attention-filter"
+              onChange={(event) => setAttentionFilter(event.target.value as AttentionFilter)}
+              value={attentionFilter}
+            >
+              <option value="all">Todos</option>
+              <option value="ok">Normal</option>
+              <option value="aviso">En demora</option>
+              <option value="alto">Urgente</option>
+              <option value="no_wait">Sin espera</option>
+            </select>
+          </div>
           <button
             aria-pressed={assignmentScope === 'assigned_to_me'}
             className={`tab ${assignmentScope === 'assigned_to_me' ? 'selected' : ''}`}
