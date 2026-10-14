@@ -32,8 +32,8 @@ Es el camino normal, y no hace falta ningún token.
 1. **Configuración** (el icono de ajustes).
 2. Tarjeta **Multimedia por sede**.
 3. Elige la **sede** en el desplegable. Aparece lo que esa sede ya tiene.
-4. Pega el **enlace público** del archivo. Por ejemplo, la dirección de la foto tal como está hoy en
-   ManyChat o en Drive.
+4. Elige el origen: pega el **enlace público** del archivo (por ejemplo, desde ManyChat o Drive) o
+   selecciona **Subir archivo** para escoger una imagen o vídeo desde tu equipo.
 5. Un **título** opcional, que es lo que se verá en la lista (`Fachada`, `Sala de masaje`…).
 6. **Importar**.
 
@@ -55,8 +55,9 @@ importación es idempotente y **actualiza** la fila en lugar de duplicarla.
 - **Imágenes y vídeos.** Cualquier otro archivo se rechaza; la propia tabla solo admite esos dos
   tipos.
 - **Hasta 25 MB.** Un vídeo más grande no entra.
-- **Enlaces `https` públicos, sin credenciales y sin redirecciones.** Un enlace de Drive con permiso
-  restringido no vale: tenemos que poder descargarlo sin autenticarnos.
+- Al importar por URL, los enlaces deben ser **`https` públicos, sin credenciales y sin
+  redirecciones**. Un enlace de Drive con permiso restringido no vale: tenemos que poder descargarlo
+  sin autenticarnos.
 
 El tipo se decide por **los bytes del archivo**, no por lo que diga el nombre ni por lo que declare
 el servidor de origen. Un archivo llamado `foto.png` que por dentro sea un PDF se rechaza.
@@ -75,8 +76,9 @@ almacén no aparece nunca en la respuesta: quien necesite el archivo pide un enl
 
 ## Detalles que conviene saber
 
-**La misma foto dos veces no crea dos archivos.** La ruta se deriva de un hash del enlace, así que
-reimportar apunta al mismo sitio, y la tabla tiene una restricción única que lo impide.
+**La misma foto dos veces no crea dos archivos.** Por URL, la ruta se deriva de un hash del enlace;
+al subirla desde el equipo, se deriva del hash de sus bytes. En ambos casos la tabla tiene una
+restricción única que impide duplicarla.
 
 **Una fila sin archivo se muestra como «Falta el archivo».** Puede pasar si el archivo se borró del
 almacén después de registrarlo. No es un error de la importación; se arregla reimportando.

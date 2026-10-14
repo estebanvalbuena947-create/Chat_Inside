@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import 'reflect-metadata';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import { NestFactory } from '@nestjs/core';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
@@ -19,6 +20,9 @@ async function bootstrap(): Promise<void> {
     methods: ['GET'],
     origin: allowedOrigin
   });
+  // Los archivos se aceptan únicamente en el endpoint de multimedia. El límite también se
+  // comprueba allí para que un cliente no pueda agotar memoria enviando un cuerpo mayor.
+  await app.register(multipart, { limits: { files: 1, fileSize: 25 * 1024 * 1024 } });
 
   // La direccion de escucha se configura: en el servidor escucha solo en local (detras de nginx) y
   // dentro de un contenedor necesita 0.0.0.0 para que el puerto publicado funcione.

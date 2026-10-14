@@ -140,6 +140,62 @@ describe('entrada', () => {
   });
 });
 
+describe('carga directa', () => {
+  it('guarda una imagen reconocida por sus bytes y no por su nombre', async () => {
+    const { servicio, storageUpload } = crearServicio();
+    const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]);
+
+    await servicio.uploadFile('Bearer token', 'tenant-1', {
+      branchSlug: 'valle',
+      bytes,
+      title: 'Fachada'
+    });
+
+    expect(storageUpload).toHaveBeenCalledWith(
+      expect.stringContaining('tenant-1/branch-1/'),
+      bytes,
+      expect.objectContaining({ contentType: 'image/jpeg', upsert: true })
+    );
+  });
+
+  it.each([
+    ['sin bytes', Buffer.alloc(0)],
+    ['un PDF disfrazado', Buffer.from([0x25, 0x50, 0x44, 0x46])]
+  ])('rechaza %s antes de subirlo', async (_name, bytes) => {
+    const { servicio, storageUpload } = crearServicio();
+
+    await expect(
+      servicio.uploadFile('Bearer token', 'tenant-1', { branchSlug: 'valle', bytes })
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    expect(storageUpload).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un archivo que supera el limite antes de subirlo', async () => {
+    const { servicio, storageUpload } = crearServicio();
+
+    await expect(
+      servicio.uploadFile('Bearer token', 'tenant-1', {
+        branchSlug: 'valle',
+        bytes: Buffer.alloc(25 * 1024 * 1024 + 1)
+      })
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    expect(storageUpload).not.toHaveBeenCalled();
+  });
+
+  it('deriva la misma ruta para los mismos bytes', async () => {
+    const { servicio, storageUpload } = crearServicio();
+    const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]);
+
+    await servicio.uploadFile('Bearer token', 'tenant-1', { branchSlug: 'valle', bytes });
+    await servicio.uploadFile('Bearer token', 'tenant-1', { branchSlug: 'valle', bytes });
+
+    const uploadCalls = storageUpload.mock.calls as unknown as Array<[string, Buffer, unknown]>;
+    expect(uploadCalls[0]?.[0]).toBe(uploadCalls[1]?.[0]);
+  });
+});
+
 describe('lo que se pide al motor', () => {
   it('la ruta es determinista: la misma direccion da el mismo archivo', async () => {
     const { servicio } = crearServicio();

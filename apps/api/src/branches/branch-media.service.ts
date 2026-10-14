@@ -6,7 +6,12 @@ import {
   NotFoundException,
   UnprocessableEntityException
 } from '@nestjs/common';
-import { signMediaPaths, storeRemoteMedia, supabaseMediaStorage } from '@chat-zernio/media';
+import {
+  recognizeMedia,
+  signMediaPaths,
+  storeRemoteMedia,
+  supabaseMediaStorage
+} from '@chat-zernio/media';
 import { z } from 'zod';
 import { RequestAuthenticator } from '../auth/request-authenticator';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
@@ -44,6 +49,11 @@ export const importBranchMediaSchema = z.object({
   branchSlug: z.string().trim().min(1).max(120),
   sortOrder: z.number().int().min(0).max(9999).optional(),
   sourceUrl: z.string().trim().min(1).max(2048),
+  title: z.string().trim().max(160).optional()
+});
+
+const uploadBranchMediaSchema = z.object({
+  branchSlug: z.string().trim().min(1).max(120),
   title: z.string().trim().max(160).optional()
 });
 
@@ -153,43 +163,109 @@ export class BranchMediaService {
       );
     }
 
-    const kind = KIND_BY_PREFIX.find((entrada) =>
-      guardado.contentType.startsWith(entrada.prefix)
-    )?.kind;
-    if (!kind) {
+    return this.registerStoredMedia({
+      branchId,
+      contentType: guardado.contentType,
+      path: guardado.path,
+      sortOrder: sortOrder ?? 0,
+      supabase,
+      tenantId,
+      title
+    });
+  }
+
+  /** Guarda bytes que vienen del administrador, sin confiar en su nombre ni MIME declarado. */
+  async uploadFile(authorization: unknown, tenantId: string, rawInput: unknown): Promise<unknown> {
+    const identity = await this.requestAuthenticator.authenticate(authorization);
+    await this.tenantAccessService.assertMembership(identity.userId, tenantId);
+
+    const input = rawInput as { branchSlug?: unknown; bytes?: unknown; title?: unknown };
+    const parsed = uploadBranchMediaSchema.safeParse({
+      branchSlug: input.branchSlug,
+      title: input.title
+    });
+    if (!parsed.success || !Buffer.isBuffer(input.bytes) || input.bytes.length === 0) {
+      throw new UnprocessableEntityException('Hace falta una sede y un archivo valido.');
+    }
+    if (input.bytes.length > MAX_BYTES) {
+      throw new UnprocessableEntityException('El archivo supera el limite de 25 MB.');
+    }
+
+    const recognized = recognizeMedia(input.bytes);
+    const kind = recognized && this.kindForContentType(recognized.contentType);
+    if (!recognized || !kind) {
       throw new UnprocessableEntityException('El archivo no es una imagen ni un video.');
     }
 
-    // `upsert` sobre la clave unica de la tabla: volver a importar la misma direccion actualiza el
-    // titulo y el orden en lugar de fallar. El archivo del almacen se sobrescribe igual.
-    const { data, error } = await supabase
+    const supabase = this.supabaseServerClientFactory.create();
+    const sede = await this.resolveBranch(supabase, tenantId, parsed.data.branchSlug);
+    const branchId = String(sede.id);
+    const hash = createHash('sha256').update(input.bytes).digest('hex').slice(0, 32);
+    const path = `${tenantId}/${branchId}/${hash}.${recognized.extension}`;
+    const uploaded = await supabaseMediaStorage(supabase).upload({
+      bucket: BRANCH_MEDIA_BUCKET,
+      bytes: input.bytes,
+      contentType: recognized.contentType,
+      path
+    });
+    if (!uploaded) {
+      throw new InternalServerErrorException('No se pudo guardar el archivo.');
+    }
+
+    return this.registerStoredMedia({
+      branchId,
+      contentType: recognized.contentType,
+      path,
+      sortOrder: 0,
+      supabase,
+      tenantId,
+      title: parsed.data.title
+    });
+  }
+
+  private kindForContentType(contentType: string): 'image' | 'video' | null {
+    return KIND_BY_PREFIX.find((entry) => contentType.startsWith(entry.prefix))?.kind ?? null;
+  }
+
+  /** Registra una copia ya validada sin duplicar la política entre URL y carga directa. */
+  private async registerStoredMedia(input: {
+    branchId: string;
+    contentType: string;
+    path: string;
+    sortOrder: number;
+    supabase: ReturnType<SupabaseServerClientFactory['create']>;
+    tenantId: string;
+    title: string | undefined;
+  }): Promise<unknown> {
+    const kind = this.kindForContentType(input.contentType);
+    if (!kind) throw new UnprocessableEntityException('El archivo no es una imagen ni un video.');
+
+    const { data, error } = await input.supabase
       .from('branch_media')
       .upsert(
         {
-          branch_id: branchId,
+          branch_id: input.branchId,
           kind,
-          sort_order: sortOrder ?? 0,
-          storage_object_path: guardado.path,
-          tenant_id: tenantId,
-          title: title ?? null
+          sort_order: input.sortOrder,
+          storage_object_path: input.path,
+          tenant_id: input.tenantId,
+          title: input.title ?? null
         },
         { onConflict: 'branch_id,storage_object_path' }
       )
       .select('id, kind, sort_order, storage_object_path, title')
       .single();
-    if (error) {
+    if (error)
       throw new InternalServerErrorException('El archivo se guardo, pero no se pudo registrar.');
-    }
 
-    const fila = (data ?? {}) as Record<string, unknown>;
+    const row = (data ?? {}) as Record<string, unknown>;
     return {
-      id: String(fila.id ?? ''),
-      kind: String(fila.kind ?? kind),
-      sortOrder: Number(fila.sort_order ?? 0),
-      tenantId,
-      title: fila.title === null || fila.title === undefined ? null : String(fila.title),
-      // La ruta interna no sale nunca: quien la necesite pide un enlace firmado.
-      contentType: guardado.contentType
+      contentType: input.contentType,
+      id: String(row.id ?? ''),
+      kind: String(row.kind ?? kind),
+      sortOrder: Number(row.sort_order ?? 0),
+      tenantId: input.tenantId,
+      title: row.title === null || row.title === undefined ? null : String(row.title)
     };
   }
 

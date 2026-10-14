@@ -51,6 +51,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: context.error }, { status: context.status });
   }
 
+  const contentType = request.headers.get('content-type') ?? '';
+  if (contentType.startsWith('multipart/form-data')) {
+    const formData = await request.formData().catch(() => null);
+    const branchSlug =
+      typeof formData?.get('branchSlug') === 'string'
+        ? String(formData.get('branchSlug')).trim()
+        : '';
+    const file = formData?.get('file');
+    if (!branchSlug) {
+      return NextResponse.json({ error: 'Hace falta la sede.' }, { status: 422 });
+    }
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: 'Hace falta un archivo.' }, { status: 422 });
+    }
+
+    const upstreamForm = new FormData();
+    upstreamForm.set('file', file, file.name);
+    const title = formData?.get('title');
+    if (typeof title === 'string') upstreamForm.set('title', title);
+    const response = await fetch(
+      `${context.apiUrl}/v1/tenants/${context.tenant.id}/branches/${encodeURIComponent(
+        branchSlug
+      )}/media/upload`,
+      { body: upstreamForm, headers: { Authorization: context.authorization }, method: 'POST' }
+    );
+    return new NextResponse(await response.text(), {
+      headers: { 'Content-Type': 'application/json' },
+      status: response.status
+    });
+  }
+
   const cuerpo = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const branchSlug = typeof cuerpo.branchSlug === 'string' ? cuerpo.branchSlug.trim() : '';
   if (!branchSlug) {

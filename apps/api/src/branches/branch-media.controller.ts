@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Req,
+  UnprocessableEntityException
+} from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { BranchMediaService } from './branch-media.service';
 
 /**
@@ -36,5 +48,27 @@ export class BranchMediaController {
     // La sede viene en el camino; se añade al cuerpo para que el servicio la valide con el resto.
     const cuerpo = (body ?? {}) as Record<string, unknown>;
     return this.service.importFromUrl(authorization, tenantId, { ...cuerpo, branchSlug });
+  }
+
+  /** Sube un archivo elegido por el administrador; la API reconoce su tipo por los bytes. */
+  @Post('upload')
+  @HttpCode(201)
+  async subir(
+    @Param('tenantId') tenantId: string,
+    @Param('branchSlug') branchSlug: string,
+    @Req() request: FastifyRequest,
+    @Headers('authorization') authorization: string | undefined
+  ): Promise<unknown> {
+    const upload = await request.file();
+    if (!upload) throw new UnprocessableEntityException('Hace falta un archivo.');
+
+    const titleField = upload.fields.title;
+    const firstTitleField = Array.isArray(titleField) ? titleField[0] : titleField;
+    const title = firstTitleField && 'value' in firstTitleField ? firstTitleField.value : undefined;
+    return this.service.uploadFile(authorization, tenantId, {
+      branchSlug,
+      bytes: await upload.toBuffer(),
+      title: typeof title === 'string' ? title : undefined
+    });
   }
 }

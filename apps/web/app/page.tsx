@@ -384,7 +384,10 @@ export default function HomePage(): React.ReactNode {
     Array<{ name: string; slug: string }>
   >([]);
   const [branchMediaSlug, setBranchMediaSlug] = useState('');
+  const [branchMediaInputMode, setBranchMediaInputMode] = useState<'file' | 'url'>('url');
   const [branchMediaSourceUrl, setBranchMediaSourceUrl] = useState('');
+  const [branchMediaFile, setBranchMediaFile] = useState<File | null>(null);
+  const [branchMediaFileInputKey, setBranchMediaFileInputKey] = useState(0);
   const [branchMediaTitle, setBranchMediaTitle] = useState('');
   const [branchMediaItems, setBranchMediaItems] = useState<
     Array<{ id: string; kind: string; title: string | null; url: string | null }>
@@ -446,13 +449,23 @@ export default function HomePage(): React.ReactNode {
     setIsImportingBranchMedia(true);
     setBranchMediaNotice(null);
     try {
+      const isFile = branchMediaInputMode === 'file';
+      const body = isFile
+        ? (() => {
+            const form = new FormData();
+            form.set('branchSlug', branchMediaSlug);
+            form.set('file', branchMediaFile as File);
+            if (branchMediaTitle.trim()) form.set('title', branchMediaTitle.trim());
+            return form;
+          })()
+        : JSON.stringify({
+            branchSlug: branchMediaSlug,
+            sourceUrl: branchMediaSourceUrl,
+            title: branchMediaTitle.trim() || undefined
+          });
       const respuesta = await fetch('/api/branches/media', {
-        body: JSON.stringify({
-          branchSlug: branchMediaSlug,
-          sourceUrl: branchMediaSourceUrl,
-          title: branchMediaTitle.trim() || undefined
-        }),
-        headers: { 'Content-Type': 'application/json' },
+        body,
+        headers: isFile ? undefined : { 'Content-Type': 'application/json' },
         method: 'POST'
       });
       const cuerpo = (await respuesta.json().catch(() => ({}))) as { error?: string };
@@ -461,6 +474,8 @@ export default function HomePage(): React.ReactNode {
         return;
       }
       setBranchMediaSourceUrl('');
+      setBranchMediaFile(null);
+      setBranchMediaFileInputKey((current) => current + 1);
       setBranchMediaTitle('');
       setBranchMediaNotice('Archivo importado.');
       await loadBranchMedia(branchMediaSlug);
@@ -4188,7 +4203,7 @@ export default function HomePage(): React.ReactNode {
                 <strong>Multimedia por sede</strong>
                 <span>
                   Las fotos y videos que el bot comparte de cada sucursal. Se importan desde un
-                  enlace publico.
+                  enlace publico o se cargan desde un archivo.
                 </span>
               </button>
             )}
@@ -4226,15 +4241,48 @@ export default function HomePage(): React.ReactNode {
               ))}
             </select>
           </label>
-          <label>
-            Enlace publico del archivo
-            <input
-              maxLength={2048}
-              onChange={(event) => setBranchMediaSourceUrl(event.target.value)}
-              placeholder="https://…"
-              value={branchMediaSourceUrl}
-            />
-          </label>
+          <fieldset className="branch-media-source">
+            <legend>Origen del archivo</legend>
+            <label>
+              <input
+                checked={branchMediaInputMode === 'url'}
+                name="branch-media-source"
+                onChange={() => setBranchMediaInputMode('url')}
+                type="radio"
+              />
+              Enlace público
+            </label>
+            <label>
+              <input
+                checked={branchMediaInputMode === 'file'}
+                name="branch-media-source"
+                onChange={() => setBranchMediaInputMode('file')}
+                type="radio"
+              />
+              Subir archivo
+            </label>
+          </fieldset>
+          {branchMediaInputMode === 'url' ? (
+            <label>
+              Enlace público del archivo
+              <input
+                maxLength={2048}
+                onChange={(event) => setBranchMediaSourceUrl(event.target.value)}
+                placeholder="https://…"
+                value={branchMediaSourceUrl}
+              />
+            </label>
+          ) : (
+            <label>
+              Archivo (imagen o video, hasta 25 MB)
+              <input
+                accept="image/*,video/*"
+                key={branchMediaFileInputKey}
+                onChange={(event) => setBranchMediaFile(event.target.files?.[0] ?? null)}
+                type="file"
+              />
+            </label>
+          )}
           <label>
             Titulo (opcional)
             <input
@@ -4247,11 +4295,23 @@ export default function HomePage(): React.ReactNode {
           <div className="internal-label-manager-actions">
             <button
               className="internal-label-save"
-              disabled={!branchMediaSlug || !branchMediaSourceUrl.trim() || isImportingBranchMedia}
+              disabled={
+                !branchMediaSlug ||
+                (branchMediaInputMode === 'url'
+                  ? !branchMediaSourceUrl.trim()
+                  : branchMediaFile === null) ||
+                isImportingBranchMedia
+              }
               onClick={() => void importBranchMedia()}
               type="button"
             >
-              {isImportingBranchMedia ? 'Importando…' : 'Importar'}
+              {isImportingBranchMedia
+                ? branchMediaInputMode === 'file'
+                  ? 'Subiendo…'
+                  : 'Importando…'
+                : branchMediaInputMode === 'file'
+                  ? 'Subir archivo'
+                  : 'Importar'}
             </button>
           </div>
           {branchMediaNotice && <p className="media-view-copy">{branchMediaNotice}</p>}
