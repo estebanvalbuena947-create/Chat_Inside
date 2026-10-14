@@ -3836,107 +3836,113 @@ export default function HomePage(): React.ReactNode {
                 {teamError}
               </p>
             )}
-            <section className="team-members" aria-label="Integrantes">
-              <div className="team-members-heading">
-                <div>
-                  <p className="eyebrow">ACCESOS ACTIVOS</p>
-                  <h3>Integrantes</h3>
+            <div className="team-operations-layout">
+              <section className="team-members" aria-label="Integrantes">
+                <div className="team-members-heading">
+                  <div>
+                    <p className="eyebrow">ACCESOS ACTIVOS</p>
+                    <h3>Integrantes</h3>
+                  </div>
+                  <span>{tenantMembers.length} con acceso</span>
                 </div>
-                <span>{tenantMembers.length} con acceso</span>
-              </div>
-              {isTenantMembersLoading && <p>Cargando integrantes…</p>}
-              {!isTenantMembersLoading && tenantMembers.length === 0 && (
-                <p>No hay integrantes en este tenant.</p>
-              )}
-              <div className="team-member-grid">
-                {tenantMembers.map((member) => (
-                  <article className="team-member-card" key={member.userId}>
-                    <div className="team-member-card-top">
-                      <span className="team-member-avatar" aria-hidden="true">
-                        {initials(memberLabel(member)) || '•'}
-                      </span>
-                      <div>
-                        <h4>{memberLabel(member)}</h4>
-                        <p>{member.email ?? 'Sin correo disponible'}</p>
+                {isTenantMembersLoading && <p>Cargando integrantes…</p>}
+                {!isTenantMembersLoading && tenantMembers.length === 0 && (
+                  <p>No hay integrantes en este tenant.</p>
+                )}
+                <div className="team-member-grid">
+                  {tenantMembers.map((member) => (
+                    <article className="team-member-card" key={member.userId}>
+                      <div className="team-member-card-top">
+                        <span className="team-member-avatar" aria-hidden="true">
+                          {initials(memberLabel(member)) || '•'}
+                        </span>
+                        <div>
+                          <h4>{memberLabel(member)}</h4>
+                          <p>{member.email ?? 'Sin correo disponible'}</p>
+                        </div>
+                        <span className="team-member-access">Con acceso</span>
                       </div>
-                      <span className="team-member-access">Con acceso</span>
-                    </div>
-                    <div className="team-member-actions">
-                      <label>
-                        <span>Rol</span>
-                        <select
-                          aria-label={`Rol de ${memberLabel(member)}`}
+                      <div className="team-member-actions">
+                        <label>
+                          <span>Rol</span>
+                          <select
+                            aria-label={`Rol de ${memberLabel(member)}`}
+                            disabled={updatingMemberId === member.userId}
+                            onChange={(event) =>
+                              void changeMemberRole(
+                                member,
+                                event.target.value as TenantMember['role']
+                              )
+                            }
+                            value={member.role}
+                          >
+                            <option value="admin">Administrador</option>
+                            <option value="supervisor">Supervisor</option>
+                            <option value="agent">Agente</option>
+                          </select>
+                        </label>
+                        <button
+                          className="channel-rename-cancel"
                           disabled={updatingMemberId === member.userId}
-                          onChange={(event) =>
-                            void changeMemberRole(
-                              member,
-                              event.target.value as TenantMember['role']
-                            )
-                          }
-                          value={member.role}
+                          onClick={() => void removeMember(member)}
+                          type="button"
                         >
-                          <option value="admin">Administrador</option>
-                          <option value="supervisor">Supervisor</option>
-                          <option value="agent">Agente</option>
-                        </select>
-                      </label>
-                      <button
-                        className="channel-rename-cancel"
-                        disabled={updatingMemberId === member.userId}
-                        onClick={() => void removeMember(member)}
-                        type="button"
-                      >
-                        {updatingMemberId === member.userId ? 'Actualizando…' : 'Retirar'}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-            <form className="team-invite" onSubmit={inviteMember}>
-              <h3>Invitar</h3>
-              <label>
-                Correo
-                <input
-                  maxLength={200}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder="persona@correo.com"
-                  type="email"
-                  value={inviteEmail}
-                />
-              </label>
-              <label>
-                Rol
-                <select
-                  onChange={(event) => setInviteRole(event.target.value as TenantMember['role'])}
-                  value={inviteRole}
-                >
-                  <option value="agent">Agente</option>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              </label>
-              <button
-                className="channel-rename-save"
-                disabled={!inviteEmail.trim() || isInviting}
-                type="submit"
-              >
-                {isInviting ? 'Generando…' : 'Generar invitación'}
-              </button>
-            </form>
-            {inviteLink && (
-              <section className="team-invite-link" aria-label="Enlace de invitación">
-                <p>
-                  Comparte este enlace con la persona. Es de un solo uso y solo se muestra aquí.
-                </p>
-                <input
-                  aria-label="Enlace de invitación"
-                  onFocus={(event) => event.currentTarget.select()}
-                  readOnly
-                  value={inviteLink}
-                />
+                          {updatingMemberId === member.userId ? 'Actualizando…' : 'Retirar'}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
               </section>
-            )}
+              <aside className="team-invite-panel">
+                <form className="team-invite" onSubmit={inviteMember}>
+                  <h3>Invitar integrante</h3>
+                  <label>
+                    Correo
+                    <input
+                      maxLength={200}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                      placeholder="persona@correo.com"
+                      type="email"
+                      value={inviteEmail}
+                    />
+                  </label>
+                  <label>
+                    Rol
+                    <select
+                      onChange={(event) =>
+                        setInviteRole(event.target.value as TenantMember['role'])
+                      }
+                      value={inviteRole}
+                    >
+                      <option value="agent">Agente</option>
+                      <option value="supervisor">Supervisor</option>
+                      <option value="admin">Administrador</option>
+                    </select>
+                  </label>
+                  <button
+                    className="channel-rename-save"
+                    disabled={!inviteEmail.trim() || isInviting}
+                    type="submit"
+                  >
+                    {isInviting ? 'Generando…' : 'Generar invitación'}
+                  </button>
+                </form>
+                {inviteLink && (
+                  <section className="team-invite-link" aria-label="Enlace de invitación">
+                    <p>
+                      Comparte este enlace con la persona. Es de un solo uso y solo se muestra aquí.
+                    </p>
+                    <input
+                      aria-label="Enlace de invitación"
+                      onFocus={(event) => event.currentTarget.select()}
+                      readOnly
+                      value={inviteLink}
+                    />
+                  </section>
+                )}
+              </aside>
+            </div>
           </section>
         </div>
       )}

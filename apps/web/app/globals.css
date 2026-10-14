@@ -4837,10 +4837,27 @@ button:not(:disabled):active {
   max-width: 680px;
 }
 
+.team-operations-view > header,
+.team-operations-view > .channel-modal-copy,
+.team-operations-view > .channel-modal-error,
+.team-operations-layout {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 1080px;
+}
+
+.team-operations-layout {
+  align-items: start;
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+  margin-top: 28px;
+}
+
 .team-operations-view .team-members {
   border: 0;
   gap: 14px;
-  margin-top: 28px;
+  margin-top: 0;
   padding-top: 0;
 }
 
@@ -4955,6 +4972,32 @@ button:not(:disabled):active {
   padding: 8px 10px;
 }
 
+.team-invite-panel {
+  background: var(--ui-surface);
+  border-radius: 16px;
+  box-shadow:
+    0 2px 5px rgb(56 48 33 / 5%),
+    0 12px 26px rgb(56 48 33 / 9%);
+  padding: 18px;
+}
+
+.team-invite-panel .team-invite,
+.team-invite-panel .team-invite-link {
+  border: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.team-invite-panel .team-invite-link {
+  border-top: 1px solid rgb(97 79 55 / 12%);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.team-invite-panel .team-invite .channel-rename-save {
+  min-height: 40px;
+}
+
 @media (max-width: 620px) {
   .channel-operations-connect {
     display: grid;
@@ -5004,6 +5047,12 @@ button:not(:disabled):active {
 
   .team-member-actions button {
     width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .team-operations-layout {
+    grid-template-columns: 1fr;
   }
 }
 
