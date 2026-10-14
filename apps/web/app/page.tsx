@@ -4214,7 +4214,10 @@ export default function HomePage(): React.ReactNode {
         </section>
       )}{' '}
       {isBranchMediaOpen && (tenant?.role === 'admin' || tenant?.role === 'supervisor') && (
-        <section className="internal-label-manager" aria-label="Multimedia por sede">
+        <section
+          className="internal-label-manager branch-media-manager"
+          aria-label="Multimedia por sede"
+        >
           <div className="internal-label-manager-heading">
             <strong>Multimedia por sede</strong>
             <button
