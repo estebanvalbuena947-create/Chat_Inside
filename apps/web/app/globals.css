@@ -4833,6 +4833,128 @@ button:not(:disabled):active {
   margin: 0 0 2px;
 }
 
+.team-operations-view .channel-modal-copy {
+  max-width: 680px;
+}
+
+.team-operations-view .team-members {
+  border: 0;
+  gap: 14px;
+  margin-top: 28px;
+  padding-top: 0;
+}
+
+.team-members-heading {
+  align-items: end;
+  display: flex;
+  justify-content: space-between;
+}
+
+.team-members-heading .eyebrow {
+  margin: 0 0 3px;
+}
+
+.team-members-heading h3 {
+  color: var(--brand-tinta);
+  font-size: 18px;
+}
+
+.team-members-heading > span {
+  color: var(--brand-tinta-suave);
+  font-size: 12px;
+}
+
+.team-member-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
+}
+
+.team-member-card {
+  background: var(--ui-surface);
+  border: 0;
+  border-radius: 16px;
+  box-shadow:
+    0 2px 5px rgb(56 48 33 / 5%),
+    0 12px 26px rgb(56 48 33 / 9%);
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.team-member-card-top {
+  align-items: start;
+  display: grid;
+  gap: 11px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+}
+
+.team-member-avatar {
+  align-items: center;
+  background: var(--brand-matcha-tenue);
+  border-radius: 13px;
+  color: var(--brand-matcha-oscuro);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.team-member-card h4 {
+  color: var(--brand-tinta);
+  font-size: 15px;
+  margin: 1px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.team-member-card p {
+  color: var(--brand-tinta-suave);
+  font-size: 12px;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.team-member-access {
+  background: #e4f0e6;
+  border-radius: 999px;
+  color: #387148;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 8px;
+}
+
+.team-member-actions {
+  align-items: end;
+  display: flex;
+  gap: 8px;
+}
+
+.team-member-actions label {
+  display: grid;
+  flex: 1;
+  gap: 5px;
+}
+
+.team-member-actions label > span {
+  color: var(--brand-tinta-suave);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.team-member-actions select {
+  background: #fffdf9;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px rgb(97 79 55 / 17%);
+  color: var(--brand-tinta);
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
 @media (max-width: 620px) {
   .channel-operations-connect {
     display: grid;
@@ -4862,6 +4984,25 @@ button:not(:disabled):active {
 
   .channel-account-actions button,
   .channel-account-actions input {
+    width: 100%;
+  }
+
+  .team-member-card-top {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .team-member-access {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .team-member-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .team-member-actions button {
     width: 100%;
   }
 }

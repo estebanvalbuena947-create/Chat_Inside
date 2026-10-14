@@ -2415,9 +2415,9 @@ export default function HomePage(): React.ReactNode {
             <span className="nav-label">Reseñas</span>
           </button>
           <button
-            aria-current={activeView === 'inbox' ? 'page' : undefined}
+            aria-current={activeView === 'inbox' && !isTeamOpen ? 'page' : undefined}
             aria-label="Bandeja"
-            className={`nav-item ${activeView === 'inbox' ? 'active' : ''}`}
+            className={`nav-item ${activeView === 'inbox' && !isTeamOpen ? 'active' : ''}`}
             onClick={() => {
               closeOverlays();
             }}
@@ -2453,8 +2453,9 @@ export default function HomePage(): React.ReactNode {
           </button>
           {tenant?.role === 'admin' && (
             <button
+              aria-current={isTeamOpen ? 'page' : undefined}
               aria-label="Equipo"
-              className="nav-item"
+              className={`nav-item ${isTeamOpen ? 'active' : ''}`}
               onClick={() => {
                 closeOverlays();
                 setIsTeamOpen(true);
@@ -3807,7 +3808,7 @@ export default function HomePage(): React.ReactNode {
         >
           <section
             aria-labelledby="team-title"
-            className="channel-modal channel-modal-wide"
+            className="channel-modal channel-modal-wide team-operations-view"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
           >
@@ -3836,36 +3837,61 @@ export default function HomePage(): React.ReactNode {
               </p>
             )}
             <section className="team-members" aria-label="Integrantes">
-              <h3>Integrantes</h3>
+              <div className="team-members-heading">
+                <div>
+                  <p className="eyebrow">ACCESOS ACTIVOS</p>
+                  <h3>Integrantes</h3>
+                </div>
+                <span>{tenantMembers.length} con acceso</span>
+              </div>
               {isTenantMembersLoading && <p>Cargando integrantes…</p>}
               {!isTenantMembersLoading && tenantMembers.length === 0 && (
                 <p>No hay integrantes en este tenant.</p>
               )}
-              {tenantMembers.map((member) => (
-                <div className="team-member" key={member.userId}>
-                  <strong>{memberLabel(member)}</strong>
-                  <select
-                    aria-label={`Rol de ${memberLabel(member)}`}
-                    disabled={updatingMemberId === member.userId}
-                    onChange={(event) =>
-                      void changeMemberRole(member, event.target.value as TenantMember['role'])
-                    }
-                    value={member.role}
-                  >
-                    <option value="admin">Administrador</option>
-                    <option value="supervisor">Supervisor</option>
-                    <option value="agent">Agente</option>
-                  </select>
-                  <button
-                    className="channel-rename-cancel"
-                    disabled={updatingMemberId === member.userId}
-                    onClick={() => void removeMember(member)}
-                    type="button"
-                  >
-                    Retirar
-                  </button>
-                </div>
-              ))}
+              <div className="team-member-grid">
+                {tenantMembers.map((member) => (
+                  <article className="team-member-card" key={member.userId}>
+                    <div className="team-member-card-top">
+                      <span className="team-member-avatar" aria-hidden="true">
+                        {initials(memberLabel(member)) || '•'}
+                      </span>
+                      <div>
+                        <h4>{memberLabel(member)}</h4>
+                        <p>{member.email ?? 'Sin correo disponible'}</p>
+                      </div>
+                      <span className="team-member-access">Con acceso</span>
+                    </div>
+                    <div className="team-member-actions">
+                      <label>
+                        <span>Rol</span>
+                        <select
+                          aria-label={`Rol de ${memberLabel(member)}`}
+                          disabled={updatingMemberId === member.userId}
+                          onChange={(event) =>
+                            void changeMemberRole(
+                              member,
+                              event.target.value as TenantMember['role']
+                            )
+                          }
+                          value={member.role}
+                        >
+                          <option value="admin">Administrador</option>
+                          <option value="supervisor">Supervisor</option>
+                          <option value="agent">Agente</option>
+                        </select>
+                      </label>
+                      <button
+                        className="channel-rename-cancel"
+                        disabled={updatingMemberId === member.userId}
+                        onClick={() => void removeMember(member)}
+                        type="button"
+                      >
+                        {updatingMemberId === member.userId ? 'Actualizando…' : 'Retirar'}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </section>
             <form className="team-invite" onSubmit={inviteMember}>
               <h3>Invitar</h3>
