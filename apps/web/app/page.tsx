@@ -3594,7 +3594,7 @@ export default function HomePage(): React.ReactNode {
         >
           <section
             aria-labelledby="channel-setup-title"
-            className="channel-modal"
+            className="channel-modal channel-modal-wide channel-operations-view"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
           >
@@ -3622,7 +3622,7 @@ export default function HomePage(): React.ReactNode {
                 {channelSetupError}
               </p>
             )}
-            <div className="channel-connection-actions">
+            <div className="channel-connection-actions channel-operations-connect">
               {(['instagram', 'facebook', 'whatsapp', 'tiktok'] as const).map((platform) => (
                 <button
                   className={`conversation-platform platform-${channelPlatformClass(platform)}`}
@@ -3638,54 +3638,79 @@ export default function HomePage(): React.ReactNode {
               ))}
             </div>
             <section className="connected-channel-list" aria-label="Canales ya conectados">
-              <h3>Canales conectados</h3>
+              <div className="channel-accounts-heading">
+                <div>
+                  <p className="eyebrow">CUENTAS ACTIVAS</p>
+                  <h3>Canales conectados</h3>
+                </div>
+                <span>{connectedChannels.length} en operación</span>
+              </div>
               {isChannelsLoading && <p>Cargando canales…</p>}
               {!isChannelsLoading && connectedChannels.length === 0 && (
                 <p>Aún no hay canales conectados.</p>
               )}
-              {connectedChannels.map((channel) => (
-                <div key={channel.id}>
-                  <span
-                    className={`conversation-platform platform-${channelPlatformClass(
-                      channel.platform
-                    )}`}
-                  >
-                    {channelPlatformLabel(channel.platform)}
-                  </span>
-                  {renamingChannelId === channel.id ? (
-                    <form className="channel-rename-form" onSubmit={renameChannel}>
-                      <input
-                        aria-label="Nombre del canal"
-                        autoFocus
-                        maxLength={160}
-                        onChange={(event) => setChannelNameDraft(event.target.value)}
-                        placeholder="Ej. Instagram ventas"
-                        value={channelNameDraft}
-                      />
-                      <button
-                        className="channel-rename-save"
-                        disabled={!channelNameDraft.trim() || isRenamingChannel}
-                        type="submit"
+              <div className="channel-account-grid">
+                {connectedChannels.map((channel) => (
+                  <article className="channel-account-card" key={channel.id}>
+                    <div className="channel-account-card-top">
+                      <span
+                        aria-hidden="true"
+                        className={`channel-account-mark platform-${channelPlatformClass(
+                          channel.platform
+                        )}`}
                       >
-                        {isRenamingChannel ? 'Guardando…' : 'Guardar'}
-                      </button>
-                      <button
-                        className="channel-rename-cancel"
-                        disabled={isRenamingChannel}
-                        onClick={() => {
-                          setRenamingChannelId(null);
-                          setChannelNameDraft('');
-                          setChannelRenameError(null);
-                        }}
-                        type="button"
-                      >
-                        Cancelar
-                      </button>
-                    </form>
-                  ) : (
-                    <>
-                      <strong>{channel.displayName ?? 'Cuenta sin nombre'}</strong>
-                      {tenant?.role === 'admin' && (
+                        {channelPlatformAbbreviation(channel.platform)}
+                      </span>
+                      <div>
+                        <span
+                          className={`conversation-platform platform-${channelPlatformClass(
+                            channel.platform
+                          )}`}
+                        >
+                          {channelPlatformLabel(channel.platform)}
+                        </span>
+                        <h4>{channel.displayName ?? 'Cuenta sin nombre'}</h4>
+                        <p>
+                          Conectada desde{' '}
+                          {new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(
+                            new Date(channel.createdAt)
+                          )}
+                        </p>
+                      </div>
+                      <span className="channel-account-status">Activa</span>
+                    </div>
+                    <div className="channel-account-actions">
+                      {renamingChannelId === channel.id ? (
+                        <form className="channel-rename-form" onSubmit={renameChannel}>
+                          <input
+                            aria-label="Nombre del canal"
+                            autoFocus
+                            maxLength={160}
+                            onChange={(event) => setChannelNameDraft(event.target.value)}
+                            placeholder="Ej. Instagram ventas"
+                            value={channelNameDraft}
+                          />
+                          <button
+                            className="channel-rename-save"
+                            disabled={!channelNameDraft.trim() || isRenamingChannel}
+                            type="submit"
+                          >
+                            {isRenamingChannel ? 'Guardando…' : 'Guardar'}
+                          </button>
+                          <button
+                            className="channel-rename-cancel"
+                            disabled={isRenamingChannel}
+                            onClick={() => {
+                              setRenamingChannelId(null);
+                              setChannelNameDraft('');
+                              setChannelRenameError(null);
+                            }}
+                            type="button"
+                          >
+                            Cancelar
+                          </button>
+                        </form>
+                      ) : tenant?.role === 'admin' ? (
                         <>
                           <button
                             className="channel-rename-trigger"
@@ -3699,11 +3724,11 @@ export default function HomePage(): React.ReactNode {
                             {channel.displayName ? 'Renombrar' : 'Nombrar'}
                           </button>
                           {removingChannelId === channel.id ? (
-                            <>
-                              <span>
+                            <div className="channel-remove-confirmation">
+                              <p>
                                 Se desconecta en Zernio y deja de usarse. Las conversaciones y los
                                 mensajes se conservan.
-                              </span>
+                              </p>
                               <button
                                 className="channel-remove-trigger"
                                 disabled={isRemovingChannel}
@@ -3723,7 +3748,7 @@ export default function HomePage(): React.ReactNode {
                               >
                                 Cancelar
                               </button>
-                            </>
+                            </div>
                           ) : (
                             <>
                               <button
@@ -3751,11 +3776,15 @@ export default function HomePage(): React.ReactNode {
                             </>
                           )}
                         </>
+                      ) : (
+                        <p className="channel-account-view-only">
+                          Solo un administrador puede editarla.
+                        </p>
                       )}
-                    </>
-                  )}
-                </div>
-              ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
               {channelRenameError && (
                 <p className="channel-rename-error" role="alert">
                   {channelRenameError}

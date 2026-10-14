@@ -4692,6 +4692,180 @@ button:not(:disabled):active {
   outline-offset: 3px;
 }
 
+/* Channels use the same broad operational canvas as Reservations. */
+.channel-operations-view .channel-modal-copy {
+  max-width: 650px;
+}
+
+.channel-operations-connect {
+  background: var(--ui-surface-muted);
+  border-radius: 14px;
+  margin-top: 20px;
+  padding: 12px;
+}
+
+.channel-operations-view .connected-channel-list {
+  border: 0;
+  gap: 14px;
+  margin-top: 28px;
+  padding-top: 0;
+}
+
+.channel-accounts-heading {
+  align-items: end;
+  display: flex;
+  justify-content: space-between;
+}
+
+.channel-accounts-heading .eyebrow {
+  margin: 0 0 3px;
+}
+
+.channel-accounts-heading h3 {
+  color: var(--brand-tinta);
+  font-size: 18px;
+}
+
+.channel-accounts-heading > span {
+  color: var(--brand-tinta-suave);
+  font-size: 12px;
+}
+
+.channel-account-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
+}
+
+.channel-account-card {
+  background: var(--ui-surface);
+  border: 0;
+  border-radius: 16px;
+  box-shadow:
+    0 2px 5px rgb(56 48 33 / 5%),
+    0 12px 26px rgb(56 48 33 / 9%);
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.channel-account-card-top {
+  align-items: start;
+  display: grid;
+  gap: 11px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+}
+
+.channel-account-mark {
+  align-items: center;
+  background: var(--brand-matcha-tenue);
+  border-radius: 13px;
+  color: var(--brand-matcha-oscuro);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.channel-account-mark.platform-instagram {
+  background: #f2e7dd;
+  color: var(--brand-caoba);
+}
+
+.channel-account-mark.platform-whatsapp {
+  background: #e3efe2;
+  color: #347245;
+}
+
+.channel-account-card-top .conversation-platform {
+  display: inline-flex;
+  margin-bottom: 5px;
+}
+
+.channel-account-card h4 {
+  color: var(--brand-tinta);
+  font-size: 15px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.channel-account-card p {
+  color: var(--brand-tinta-suave);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.channel-account-status {
+  background: #e4f0e6;
+  border-radius: 999px;
+  color: #387148;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 8px;
+}
+
+.channel-account-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.channel-account-actions .channel-rename-form {
+  margin-left: 0;
+}
+
+.channel-account-view-only {
+  font-style: italic;
+}
+
+.channel-remove-confirmation {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.channel-remove-confirmation p {
+  flex-basis: 100%;
+  margin: 0 0 2px;
+}
+
+@media (max-width: 620px) {
+  .channel-operations-connect {
+    display: grid;
+  }
+
+  .channel-operations-connect .conversation-platform {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .channel-account-card-top {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .channel-account-status {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .channel-account-actions,
+  .channel-account-actions .channel-rename-form {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .channel-account-actions button,
+  .channel-account-actions input {
+    width: 100%;
+  }
+}
+
 .reservations-table tr:hover td {
   background: #faf8f2;
 }
