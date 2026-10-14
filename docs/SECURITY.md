@@ -44,6 +44,30 @@
 - Auditoría registra actor, tenant, recurso, acción, resultado y correlación, sin secretos.
 - La retención, exportación y eliminación por tenant son decisiones pendientes antes de producción.
 
+### La credencial de máquina de las tools
+
+n8n llama a la API con una credencial de máquina (`tool_tokens`). La tabla guarda **solo su SHA-256**,
+así que quien lea la base no puede usarla; el token existe en dos sitios y en ninguno más: la variable
+`WEPLASH_TOOL_TOKEN` de n8n y la cabeza de quien lo generó.
+
+**Si un token se expone** —pegado en un chat, en un ticket, en una captura—, se rota. Rotar es crear el
+nuevo, ponerlo en n8n, probar y **después** revocar el viejo, en ese orden: revocar antes deja al bot sin
+voz, porque todos los flujos leen la misma variable.
+
+```powershell
+.\tools\rotar-token-tool.ps1 -Listar          # qué credenciales hay y cuándo se usó cada una
+.\tools\rotar-token-tool.ps1                  # crea una y muestra el token UNA vez
+.\tools\rotar-token-tool.ps1 -RevocarId <id>  # cuando n8n ya trabaja con la nueva
+```
+
+El script genera el token con el generador criptográfico del sistema, calcula su huella y **no escribe
+el token en ningún archivo**. Si Windows lo bloquea por la política de ejecución, se ejecuta con
+`powershell -ExecutionPolicy Bypass -File`, sin cambiar la política del equipo.
+
+La rotación no es solo por higiene: un token filtrado permite enviar mensajes, transferir y cerrar
+conversaciones en nombre del bot, y la API no distingue quién está detrás. Vale la pena rotarlo también
+cuando alguien deja el equipo.
+
 ## Operación segura
 
 - Rate limiting por IP, usuario, tenant, conversación, carga y ejecución de agente.
