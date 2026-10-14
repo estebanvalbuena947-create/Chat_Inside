@@ -380,6 +380,7 @@ export default function HomePage(): React.ReactNode {
   // Multimedia por sede: se elige la sede, se pega un enlace y se ve lo que ya hay. Se reutilizan
   // las clases del panel de etiquetas, que ya trae su estilo.
   const [isBranchMediaOpen, setIsBranchMediaOpen] = useState(false);
+  const [isBranchManagerOpen, setIsBranchManagerOpen] = useState(false);
   const [branchMediaBranches, setBranchMediaBranches] = useState<
     Array<{ name: string; slug: string }>
   >([]);
@@ -395,6 +396,9 @@ export default function HomePage(): React.ReactNode {
   const [branchMediaNotice, setBranchMediaNotice] = useState<string | null>(null);
   const [isLoadingBranchMedia, setIsLoadingBranchMedia] = useState(false);
   const [isImportingBranchMedia, setIsImportingBranchMedia] = useState(false);
+  const [branchName, setBranchName] = useState('');
+  const [branchManagerNotice, setBranchManagerNotice] = useState<string | null>(null);
+  const [isSavingBranch, setIsSavingBranch] = useState(false);
 
   async function loadBranchMedia(slug: string): Promise<void> {
     setIsLoadingBranchMedia(true);
@@ -442,6 +446,49 @@ export default function HomePage(): React.ReactNode {
       setBranchMediaNotice('No se pudieron leer las sedes.');
     } finally {
       setIsLoadingBranchMedia(false);
+    }
+  }
+
+  async function openBranchManager(): Promise<void> {
+    setIsBranchManagerOpen(true);
+    setBranchManagerNotice(null);
+    try {
+      const response = await fetch('/api/branches', { cache: 'no-store' });
+      const body = (await response.json().catch(() => ({}))) as {
+        branches?: Array<{ name: string; slug: string }>;
+        error?: string;
+      };
+      if (!response.ok) {
+        setBranchManagerNotice(body.error ?? 'No se pudieron leer las sedes.');
+        return;
+      }
+      setBranchMediaBranches(Array.isArray(body.branches) ? body.branches : []);
+    } catch {
+      setBranchManagerNotice('No se pudieron leer las sedes.');
+    }
+  }
+
+  async function createBranch(): Promise<void> {
+    setIsSavingBranch(true);
+    setBranchManagerNotice(null);
+    try {
+      const response = await fetch('/api/branches', {
+        body: JSON.stringify({ name: branchName }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST'
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setBranchManagerNotice(body.error ?? 'No se pudo crear la sede.');
+        return;
+      }
+      setBranchName('');
+      await openBranchManager();
+      setBranchManagerNotice('Sede creada.');
+    } catch {
+      setBranchManagerNotice('No se pudo crear la sede.');
+    } finally {
+      setIsSavingBranch(false);
     }
   }
 
@@ -4181,6 +4228,16 @@ export default function HomePage(): React.ReactNode {
                 <span>Clasifica las conversaciones para encontrarlas despues.</span>
               </button>
             )}
+            {tenant?.role === 'admin' && (
+              <button
+                className="settings-card"
+                onClick={() => void openBranchManager()}
+                type="button"
+              >
+                <strong>Sedes</strong>
+                <span>Agrega y consulta las sedes disponibles para el equipo y su multimedia.</span>
+              </button>
+            )}
             <button
               className="settings-card"
               onClick={() => {
@@ -4213,9 +4270,72 @@ export default function HomePage(): React.ReactNode {
           </p>
         </section>
       )}{' '}
+      {isBranchManagerOpen && tenant?.role === 'admin' && (
+        <section className="internal-label-manager settings-dialog" aria-label="Administrar sedes">
+          <div className="internal-label-manager-heading">
+            <div>
+              <strong>Sedes</strong>
+              <p>Administra las sucursales que el equipo puede elegir.</p>
+            </div>
+            <button
+              aria-label="Cerrar administración de sedes"
+              onClick={() => setIsBranchManagerOpen(false)}
+              type="button"
+            >
+              ×
+            </button>
+          </div>
+          <div className="settings-dialog-layout">
+            <form
+              className="branch-create-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void createBranch();
+              }}
+            >
+              <h2>Nueva sede</h2>
+              <p>El nombre genera un identificador interno único. Por ejemplo: Roma.</p>
+              <label>
+                Nombre de la sede
+                <input
+                  maxLength={80}
+                  onChange={(event) => setBranchName(event.target.value)}
+                  placeholder="Ej. Roma"
+                  value={branchName}
+                />
+              </label>
+              <button
+                className="internal-label-save"
+                disabled={!branchName.trim() || isSavingBranch}
+                type="submit"
+              >
+                {isSavingBranch ? 'Creando…' : 'Crear sede'}
+              </button>
+              {branchManagerNotice && (
+                <p className="settings-dialog-notice">{branchManagerNotice}</p>
+              )}
+            </form>
+            <div className="branch-list-panel">
+              <h2>Sedes activas</h2>
+              {branchMediaBranches.length === 0 ? (
+                <p>Aún no hay sedes creadas.</p>
+              ) : (
+                <ul>
+                  {branchMediaBranches.map((branch) => (
+                    <li key={branch.slug}>
+                      <strong>{branch.name}</strong>
+                      <span>{branch.slug}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
       {isBranchMediaOpen && (tenant?.role === 'admin' || tenant?.role === 'supervisor') && (
         <section
-          className="internal-label-manager branch-media-manager"
+          className="internal-label-manager settings-dialog branch-media-manager"
           aria-label="Multimedia por sede"
         >
           <div className="internal-label-manager-heading">

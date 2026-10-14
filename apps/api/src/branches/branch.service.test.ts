@@ -1,4 +1,8 @@
-import { ForbiddenException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  UnprocessableEntityException
+} from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { crearClienteSupabase } from '../tools/supabase-chain.fixture';
@@ -100,5 +104,83 @@ describe('sedes del espacio', () => {
     await servicio.list('Bearer token', 'tenant-1');
 
     expect(llamadasDe('branches').some((llamada) => llamada.metodo === 'order')).toBe(true);
+  });
+});
+
+describe('crear sedes', () => {
+  it('no llega a escribir si la persona no es administradora', async () => {
+    const { cliente, llamadasDe } = crearClienteSupabase({ branches: { data: null, error: null } });
+    const servicio = new BranchService(
+      {
+        authenticate: vi.fn().mockResolvedValue({ userId: 'user-1' })
+      } as unknown as RequestAuthenticator,
+      {
+        assertRole: vi.fn(async () => {
+          throw new ForbiddenException('Sin permiso.');
+        })
+      } as unknown as TenantAccessService,
+      { create: () => cliente } as unknown as SupabaseServerClientFactory
+    );
+
+    await expect(
+      servicio.create('Bearer token', 'tenant-1', { name: 'Roma' })
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(llamadasDe('branches')).toHaveLength(0);
+  });
+
+  it('solo permite a un administrador crear una sede y normaliza su slug', async () => {
+    const { argumentosDe, cliente } = crearClienteSupabase({
+      branches: { data: { id: 'roma-id', name: 'Roma', slug: 'roma' }, error: null }
+    });
+    const servicio = new BranchService(
+      {
+        authenticate: vi.fn().mockResolvedValue({ userId: 'user-1' })
+      } as unknown as RequestAuthenticator,
+      {
+        assertRole: vi.fn(async () => undefined)
+      } as unknown as TenantAccessService,
+      { create: () => cliente } as unknown as SupabaseServerClientFactory
+    );
+
+    await expect(
+      servicio.create('Bearer token', 'tenant-1', { name: 'Roma' })
+    ).resolves.toMatchObject({
+      item: { name: 'Roma', slug: 'roma' }
+    });
+    expect(argumentosDe('branches', 'insert')).toEqual([
+      { is_active: true, name: 'Roma', slug: 'roma', tenant_id: 'tenant-1' }
+    ]);
+  });
+
+  it('rechaza un nombre que no puede formar un slug', async () => {
+    const { cliente } = crearClienteSupabase({ branches: { data: null, error: null } });
+    const servicio = new BranchService(
+      {
+        authenticate: vi.fn().mockResolvedValue({ userId: 'user-1' })
+      } as unknown as RequestAuthenticator,
+      { assertRole: vi.fn(async () => undefined) } as unknown as TenantAccessService,
+      { create: () => cliente } as unknown as SupabaseServerClientFactory
+    );
+
+    await expect(
+      servicio.create('Bearer token', 'tenant-1', { name: '---' })
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it('convierte un duplicado del tenant en un conflicto claro', async () => {
+    const { cliente } = crearClienteSupabase({
+      branches: { data: null, error: { code: '23505' } }
+    });
+    const servicio = new BranchService(
+      {
+        authenticate: vi.fn().mockResolvedValue({ userId: 'user-1' })
+      } as unknown as RequestAuthenticator,
+      { assertRole: vi.fn(async () => undefined) } as unknown as TenantAccessService,
+      { create: () => cliente } as unknown as SupabaseServerClientFactory
+    );
+
+    await expect(
+      servicio.create('Bearer token', 'tenant-1', { name: 'Roma' })
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

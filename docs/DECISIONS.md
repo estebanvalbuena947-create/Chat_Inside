@@ -1186,3 +1186,11 @@ En el mismo corte se reconoció el PDF por sus bytes (`%PDF-`) y se añadió `ap
 de la conversación. Sin lo primero, la descarga se completaba y el archivo se descartaba por
 desconocido; sin lo segundo, la escritura se rechazaba. Las dos cosas juntas eran la razón de que
 ningún comprobante en PDF llegara nunca a la validación.
+
+## Las sedes se crean como configuración, no como una lista en código (2026-10-14)
+
+La pantalla de Configuración permite que un administrador cree sedes como «Roma» y las siguientes
+que se requieran. El servidor convierte el nombre a un slug estable y aplica la unicidad por tenant;
+la interfaz no mantiene una lista de nombres ni escribe directamente en la base. Crear una sede no
+borra ni modifica conversaciones existentes, y si una futura sede necesita una referencia externa se
+agrega como configuración explícita en su propio corte.

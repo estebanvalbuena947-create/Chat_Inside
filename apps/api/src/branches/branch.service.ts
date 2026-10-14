@@ -1,4 +1,11 @@
-import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  UnprocessableEntityException
+} from '@nestjs/common';
+import { z } from 'zod';
 import { RequestAuthenticator } from '../auth/request-authenticator';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantAccessService } from '../tenants/tenant-access.service';
@@ -42,5 +49,51 @@ export class BranchService {
       }),
       tenantId
     };
+  }
+
+  /** Un administrador crea una sede; nunca se usa el nombre visible como condición de negocio. */
+  async create(authorization: unknown, tenantId: string, rawInput: unknown): Promise<unknown> {
+    const identity = await this.requestAuthenticator.authenticate(authorization);
+    await this.tenantAccessService.assertRole(identity.userId, tenantId, ['admin']);
+
+    const parsed = z.object({ name: z.string().trim().min(1).max(80) }).safeParse(rawInput);
+    if (!parsed.success) {
+      throw new UnprocessableEntityException('Escribe un nombre de sede de hasta 80 caracteres.');
+    }
+
+    const name = parsed.data.name;
+    const slug = this.slugFromName(name);
+    if (!slug) throw new UnprocessableEntityException('El nombre debe contener letras o números.');
+
+    const supabase = this.supabaseServerClientFactory.create();
+    const { data, error } = await supabase
+      .from('branches')
+      .insert({ is_active: true, name, slug, tenant_id: tenantId })
+      .select('id, name, slug')
+      .single();
+    if (error?.code === '23505') {
+      throw new ConflictException('Ya existe una sede con ese nombre.');
+    }
+    if (error || !data) throw new InternalServerErrorException('No fue posible crear la sede.');
+
+    const branch = data as Record<string, unknown>;
+    return {
+      item: {
+        id: String(branch.id ?? ''),
+        name: String(branch.name ?? name),
+        slug: String(branch.slug ?? slug)
+      },
+      tenantId
+    };
+  }
+
+  private slugFromName(name: string): string {
+    return name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 41);
   }
 }

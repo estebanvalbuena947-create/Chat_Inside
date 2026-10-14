@@ -33,3 +33,21 @@ export async function GET(): Promise<NextResponse> {
     status: response.status
   });
 }
+
+export async function POST(request: Request): Promise<NextResponse> {
+  const context = await getSingleTenantApiContext();
+  if (isContextError(context)) {
+    return NextResponse.json({ error: context.error }, { status: context.status });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const response = await fetch(`${context.apiUrl}/v1/tenants/${context.tenant.id}/branches`, {
+    body: JSON.stringify({ name: body.name }),
+    headers: { Authorization: context.authorization, 'Content-Type': 'application/json' },
+    method: 'POST'
+  });
+  return new NextResponse(await response.text(), {
+    headers: { 'Content-Type': 'application/json' },
+    status: response.status
+  });
+}

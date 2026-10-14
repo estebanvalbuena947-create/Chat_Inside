@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Inject, Param } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Post } from '@nestjs/common';
 import { BranchService } from './branch.service';
 
 /**
@@ -18,5 +18,16 @@ export class BranchController {
     @Headers('authorization') authorization: string | undefined
   ): Promise<unknown> {
     return this.service.list(authorization, tenantId);
+  }
+
+  /** Crea una sede dentro del espacio; el nombre se convierte en su slug estable. */
+  @Post()
+  @HttpCode(201)
+  async crear(
+    @Param('tenantId') tenantId: string,
+    @Body() body: unknown,
+    @Headers('authorization') authorization: string | undefined
+  ): Promise<unknown> {
+    return this.service.create(authorization, tenantId, body);
   }
 }

@@ -4451,6 +4451,117 @@ div:has(#won-dialog-title) button:not([aria-label]) {
   }
 }
 
+/* Las herramientas de Configuración se abren como un espacio de trabajo contenido, no como una
+   página interminable: el encabezado permanece claro y el contenido aprovecha el ancho disponible. */
+.internal-label-manager.settings-dialog,
+.canned-response-manager {
+  position: fixed;
+  inset: auto;
+  top: 50%;
+  left: calc(50% + var(--nav-width, 56px) / 2);
+  z-index: 26;
+  width: min(1080px, calc(100vw - var(--nav-width, 56px) - 48px));
+  max-height: min(760px, calc(100dvh - 48px));
+  height: auto;
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-md);
+  transform: translate(-50%, -50%);
+}
+.settings-dialog .internal-label-manager-heading {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.settings-dialog .internal-label-manager-heading p {
+  margin: 4px 0 0;
+  color: var(--brand-tinta-suave);
+  font-size: 12px;
+  font-weight: 400;
+}
+.settings-dialog-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
+  gap: 24px;
+  padding-top: 20px;
+}
+.branch-create-form,
+.branch-list-panel {
+  padding: 18px;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface-muted);
+}
+.branch-create-form h2,
+.branch-list-panel h2 {
+  margin: 0;
+  color: var(--brand-matcha-oscuro);
+  font-size: 15px;
+}
+.branch-create-form > p,
+.branch-list-panel > p {
+  margin: 7px 0 14px;
+  color: var(--brand-tinta-suave);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.branch-create-form label {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+  color: var(--brand-tinta);
+  font-size: 12px;
+  font-weight: 700;
+}
+.branch-create-form input {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  font: inherit;
+}
+.settings-dialog-notice {
+  margin: 12px 0 0;
+  color: var(--brand-matcha-oscuro);
+  font-size: 12px;
+}
+.branch-list-panel ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.branch-list-panel li {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+}
+.branch-list-panel li span {
+  color: var(--brand-tinta-suave);
+  font-size: 11px;
+}
+@media (max-width: 720px) {
+  .internal-label-manager.settings-dialog,
+  .canned-response-manager {
+    left: 50%;
+    width: calc(100vw - 28px);
+    max-height: calc(100dvh - 28px);
+    padding: 18px;
+  }
+  .settings-dialog-layout {
+    grid-template-columns: 1fr;
+  }
+  .branch-media-manager {
+    display: flex;
+  }
+}
+
 /* Sistema visual operativo: conserva la paleta Inside Spa y unifica todas las superficies. */
 :root {
   --ui-canvas: #f7f4ed;
