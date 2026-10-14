@@ -1,5 +1,5 @@
 {
-  "name": "4.5 Confirmar pago manual — Pabau y plantilla automática (v2 WEPLASH)",
+  "name": "4.5 UNIFICADO - Weplash (ZNO) + ManyChat",
   "nodes": [
     {
       "parameters": {
@@ -12,13 +12,13 @@
           ]
         }
       },
-      "id": "d1717fab-fbbd-49cd-abfd-1dbf448a1e6a",
+      "id": "d7938fd2-66e8-4c1c-9aa5-7a8276b4cc06",
       "name": "Revisar pagos manuales",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        3744,
-        7520
+        17536,
+        15200
       ]
     },
     {
@@ -29,13 +29,13 @@
           "queryReplacement": "={{ [String($execution.id)] }}"
         }
       },
-      "id": "2dcf4879-ab33-4434-8c0a-a801e5bebd23",
+      "id": "0897a42f-96c8-4311-9c9b-9c03151e0c56",
       "name": "Tomar pago manual",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        3968,
-        7520
+        17760,
+        15200
       ],
       "retryOnFail": true,
       "credentials": {
@@ -49,26 +49,26 @@
       "parameters": {
         "jsCode": "const r=$input.first().json.resultado;if(!r)return [];return [{json:typeof r==='string'?JSON.parse(r):r}];"
       },
-      "id": "4884b30f-acaa-4778-85eb-b36fd2f96fd2",
+      "id": "b4338aa3-0b40-4c00-839a-34140ffe949f",
       "name": "Contexto de pago manual",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4192,
-        7520
+        17984,
+        15200
       ]
     },
     {
       "parameters": {
         "jsCode": "const d = $input.first().json || {};\n\nfunction lista(valor) {\n  if (valor === undefined || valor === null || valor === '') return [];\n  if (Array.isArray(valor)) return valor.flatMap(lista);\n  if (typeof valor === 'string') {\n    const texto = valor.trim();\n    if (!texto) return [];\n    try {\n      const convertido = JSON.parse(texto);\n      if (Array.isArray(convertido)) return convertido.flatMap(lista);\n    } catch {}\n    return texto.split(/\\s*(?:,|\\+|;|\\|)\\s*/).filter(Boolean);\n  }\n  return [valor];\n}\n\nconst BASE = {\n  '24077': {\n    agua: 'https://api.oauth.pabau.com/cg50463j391eb4i6hb9b315idc8id5ga90g493jf29734a4e9aj3ha5a5gb52a65',\n    masaje: 'https://api.oauth.pabau.com/cg50463j391eb4i6hb9b315idc8id5ga90g493jf29734a4e9aj3ha5a5gb52a65',\n  },\n  '24079': {\n    agua: 'https://api.oauth.pabau.com/28006aa905jfdg1jd39cbbh878bajb72h4be3ba3a339314cchdife73i3e80g1f',\n    masaje: 'https://api.oauth.pabau.com/Xvbasv8U5qwLi3SsD79GycTxjxoXTyiIeLUh6urzOQU',\n  },\n  '24080': {\n    agua: 'https://api.oauth.pabau.com/a4dj4ebj49g2b15bf841hd0bafi3hb7icccdf9494gf1cc22id9606j79d29ig91',\n    masaje: 'https://api.oauth.pabau.com/a4dj4ebj49g2b15bf841hd0bafi3hb7icccdf9494gf1cc22id9606j79d29ig91',\n  },\n  '24082': {\n    agua: 'https://api.oauth.pabau.com/i15b16i0cah9aif6263d82h7a7h72b0hcef5ac1698d2f2ih62ebia7f0j5e571d',\n    masaje: 'https://api.oauth.pabau.com/i15b16i0cah9aif6263d82h7a7h72b0hcef5ac1698d2f2ih62ebia7f0j5e571d',\n  },\n  '24221': {\n    agua: 'https://api.oauth.pabau.com/F9jYXMXcdM98vl9kvo1JsRglq2YHuIB2N7FSLPWFyRg',\n    masaje: 'https://api.oauth.pabau.com/F9jYXMXcdM98vl9kvo1JsRglq2YHuIB2N7FSLPWFyRg',\n  },\n};\n\nconst sucursalPabau = String(d.sucursal ?? '').trim();\nconst config = BASE[sucursalPabau];\nif (!config) throw new Error('No existe configuración Pabau para verificar la sucursal ' + d.sucursal);\n\nconst agua = lista(d.pabau_citas_agua_ids).map(String).filter(Boolean).map(appointment_id => ({\n  appointment_id, pabau_base: config.agua, tipo_cita_pabau: 'agua',\n}));\nconst masaje = lista(d.pabau_citas_masaje_ids).map(String).filter(Boolean).map(appointment_id => ({\n  appointment_id, pabau_base: config.masaje, tipo_cita_pabau: 'masaje',\n}));\nconst necesarias=Number(d.numero_personas||d.personas||d.terapeutas_necesarios);\nif(!Number.isInteger(necesarias)||necesarias<1||masaje.length!==necesarias||new Set(masaje.map(x=>x.appointment_id)).size!==necesarias)throw Error('CITAS_MASAJE_INCOMPLETAS');\nif(d.service_agua_id&&agua.length!==Number(d.jacuzzis_necesarios||1))throw Error('CITAS_AGUA_INCOMPLETAS');\nconst unicas = [];\nconst vistos = new Set();\nfor (const cita of [...agua, ...masaje]) {\n  const clave = cita.pabau_base + '|' + cita.appointment_id;\n  if (vistos.has(clave)) continue;\n  vistos.add(clave);\n  unicas.push(cita);\n}\nif (!unicas.length) throw new Error('Supabase indica una retención Pabau, pero no contiene appointment_id para verificar');\n\nreturn unicas.map(cita => ({ json: {\n  ...cita,\n  borrador_id: d.id,\n  sucursal_pabau: sucursalPabau,\n  credencial_pabau_scope: sucursalPabau + ':' + cita.tipo_cita_pabau,\n  total_citas_pabau_esperadas: unicas.length,\n} }));"
       },
-      "id": "37e4c9b5-9aa6-4255-81f9-817e2d470ad0",
+      "id": "45e344c6-09de-4288-84f4-66cbb8d81ace",
       "name": "Preparar citas existentes para actualizar nota",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        6656,
-        7296
+        20448,
+        14976
       ],
       "onError": "continueErrorOutput",
       "notes": "Configuración única por sucursal y tipo de cita, igual a 4.1. Polanco conserva claves separadas para agua y masaje. Las siguientes operaciones reutilizan esta misma selección."
@@ -86,13 +86,13 @@
           }
         }
       },
-      "id": "87815e22-6c58-4c13-afd9-474874e59eeb",
+      "id": "9ce5d9f8-1c48-4712-b19a-933e59f5a657",
       "name": "Leer nota actual de cita Pabau",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        6880,
-        7376
+        20672,
+        15056
       ],
       "retryOnFail": true,
       "onError": "continueErrorOutput",
@@ -102,30 +102,31 @@
       "parameters": {
         "jsCode": "const reserva = $('Contexto de pago manual').first().json;\nconst preparadas = $('Preparar citas existentes para actualizar nota').all().map(item => item.json);\nconst respuestas = $input.all();\nfunction objeto(v) {\n  for (let i=0; i<3 && typeof v==='string'; i++) {\n    try { v=JSON.parse(v); } catch { return null; }\n  }\n  return v && typeof v==='object' ? v : null;\n}\nconst claveNormalizada = k => String(k).replace(/[^a-z0-9]/gi,'').toLowerCase();\nfunction campo(v,nombres) {\n  if (!v || typeof v!=='object' || Array.isArray(v)) return undefined;\n  for (const nombre of nombres) {\n    const key=Object.keys(v).find(k=>claveNormalizada(k)===nombre);\n    if (key!==undefined && v[key]!==undefined) return v[key];\n  }\n  return undefined;\n}\nfunction idCita(v) {\n  const valor=campo(v,['appointmentid','bookingid','id']);\n  return valor===undefined || valor===null ? '' : String(valor).trim();\n}\nfunction leerNota(cita) {\n  const v=campo(cita,['note','notes','appointmentnote','appointmentnotes']);\n  return v===null ? '' : typeof v==='string' ? v : null;\n}\nconst contenedoresPabau = new Set(['body','data','appointment','appointments','booking','bookings','result','results','response','items','rows','records','details']);\nfunction citaDesdeDetalles(envoltorio,detalles) {\n  const clientes=campo(envoltorio,['client','clients']);\n  const cliente=Array.isArray(clientes) && clientes.length===1 ? objeto(clientes[0]) : (!Array.isArray(clientes)?objeto(clientes):null);\n  const ubicacion=objeto(campo(detalles,['location']));\n  // Keep the appointment's own ID/note together with its enclosing client.\n  return {\n    ...envoltorio,\n    ...detalles,\n    contact_id:campo(detalles,['contactid','clientid']) ?? campo(envoltorio,['contactid','clientid']) ?? campo(cliente,['id']),\n    location_id:campo(detalles,['locationid','branchid']) ?? campo(envoltorio,['locationid','branchid']) ?? campo(ubicacion,['id']),\n  };\n}\nfunction buscar(v,id,nivel=0) {\n  v=objeto(v);\n  if (!v || nivel>8) return null;\n  if (Array.isArray(v)) {\n    for (const item of v) { const r=buscar(item,id,nivel+1); if (r) return r; }\n    return null;\n  }\n  const detalles=objeto(campo(v,['details']));\n  if (detalles && idCita(detalles)===String(id).trim()) return citaDesdeDetalles(v,detalles);\n  const coincide=idCita(v)===String(id).trim();\n  if (coincide && leerNota(v)!==null) return v;\n  for (const key of Object.keys(v)) {\n    if (!contenedoresPabau.has(claveNormalizada(key))) continue;\n    const r=buscar(v[key],id,nivel+1); if (r) return r;\n  }\n  return coincide ? v : null;\n}\nfunction diagnosticoPabau(v) {\n  const raiz=objeto(v), ids=new Set();\n  function recorrer(x,nivel=0) {\n    x=objeto(x); if (!x || nivel>8 || ids.size>=10) return;\n    if (Array.isArray(x)) { for (const a of x.slice(0,30)) recorrer(a,nivel+1); return; }\n    const id=idCita(x); if (/^\\d+$/.test(id)) ids.add(id);\n    for (const k of Object.keys(x)) if (contenedoresPabau.has(claveNormalizada(k))) recorrer(x[k],nivel+1);\n  }\n  recorrer(raiz);\n  // Structural diagnostics only: no raw body, client notes, URLs or API keys.\n  return {formato_respuesta:raiz ? (Array.isArray(raiz)?'array':'objeto') : 'no_json',campos_respuesta:raiz && !Array.isArray(raiz)?Object.keys(raiz).filter(k=>/^[a-z_][a-z0-9_ -]{0,35}$/i.test(k)).slice(0,20):[],ids_devuelto_por_api:[...ids]};\n}\n\nfunction presente(v) { return v !== undefined && v !== null && String(v).trim() !== ''; }\nfunction comparar(cita, claves, esperado, motivo, motivos) {\n  const valor = campo(cita,claves.map(claveNormalizada));\n  if (presente(valor) && presente(esperado) && String(valor) !== String(esperado)) motivos.push(motivo);\n}\nconst detalle = preparadas.map((esperada,index)=>{\n  const item = respuestas.find(r=>r.pairedItem && !Array.isArray(r.pairedItem) && r.pairedItem.item === index) ?? respuestas[index];\n  const respuesta = item?.json ?? {};\n  const cuerpo = objeto(respuesta.body ?? respuesta.data ?? respuesta);\n  const codigo = Number(respuesta.statusCode ?? respuesta.status_code ?? (respuesta.error ? 0 : 200));\n  const cita = buscar(cuerpo,esperada.appointment_id);\n  const motivos=[];\n  if (!item) motivos.push('SIN_RESPUESTA');\n  else if (codigo === 401 || codigo === 403) motivos.push('ACCESO_PABAU_DENEGADO');\n  else if (codigo === 404) motivos.push('CITA_NO_ENCONTRADA');\n  else if (codigo < 200 || codigo >= 300 || respuesta.error || respuesta.success === false || ['error','failed'].includes(String(cuerpo?.status || '').toLowerCase()) || campo(cuerpo,['success']) === false || campo(cuerpo,['status']) === false || campo(cuerpo,['error']) || campo(cita,['success']) === false) motivos.push('ERROR_CONSULTA_PABAU');\n  if (!cita && !motivos.length) motivos.push('RESPUESTA_SIN_ID_ESPERADO');\n  const estado = String(campo(cita,['status','appointmentstatus']) ?? '').trim().toLowerCase();\n  if (cita && (['cancelled','canceled','deleted','void','expired','cancelada','cancelado'].includes(estado) || [true,1,'1'].includes(campo(cita,['deleted'])) || [true,1,'1'].includes(campo(cita,['cancelled'])))) motivos.push('CITA_NO_ACTIVA');\n  if (cita) {\n    comparar(cita,['contact_id','client_id','contactId'],reserva.contact_id,'CONTACTO_NO_COINCIDE',motivos);\n    comparar(cita,['location_id','branch_id'],reserva.sucursal,'SUCURSAL_NO_COINCIDE',motivos);\n  }\n  const notaActual = leerNota(cita);\n  if (cita && notaActual === null) motivos.push('NOTA_ACTUAL_NO_DISPONIBLE');\n  return {appointment_id:String(esperada.appointment_id),tipo:esperada.tipo_cita_pabau,sucursal_pabau:esperada.sucursal_pabau,credencial_pabau_scope:esperada.credencial_pabau_scope,...diagnosticoPabau(cuerpo),existe:!!cita && motivos.length===0,estado:estado||null,codigo_http:codigo,motivos,titulo_actual:cita?.title ?? null,nota_actual:notaActual};\n});\nconst todasExisten=detalle.length>0 && respuestas.length===preparadas.length && detalle.every(x=>x.existe);\nreturn [{json:{...reserva,citas_pabau_verificadas:todasExisten,citas_pabau_esperadas:preparadas.length,citas_pabau_existentes:detalle.filter(x=>x.existe).length,detalle_verificacion_pabau:detalle}}];\n"
       },
-      "id": "c8422515-8a9e-4be0-8938-d5524322c492",
+      "id": "45c4a2d8-a4d1-401a-a2ba-131f4e3c589f",
       "name": "Validar lectura de nota e ID de cita",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        7104,
-        7440
+        20896,
+        15120
       ],
       "onError": "continueErrorOutput",
       "notes": "Decodifica data como JSON y lee appointments[].details.appointment_id y details.notes. Waiting y confirmations.confirmed=0 son válidos: 4.2 no modifica el estado de la cita en Pabau."
     },
     {
       "parameters": {
-        "jsCode": "function actualizarNotaPago(previa, nota, sesion) {\n  if (typeof previa !== 'string') throw new Error('No se pudo leer la nota actual de Pabau; no se sobrescribirá con texto vacío');\n  const pendiente = /Pre[\\s-]*reserva\\s+pendiente\\s+de\\s+pago\\.?(?:\\s*El\\s+abono\\s+se\\s+a(?:ñ|n)adir[aá]\\s+al\\s+validar\\s+el\\s+pago\\s+de\\s+Stripe\\.?)?/gi;\n  const anuncio = /El\\s+abono\\s+se\\s+a(?:ñ|n)adir[aá]\\s+al\\s+validar\\s+el\\s+pago\\s+de\\s+Stripe\\.?/gi;\n  const bloque = /(?:Pago confirmado:\\s*abono de|Abono recibido:)\\s*\\$[^\\r\\n]*?\\bPago validado por Stripe;\\s*sesi[oó]n\\s+([^\\s.]+)\\./gi;\n  let encontrada = false;\n  // Only replace our own pending/payment text; keep all other notes and payments.\n  let texto = previa.replace(bloque, (original, id) => {\n    if (id !== sesion) return original;\n    if (encontrada) return '';\n    encontrada = true;\n    return nota;\n  });\n  texto = texto.replace(pendiente, () => {\n    if (encontrada) return '';\n    encontrada = true;\n    return nota;\n  }).replace(anuncio, '').trim();\n  return encontrada ? texto : [texto, nota].filter(Boolean).join('\\n');\n}\n\nconst reserva = $input.first().json || {};\nif(reserva.citas_pabau_verificadas!==true)throw Error('CITAS_NO_VERIFICADAS');\nconst pago={monto_total:Math.round(Number(reserva.monto_pagado)*100),moneda:reserva.moneda_pago};\n\nfunction lista(valor) {\n  if (Array.isArray(valor)) return valor;\n  if (valor === null || valor === undefined || valor === '') return [];\n  if (typeof valor === 'string') {\n    try {\n      const parsed = JSON.parse(valor);\n      return Array.isArray(parsed) ? parsed : [valor];\n    } catch {\n      return valor.split(',').map(item => item.trim()).filter(Boolean);\n    }\n  }\n  return [valor];\n}\n\nconst monto = Number(pago.monto_total) / 100;\nif (!Number.isFinite(monto) || monto <= 0) throw new Error('Stripe no entregó un monto válido para la nota de Pabau');\nconst moneda = String(pago.moneda || 'mxn').toUpperCase();\nconst visible = monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\nconst nota = 'Pago manual verificado: abono de $'+visible+' '+moneda+'. Método: '+reserva.pago_manual_metodo+'. Referencia: '+reserva.pago_manual_referencia+'. Verificó: '+reserva.pago_manual_responsable+'. Registro: '+reserva.pago_manual_token+'.';\n\nconst consultas = $('Preparar citas existentes para actualizar nota').all().map(x => x.json);\nconst esperadas = [\n  ...lista(reserva.pabau_citas_agua_ids).map(id => ({id:String(id).trim(),tipo:'agua'})),\n  ...lista(reserva.pabau_citas_masaje_ids).map(id => ({id:String(id).trim(),tipo:'masaje'})),\n];\nconst citas = esperadas.map(esperada => {\n  const candidatas = consultas.filter(c => String(c.appointment_id).trim() === esperada.id && c.tipo_cita_pabau === esperada.tipo && String(c.sucursal_pabau) === String(reserva.sucursal).trim() && String(c.borrador_id) === String(reserva.id));\n  if (candidatas.length !== 1 || !candidatas[0].pabau_base) throw new Error('No hay una clave de sucursal inequívoca para actualizar la nota de la cita ' + esperada.id);\n  const c = candidatas[0];\n  return {appointment_id:esperada.id,pabau_base:c.pabau_base,tipo_cita_pabau:esperada.tipo,sucursal_pabau:c.sucursal_pabau,credencial_pabau_scope:c.credencial_pabau_scope};\n});\nif (!citas.length) throw new Error('La cita verificada en Pabau no contiene IDs para actualizar la nota');\nreturn citas.map(cita => ({ json: {\n  ...cita,\n  reserva_draft_id: reserva.id,\n  reserva_contexto: reserva,\n  nota_pago_pabau: (() => {\n    const verificadas = $('Validar lectura de nota e ID de cita').first().json.detalle_verificacion_pabau || [];\n    const verificada = verificadas.find(x => String(x.appointment_id) === String(cita.appointment_id) && x.tipo === cita.tipo_cita_pabau && x.existe === true);\n    if (!verificada) throw new Error('No se leyó la nota original de la cita ' + cita.appointment_id);\n    const previa = verificada.nota_actual;\n    return previa.includes('Registro: '+reserva.pago_manual_token+'.')?previa:[previa.replace(/Pre[\\s-]*reserva\\s+pendiente\\s+de\\s+pago\\.?/gi,'').replace(/El\\s+abono\\s+se\\s+a(?:ñ|n)adir[aá]\\s+al\\s+validar\\s+el\\s+pago\\s+de\\s+Stripe\\.?/gi,''),nota].filter(Boolean).join('\\n');\n  })(),\n  total_notas_esperadas: citas.length,\n} }));"
+        "jsCode": "function actualizarNotaPago(previa, nota, sesion) {\n  if (typeof previa !== 'string') throw new Error('No se pudo leer la nota actual de Pabau; no se sobrescribirá con texto vacío');\n  const pendiente = /Pre[\\s-]*reserva\\s+pendiente\\s+de\\s+pago\\.?(?:\\s*El\\s+abono\\s+se\\s+a(?:ñ|n)adir[aá]\\s+al\\s+validar\\s+el\\s+pago\\s+de\\s+Stripe\\.?)?/gi;\n  const anuncio = /El\\s+abono\\s+se\\s+a(?:ñ|n)adir[aá]\\s+al\\s+validar\\s+el\\s+pago\\s+de\\s+Stripe\\.?/gi;\n  const bloque = /(?:Pago confirmado:\\s*abono de|Abono recibido:)\\s*\\$[^\\r\\n]*?\\bPago validado por Stripe;\\s*sesi[oó]n\\s+([^\\s.]+)\\./gi;\n  let encontrada = false;\n  // Only replace our own pending/payment text; keep all other notes and payments.\n  let texto = previa.replace(bloque, (original, id) => {\n    if (id !== sesion) return original;\n    if (encontrada) return '';\n    encontrada = true;\n    return nota;\n  });\n  texto = texto.replace(pendiente, () => {\n    if (encontrada) return '';\n    encontrada = true;\n    return nota;\n  }).replace(anuncio, '').trim();\n  return encontrada ? texto : [texto, nota].filter(Boolean).join('\\n');\n}\n\nconst reserva = $input.first().json || {};\nif(reserva.citas_pabau_verificadas!==true)throw Error('CITAS_NO_VERIFICADAS');\nconst pago={monto_total:Math.round(Number(reserva.monto_pagado)*100),moneda:reserva.moneda_pago};\n\nfunction lista(valor) {\n  if (Array.isArray(valor)) return valor;\n  if (valor === null || valor === undefined || valor === '') return [];\n  if (typeof valor === 'string') {\n    try {\n      const parsed = JSON.parse(valor);\n      return Array.isArray(parsed) ? parsed : [valor];\n    } catch {\n      return valor.split(',').map(item => item.trim()).filter(Boolean);\n    }\n  }\n  return [valor];\n}\n\n// Importe REAL recibido (indicacion del dueno): si el comprobante registrado en la\n// pre-reserva trae el monto, ese manda; nunca se usa el deposito calculado ($500 x\n// persona). Si no hay comprobante con monto, se usa el monto de la confirmacion manual.\nconst montoComprobante = Number(\n  reserva?.comprobante_revision_datos?.monto_recibido ??\n  reserva?.comprobante_revision_datos?.monto_pago ??\n  reserva?.comprobante_revision_datos?.monto_documento ?? 0\n);\nconst montoInformado = Number(pago?.monto_total) / 100;\nconst monto = Number.isFinite(montoComprobante) && montoComprobante > 0 ? montoComprobante : montoInformado;\nif (!Number.isFinite(monto) || monto <= 0) throw new Error('El pago manual no trae un monto válido para la nota de Pabau');\nconst moneda = String(pago.moneda || 'mxn').toUpperCase();\nconst visible = monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\nconst nota = 'Pago manual verificado: abono de $'+visible+' '+moneda+'. Método: '+reserva.pago_manual_metodo+'. Referencia: '+reserva.pago_manual_referencia+'. Verificó: '+reserva.pago_manual_responsable+'. Registro: '+reserva.pago_manual_token+'.';\n\nconst consultas = $('Preparar citas existentes para actualizar nota').all().map(x => x.json);\nconst esperadas = [\n  ...lista(reserva.pabau_citas_agua_ids).map(id => ({id:String(id).trim(),tipo:'agua'})),\n  ...lista(reserva.pabau_citas_masaje_ids).map(id => ({id:String(id).trim(),tipo:'masaje'})),\n];\nconst citas = esperadas.map(esperada => {\n  const candidatas = consultas.filter(c => String(c.appointment_id).trim() === esperada.id && c.tipo_cita_pabau === esperada.tipo && String(c.sucursal_pabau) === String(reserva.sucursal).trim() && String(c.borrador_id) === String(reserva.id));\n  if (candidatas.length !== 1 || !candidatas[0].pabau_base) throw new Error('No hay una clave de sucursal inequívoca para actualizar la nota de la cita ' + esperada.id);\n  const c = candidatas[0];\n  return {appointment_id:esperada.id,pabau_base:c.pabau_base,tipo_cita_pabau:esperada.tipo,sucursal_pabau:c.sucursal_pabau,credencial_pabau_scope:c.credencial_pabau_scope};\n});\nif (!citas.length) throw new Error('La cita verificada en Pabau no contiene IDs para actualizar la nota');\nreturn citas.map(cita => ({ json: {\n  ...cita,\n  reserva_draft_id: reserva.id,\n  reserva_contexto: reserva,\n  nota_pago_pabau: (() => {\n    const verificadas = $('Validar lectura de nota e ID de cita').first().json.detalle_verificacion_pabau || [];\n    const verificada = verificadas.find(x => String(x.appointment_id) === String(cita.appointment_id) && x.tipo === cita.tipo_cita_pabau && x.existe === true);\n    if (!verificada) throw new Error('No se leyó la nota original de la cita ' + cita.appointment_id);\n    const previa = verificada.nota_actual;\n    return previa.includes('Registro: '+reserva.pago_manual_token+'.')?previa:[previa.replace(/Pre[\\s-]*reserva\\s+pendiente\\s+de\\s+pago\\.?/gi,'').replace(/El\\s+abono\\s+se\\s+a(?:ñ|n)adir[aá]\\s+al\\s+validar\\s+el\\s+pago\\s+de\\s+Stripe\\.?/gi,''),nota].filter(Boolean).join('\\n');\n  })(),\n  total_notas_esperadas: citas.length,\n} }));"
       },
-      "id": "cb37b7be-96cf-44b4-b87d-a113e90fd555",
+      "id": "d5060e7f-9a00-4f4b-ad04-4b9fa978f724",
       "name": "Preparar notas de abono en retención Pabau",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        7328,
-        7520
+        21120,
+        15200
       ],
-      "onError": "continueErrorOutput"
+      "onError": "continueErrorOutput",
+      "notes": "WEPLASH v2 - Nota de Pabau con el importe REAL recibido (comprobante), no el deposito de Stripe."
     },
     {
       "parameters": {
@@ -151,13 +152,13 @@
           }
         }
       },
-      "id": "c63e40f9-461d-4219-b04e-445589098779",
+      "id": "33195831-c2eb-45c8-939b-45ba2a39b1b0",
       "name": "Actualizar nota de abono en Pabau",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        7552,
-        7584
+        21344,
+        15264
       ],
       "retryOnFail": true,
       "onError": "continueErrorOutput",
@@ -176,13 +177,13 @@
           }
         }
       },
-      "id": "45b95a77-a105-49a2-ac09-f510cf72d010",
+      "id": "19f70189-c49b-4294-b465-b28bd27b5d66",
       "name": "Releer nota de abono guardada en Pabau",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        7776,
-        7520
+        21568,
+        15200
       ],
       "retryOnFail": true,
       "onError": "continueErrorOutput"
@@ -191,13 +192,13 @@
       "parameters": {
         "jsCode": "const reserva = $('Preparar notas de abono en retención Pabau').first().json.reserva_contexto;\nif (!reserva?.id) throw new Error('Falta el contexto de la reserva para verificar el abono');\nconst preparadas = $('Preparar notas de abono en retención Pabau').all().map(x => x.json);\nconst actualizaciones = $('Actualizar nota de abono en Pabau').all().map(x => x.json || {});\nconst lecturas = $input.all().map(x => x.json || {});\nfunction objeto(v) {\n  for (let i=0; i<3 && typeof v==='string'; i++) {\n    try { v=JSON.parse(v); } catch { return null; }\n  }\n  return v && typeof v==='object' ? v : null;\n}\nconst claveNormalizada = k => String(k).replace(/[^a-z0-9]/gi,'').toLowerCase();\nfunction campo(v,nombres) {\n  if (!v || typeof v!=='object' || Array.isArray(v)) return undefined;\n  for (const nombre of nombres) {\n    const key=Object.keys(v).find(k=>claveNormalizada(k)===nombre);\n    if (key!==undefined && v[key]!==undefined) return v[key];\n  }\n  return undefined;\n}\nfunction idCita(v) {\n  const valor=campo(v,['appointmentid','bookingid','id']);\n  return valor===undefined || valor===null ? '' : String(valor).trim();\n}\nfunction leerNota(cita) {\n  const v=campo(cita,['note','notes','appointmentnote','appointmentnotes']);\n  return v===null ? '' : typeof v==='string' ? v : null;\n}\nconst contenedoresPabau = new Set(['body','data','appointment','appointments','booking','bookings','result','results','response','items','rows','records','details']);\nfunction citaDesdeDetalles(envoltorio,detalles) {\n  const clientes=campo(envoltorio,['client','clients']);\n  const cliente=Array.isArray(clientes) && clientes.length===1 ? objeto(clientes[0]) : (!Array.isArray(clientes)?objeto(clientes):null);\n  const ubicacion=objeto(campo(detalles,['location']));\n  // Keep the appointment's own ID/note together with its enclosing client.\n  return {\n    ...envoltorio,\n    ...detalles,\n    contact_id:campo(detalles,['contactid','clientid']) ?? campo(envoltorio,['contactid','clientid']) ?? campo(cliente,['id']),\n    location_id:campo(detalles,['locationid','branchid']) ?? campo(envoltorio,['locationid','branchid']) ?? campo(ubicacion,['id']),\n  };\n}\nfunction buscar(v,id,nivel=0) {\n  v=objeto(v);\n  if (!v || nivel>8) return null;\n  if (Array.isArray(v)) {\n    for (const item of v) { const r=buscar(item,id,nivel+1); if (r) return r; }\n    return null;\n  }\n  const detalles=objeto(campo(v,['details']));\n  if (detalles && idCita(detalles)===String(id).trim()) return citaDesdeDetalles(v,detalles);\n  const coincide=idCita(v)===String(id).trim();\n  if (coincide && leerNota(v)!==null) return v;\n  for (const key of Object.keys(v)) {\n    if (!contenedoresPabau.has(claveNormalizada(key))) continue;\n    const r=buscar(v[key],id,nivel+1); if (r) return r;\n  }\n  return coincide ? v : null;\n}\nfunction diagnosticoPabau(v) {\n  const raiz=objeto(v), ids=new Set();\n  function recorrer(x,nivel=0) {\n    x=objeto(x); if (!x || nivel>8 || ids.size>=10) return;\n    if (Array.isArray(x)) { for (const a of x.slice(0,30)) recorrer(a,nivel+1); return; }\n    const id=idCita(x); if (/^\\d+$/.test(id)) ids.add(id);\n    for (const k of Object.keys(x)) if (contenedoresPabau.has(claveNormalizada(k))) recorrer(x[k],nivel+1);\n  }\n  recorrer(raiz);\n  // Structural diagnostics only: no raw body, client notes, URLs or API keys.\n  return {formato_respuesta:raiz ? (Array.isArray(raiz)?'array':'objeto') : 'no_json',campos_respuesta:raiz && !Array.isArray(raiz)?Object.keys(raiz).filter(k=>/^[a-z_][a-z0-9_ -]{0,35}$/i.test(k)).slice(0,20):[],ids_devuelto_por_api:[...ids]};\n}\n\nfunction operacionValida(r) {\n  if (!r) return false;\n  const codigo = Number(r.statusCode ?? r.status_code ?? (r.error ? 0 : 200));\n  const b = objeto(r.body ?? r), d = objeto(b?.data);\n  return codigo >= 200 && codigo < 300 && !r.error && !campo(b,['error']) && !campo(d,['error']) && campo(b,['success']) !== false && campo(d,['success']) !== false && campo(b,['status']) !== false && campo(d,['status']) !== false;\n}\nconst normalizar = s => typeof s === 'string' ? s.replace(/\\r\\n/g,'\\n').trim() : null;\nconst detalle = preparadas.map((p,i) => {\n  const cita = buscar(lecturas[i],p.appointment_id);\n  const notaLeida = leerNota(cita);\n  const motivos = [];\n  if (!operacionValida(actualizaciones[i])) motivos.push('ERROR_ACTUALIZAR_NOTA');\n  if (!operacionValida(lecturas[i])) motivos.push('ERROR_RELEER_NOTA');\n  if (!cita) motivos.push('CITA_NO_ENCONTRADA_EN_RELECTURA');\n  if (notaLeida === null) motivos.push('NOTA_NO_DEVUELTA_POR_PABAU');\n  else if (normalizar(notaLeida) !== normalizar(p.nota_pago_pabau)) motivos.push('NOTA_NO_ACTUALIZADA');\n  return {appointment_id:p.appointment_id,nota_guardada:motivos.length === 0,sucursal_pabau:p.sucursal_pabau,credencial_pabau_scope:p.credencial_pabau_scope,...diagnosticoPabau(lecturas[i]?.body ?? lecturas[i]),motivos};\n});\nconst ok = detalle.length > 0 && actualizaciones.length === preparadas.length && lecturas.length === preparadas.length && detalle.every(x => x.nota_guardada);\nreturn [{json:{...reserva,notas_pabau_actualizadas:ok,notas_pabau_esperadas:preparadas.length,notas_pabau_exitosas:detalle.filter(x => x.nota_guardada).length,detalle_notas_pabau:detalle,motivo_revision:ok ? null : 'PAGO_CONFIRMADO_NOTA_PABAU_NO_GUARDADA'}}];\n"
       },
-      "id": "8ffefdd5-5e48-4509-a22c-955390e03e27",
+      "id": "4e320962-1459-4f89-bc84-5007482af43b",
       "name": "Validar notas de abono en Pabau",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        8000,
-        7440
+        21792,
+        15120
       ],
       "onError": "continueErrorOutput",
       "notes": "Decodifica data como JSON y lee appointments[].details.appointment_id y details.notes. Waiting y confirmations.confirmed=0 son válidos: 4.2 no modifica el estado de la cita en Pabau."
@@ -206,13 +207,13 @@
       "parameters": {
         "jsCode": "const d=$input.first().json;if(d.notas_pabau_actualizadas!==true)throw Error('PAGO_PROTEGIDO_NOTAS_PENDIENTES');return [{json:d}];"
       },
-      "id": "8be71e70-b065-4956-803d-66b146788047",
+      "id": "d78bb818-0658-4247-a6f4-b86ba86bf2b8",
       "name": "Exigir notas verificadas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        8224,
-        7376
+        22016,
+        15056
       ],
       "onError": "continueErrorOutput"
     },
@@ -224,13 +225,13 @@
           "queryReplacement": "={{ [JSON.stringify($json)] }}"
         }
       },
-      "id": "6f423c76-cf09-4462-a460-2bb0e812e29f",
+      "id": "2424f03c-ff47-485a-91f7-325dd20caef6",
       "name": "Finalizar pago manual",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        8448,
-        7344
+        22240,
+        15024
       ],
       "retryOnFail": true,
       "credentials": {
@@ -245,13 +246,13 @@
       "parameters": {
         "jsCode": "const r=$input.first().json.resultado;return [{json:typeof r==='string'?JSON.parse(r):r}];"
       },
-      "id": "65933aa7-3351-4848-9dc4-120fb06c0569",
+      "id": "0110892e-6923-4880-8549-c6d10a4bcd89",
       "name": "Reserva manual confirmada",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        8672,
-        7616
+        22640,
+        15008
       ]
     },
     {
@@ -262,13 +263,13 @@
           "queryReplacement": "={{ [$('Contexto de pago manual').first().json.pago_manual_token, String($execution.id)] }}"
         }
       },
-      "id": "8e0d39c9-0907-4907-a8eb-75700cd50658",
+      "id": "639c1a9c-c5e8-48e3-916e-85d09eeb9afb",
       "name": "Registrar pago para revisión",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        8672,
-        7344
+        22336,
+        15872
       ],
       "retryOnFail": true,
       "credentials": {
@@ -286,18 +287,31 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        8896,
-        7616
+        22864,
+        15008
       ],
-      "id": "c1c02141-d45b-4185-8f72-ba7793359b47",
+      "id": "ef4a5eb9-33b9-4342-8c61-ddfda5211c6a",
       "name": "Preparar campos plantilla confirmación",
       "notes": "Recibe la fila confirmada del borrador después de verificar el abono en Pabau. Envía la plantilla sin depender de la copia a reservas."
     },
     {
       "parameters": {
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}",
-        "genericAuthType": "httpBearerAuth",
+        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $('Stripe clasificar identificador').first().json.conversation_id }}",
         "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WEPLASH_TOOL_TOKEN }}"
+            }
+          ]
+        },
         "options": {
           "response": {
             "response": {
@@ -307,102 +321,54 @@
             }
           },
           "timeout": 20000
-        },
-        "method": "GET",
-        "authentication": "none",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "value": "=Bearer {{ $env.WEPLASH_TOOL_TOKEN }}",
-              "name": "Authorization"
-            }
-          ]
-        },
-        "sendBody": false
+        }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "id": "0fad269c-d4f3-463b-8c8f-e8bb3b2ea745",
-      "name": "Stripe buscar contacto ISV",
+      "id": "7c9b8cbd-f685-43ba-a80e-ff030cd35fc9",
+      "name": "Stripe leer conversación",
       "position": [
-        9120,
-        7616
+        23088,
+        15008
       ],
       "alwaysOutputData": true,
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 2000,
-      "credentials": null,
-      "onError": "continueErrorOutput",
       "notesInFlow": true,
+      "onError": "continueErrorOutput",
       "notes": "WEPLASH v2 - Estado de la conversacion desde nuestra base"
     },
     {
       "parameters": {
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversations/{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}",
-        "genericAuthType": "httpBearerAuth",
-        "sendQuery": true,
-        "options": {
-          "response": {
-            "response": {
-              "fullResponse": true,
-              "neverError": true,
-              "responseFormat": "json"
-            }
-          },
-          "timeout": 20000
-        },
-        "method": "GET",
-        "authentication": "none",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "value": "=Bearer {{ $env.WEPLASH_TOOL_TOKEN }}",
-              "name": "Authorization"
-            }
-          ]
-        },
-        "sendBody": false
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "id": "64bc3572-a159-4d99-b6cb-dc53b55cb56e",
-      "name": "Stripe buscar contacto IS",
-      "position": [
-        9344,
-        7616
-      ],
-      "alwaysOutputData": true,
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 2000,
-      "credentials": null,
-      "onError": "continueErrorOutput",
-      "notesInFlow": true,
-      "notes": "WEPLASH v2 - Estado de la conversacion desde nuestra base"
-    },
-    {
-      "parameters": {
-        "jsCode": "// La cuenta de ManyChat ya no decide nada: el canal lo resuelve la conversacion en nuestra API.\n// Este nodo lee la conversacion que acaba de devolver la API y publica los campos que esperan los\n// IF y los verificadores del flujo. Se conservan los nombres 'manychat_*' para no tocar el resto.\nconst base = $('Preparar campos plantilla confirmación').first().json;\nconst conversationId = String(base.subscriber_id ?? '').trim();\nfunction nodo(name) { try { return $(name).first().json || {}; } catch { return {}; } }\nfunction cuerpo(raw) {\n  let b = raw.body ?? raw;\n  if (typeof b === 'string') { try { b = JSON.parse(b); } catch { return {}; } }\n  return b && typeof b === 'object' ? b : {};\n}\nconst raw = nodo('Stripe buscar contacto IS');\nconst b = cuerpo(raw);\nconst code = Number(raw.statusCode || 0);\nconst leida = !raw.error && code >= 200 && code < 300 && String(b.id ?? '') === conversationId;\nconst plataforma = String(b.contact?.platform ?? base.canal_origen ?? '').toLowerCase();\nconst canal = plataforma === 'tiktok' ? 'tiktok' : 'instagram';\nconst error = !conversationId ? 'SIN_CONVERSATION_ID' : leida ? null : 'CONVERSACION_NO_LEIDA:' + (code || 'SIN_RESPUESTA');\nreturn [{ json: { ...base,\n  weplash_conversation_id: conversationId,\n  manychat_account_id: leida ? (canal === 'tiktok' ? 'fb1309803' : 'fb1346079') : '',\n  manychat_channel: canal,\n  manychat_ruta_valida: leida,\n  manychat_error: error,\n  live_chat_url: '',\n  url_manychat_resuelta: false,\n  estado_conversacion: leida ? String(b.status ?? '') : '',\n  ventana_whatsapp: b.whatsappWindow ?? null } }];"
+        "jsCode": "// La conversacion es la unica fuente de verdad: de ella salen la sede, el canal y la ventana.\n// Nuestros extremos resuelven por el id de la conversacion (UUID), no por el del proveedor anterior.\nconst base = $('Preparar campos plantilla confirmación').first().json;\nconst conversationId = String(base.conversation_id ?? '').trim();\nfunction nodo(name) { try { return $(name).first().json || {}; } catch { return {}; } }\nfunction cuerpo(raw) {\n  let b = raw.body ?? raw;\n  if (typeof b === 'string') { try { b = JSON.parse(b); } catch { return {}; } }\n  return b && typeof b === 'object' ? b : {};\n}\nconst raw = nodo('Stripe leer conversación');\nconst b = cuerpo(raw);\nconst code = Number(raw.statusCode || 0);\nconst leida = !raw.error && code >= 200 && code < 300 && String(b.id ?? '') === conversationId;\nconst error = !conversationId ? 'SIN_CONVERSATION_ID' : leida ? null : 'CONVERSACION_NO_LEIDA:' + (code || 'SIN_RESPUESTA');\nreturn [{ json: { ...base,\n  weplash_conversation_id: conversationId,\n  weplash_canal: String(b.contact?.platform ?? base.canal_origen ?? '').toLowerCase(),\n  weplash_ruta_valida: leida,\n  weplash_error: error,\n  estado_conversacion: leida ? String(b.status ?? '') : '',\n  ventana_whatsapp: b.whatsappWindow ?? null } }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        9568,
-        7616
+        23536,
+        15008
       ],
-      "id": "7a6c8c22-6bf7-4d29-8156-cb9da323a50d",
-      "name": "Stripe resolver cuenta y canal"
+      "id": "8db539fd-a4c1-4e10-b5ad-37c46443690d",
+      "name": "Stripe resolver cuenta y canal",
+      "notes": "WEPLASH v2 - Estado de la conversacion desde nuestra base. No decide cuenta ni canal."
     },
     {
       "parameters": {
+        "method": "POST",
         "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/messages",
-        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WEPLASH_TOOL_TOKEN }}"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"conversationId\": \"{{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }}\",\n  \"idempotencyKey\": \"confirmacion-ig-isv-{{ $execution.id }}\",\n  \"text\": \"{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[0].field_value ?? '')).slice(1, -1) }}\\n\\n{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[1].field_value ?? '')).slice(1, -1) }}\"\n}",
+        "jsonBody": "={\n  \"conversationId\": \"{{ $('Stripe clasificar identificador').first().json.conversation_id }}\",\n  \"idempotencyKey\": \"confirmacion-manual-{{ $execution.id }}\",\n  \"text\": \"{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[0].field_value ?? '')).slice(1, -1) }}\\n\\n{{ JSON.stringify(String($('Preparar campos plantilla confirmación').first().json.output.data[1].field_value ?? '')).slice(1, -1) }}\"\n}",
         "options": {
           "response": {
             "response": {
@@ -412,57 +378,291 @@
             }
           },
           "timeout": 20000
-        },
-        "method": "POST",
-        "authentication": "none",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "value": "=Bearer {{ $env.WEPLASH_TOOL_TOKEN }}",
-              "name": "Authorization"
-            }
-          ]
         }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        11136,
-        7616
+        23760,
+        15008
       ],
-      "id": "57c659c1-5bc0-41b9-955c-f2381d3aa6b7",
+      "id": "5ed1d1a7-df4e-4e3c-897a-479ef3e45864",
       "name": "Enviar confirmación al contacto",
       "retryOnFail": true,
-      "credentials": null,
-      "onError": "continueErrorOutput",
       "notesInFlow": true,
+      "onError": "continueErrorOutput",
       "notes": "WEPLASH v2 - Envio por Zernio via nuestra API: ajustar el cuerpo al contrato"
     },
     {
       "parameters": {},
-      "id": "67289498-0658-4dea-873d-7baaa0b59c02",
+      "id": "638b193e-6f33-48bf-98a2-651bc9690c0c",
       "name": "Continuar registro después de plantilla",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        12032,
-        7712
+        23984,
+        15008
       ]
     },
     {
       "parameters": {
-        "content": "## Confirmación de pago manual\nPublicar después de instalar SQL. Procesa un pago pendiente por minuto. No crea ni cancela citas. Verifica las citas retenidas, registra la nota, relee, traslada a reservas y envía plantilla por el canal existente. No envía conversión Stripe.\nSi falla, el pago queda protegido y el trabajo en procesando para revisión. No se reintenta automáticamente: revisar la ejecución antes de recuperar. Un fallo de ManyChat posterior al traslado no deshace la reserva ni reenvía la plantilla por sí solo.",
+        "documentId": {
+          "__rl": true,
+          "value": "1nfL0MbGBShni7rptwoeez3MI6iRVhA9uLW5fe6o5OCU",
+          "mode": "list",
+          "cachedResultName": "Matriz Servicios Inside Spa 2026",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nfL0MbGBShni7rptwoeez3MI6iRVhA9uLW5fe6o5OCU/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Precios_Conversion_ZNO",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        24208,
+        15008
+      ],
+      "id": "1b74fd6b-d9ea-4563-b8a1-22846e9f5f51",
+      "name": "Leer precios de conversión",
+      "alwaysOutputData": true,
+      "notesInFlow": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OiOGRpJwJc57H3z",
+          "name": "New Inside Spa"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "WEPLASH v2 - Precio comercial por servicio para el valor real de la conversión. Solo lectura."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Preparar campos plantilla confirmación').first().json ?? {};\n// En la ruta ManyChat este nodo no se ejecuta: el respaldo evita que la conversion falle.\nfunction nodo(nombre) { try { return $(nombre).first().json || {}; } catch (e) { return {}; } }\nconst ruta = nodo('Stripe clasificar identificador');\nconst texto = v => String(v ?? '').trim();\n\nconst subscriberId = texto(ruta.conversation_id ?? d.conversation_id ?? d.subscriber_id);\nconst rutaValida = ruta.identificador_es_conversacion === true;\n\n// Si la reserva ya fue reportada por Stripe, el flujo 4.2 ya envio la conversion: no duplicar.\nconst yaEnStripe = Boolean(texto(d.evento_stripe_id) || texto(d.stripe_payment_intent_id));\n\nconst numero = v => { const n = Number(String(v ?? '').replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : 0; };\nconst si = v => ['SI','SÍ','TRUE','1','X','YES','VERDADERO'].includes(texto(v).toUpperCase());\n\nlet filas = [];\ntry { filas = $('Leer precios de conversión').all().map(i => i.json || {}); } catch (e) { filas = []; }\n\nconst slug = texto(d.servicio).toLowerCase();\nconst sucursal = texto(d.sucursal);\nconst personas = Math.max(1, Number(d.numero_personas ?? d.personas ?? d.terapeutas_necesarios ?? 1));\n\n// Precio comercial real del servicio. La fila de la sucursal manda sobre la fila global (*).\nconst candidatas = filas.filter(f =>\n  texto(f.servicio).toLowerCase() === slug &&\n  texto(f.vigente || 'SI').toUpperCase() !== 'NO' &&\n  numero(f.precio) > 0);\n\nconst fila = candidatas.find(f => sucursal && texto(f.sucursal) === sucursal)\n  ?? candidatas.find(f => { const s = texto(f.sucursal); return s === '*' || s === ''; });\n\nconst montoTransferido = numero(d.monto_pagado);\nlet montoConversion = montoTransferido;\nlet origenPrecio = 'pago_manual';\nlet precioUnitario = 0;\n\nif (slug && fila) {\n  precioUnitario = numero(fila.precio);\n  const porPersona = si(fila.por_persona);\n  const total = porPersona ? precioUnitario * personas : precioUnitario;\n  if (total > 0) {\n    montoConversion = total;\n    origenPrecio = porPersona ? 'matriz_por_persona' : 'matriz_total';\n  }\n}\n\n// Fecha del evento para la conversion, con respaldo a la hora actual.\nlet occurredAt = null;\nfor (const c of [d.fecha_pago, d.pago_confirmado_at, d.updated_at, d.created_at]) {\n  const t = texto(c);\n  if (!t) continue;\n  const dt = new Date(t);\n  if (!Number.isNaN(dt.getTime())) { occurredAt = dt.toISOString(); break; }\n}\nif (!occurredAt) occurredAt = new Date().toISOString();\n\nconst motivo = !rutaValida ? 'CONVERSACION_NO_RESUELTA'\n  : !subscriberId ? 'SIN_SUBSCRIBER_ID'\n  : yaEnStripe ? 'YA_REPORTADA_POR_STRIPE'\n  : montoConversion <= 0 ? 'SIN_MONTO'\n  : null;\nconst aplicable = motivo === null;\n\nreturn [{ json: {\n  ...d,\n  subscriber_id: subscriberId || d.subscriber_id,\n  conversation_id: ruta.conversation_id ?? null,\n  conversion_aplicable: aplicable,\n  conversion_omitida: !aplicable,\n  conversion_motivo: motivo,\n  monto_conversion: montoConversion,\n  monto_pagado_manual: montoTransferido,\n  precio_origen: origenPrecio,\n  precio_sucursal_aplicada: fila ? texto(fila.sucursal) : null,\n  servicio_convertido: slug || null,\n  sucursal_conversion: sucursal || null,\n  personas_convertidas: personas,\n  precio_filas_leidas: filas.length,\n  precio_unitario_matriz: precioUnitario || null,\n  occurred_at_conversion: occurredAt,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24432,
+        15008
+      ],
+      "id": "b1b14fd2-5feb-40e5-9652-c822f796cfcd",
+      "name": "Preparar conversión manual",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - Valor = precio real del servicio desde la pestaña Precios_Conversion. Omite si la conversacion no se resolvio, si no hay monto o si Stripe ya la reporto."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0419a56a-28c3-4cde-98c4-a8d80949d82f",
+              "leftValue": "={{ $json.conversion_aplicable === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        24656,
+        15008
+      ],
+      "id": "d99f647b-8e93-40de-a913-fece8a81c0cf",
+      "name": "IF conversión manual válida",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - Solo envia la conversion si hay conversacion, monto y la reserva no fue reportada ya por Stripe."
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        24880,
+        15232
+      ],
+      "id": "886c8ee2-2534-407e-8260-e8d3a3796f1c",
+      "name": "Conversión manual omitida",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - Revisar conversion_motivo: CONVERSACION_NO_RESUELTA, SIN_SUBSCRIBER_ID, YA_REPORTADA_POR_STRIPE o SIN_MONTO."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/conversions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WEPLASH_TOOL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { conversationId: $('Preparar conversión manual').first().json.conversation_id, amount: $('Preparar conversión manual').first().json.monto_conversion, currency: 'MXN', occurredAt: $('Preparar conversión manual').first().json.occurred_at_conversion } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        24880,
+        15008
+      ],
+      "id": "fbf6d8a9-7582-4e8c-859e-4f2b98f24b17",
+      "name": "Enviar conversión manual",
+      "retryOnFail": false,
+      "notesInFlow": true,
+      "onError": "continueErrorOutput",
+      "notes": "WEPLASH v2 - Mismo contrato que el flujo 4.2: conversationId, amount, currency y occurredAt."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&typeof b.queued==='boolean';\nif(!ok)throw new Error('No fue posible encolar la conversion del pago manual. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('Preparar conversión manual').first().json,conversion_ultima_operacion:'encolar_conversion_manual',conversion_encolada:b.queued===true,conversion_motivo_api:b.reason??null}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25104,
+        15008
+      ],
+      "id": "71d1149e-548d-45a5-88d5-504817b98aaf",
+      "name": "Validar conversión manual",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - Confirma que la API encolo la conversion; si no, la ejecucion queda marcada para revisar."
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        25328,
+        15008
+      ],
+      "id": "3f0edf09-b439-46e5-bd24-f398eebd176c",
+      "name": "Fin conversión manual",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - Fin de la ruta de conversion del pago manual."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "023b05ba-1e15-4eee-a555-fb0655df942f",
+              "leftValue": "={{ $json.precio_origen !== 'matriz_total' && $json.precio_origen !== 'matriz_por_persona' && $json.conversion_aplicable === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        24432,
+        15232
+      ],
+      "id": "7d706ff5-55a9-4a9b-96d6-67e995f16b4d",
+      "name": "IF precio real encontrado",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - Avisa cuando la conversion se envia con el importe transferido en vez del precio real."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json ?? {};\nconst d = $('Preparar campos plantilla confirmación').first().json ?? {};\nconst texto = v => String(v ?? '').trim();\nconst esc = x => String(x ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nconst nombres = {'24077':'Del Valle','24079':'Polanco','24080':'Juárez','24082':'Lomas','24221':'Roma'};\nconst sucursal = nombres[texto(d.sucursal)] ?? texto(d.sucursal) ?? 'Por identificar';\nconst filas = Number(r.precio_filas_leidas ?? 0);\n\n// Distingue \"la hoja no se leyo\" de \"el servicio falta en la hoja\": se arreglan distinto.\nconst causa = filas > 0\n  ? 'La hoja de precios SI se leyo (' + filas + ' filas) pero no tiene ninguna fila para el servicio \"' + texto(r.servicio_convertido) + '\". Falta agregar ese servicio a la pestaña Precios_Conversion.'\n  : 'La hoja de precios NO se pudo leer (0 filas). Revisa que la pestaña Precios_Conversion siga existiendo con el nombre exacto y que la credencial de Google siga teniendo acceso.';\n\nconst detalle = [\n  ['Canal', 'Pago manual (transferencia o comprobante)'],\n  ['Cliente', d.nombre || d.nombre_completo || 'No disponible'],\n  ['Sucursal', sucursal + ' (' + texto(d.sucursal) + ')'],\n  ['Servicio (slug)', texto(r.servicio_convertido) || '(vacío)'],\n  ['Nombre del servicio', texto(d.nombre_servicio) || '(sin nombre)'],\n  ['Personas', r.personas_convertidas ?? '(sin dato)'],\n  ['Filas leídas de la hoja', filas],\n  ['Origen del precio', r.precio_origen],\n  ['Valor enviado a Weplash', r.monto_conversion],\n  ['Importe transferido', r.monto_pagado_manual],\n  ['Subscriber ID', r.subscriber_id || 'No disponible'],\n];\n\nconst asunto = ('[PRODUCCIÓN] Conversión manual con el importe transferido en vez del precio real — ' + sucursal + ' — ' + (texto(r.servicio_convertido) || 'sin servicio')).replace(/[\\r\\n]+/g, ' ').slice(0, 220);\nconst html = '<html lang=\"es\"><body style=\"font-family:Arial;color:#243330\">'\n  + '<h2>El valor de la conversión no es el precio real del servicio</h2>'\n  + '<p>' + esc(causa) + '</p>'\n  + '<p>Se trata de un pago <b>manual</b> ya confirmado. La conversión se envió igual usando el importe transferido, '\n  + 'para no perder el evento. Mientras la hoja no se corrija, el valor que recibe Meta para ese servicio queda subestimado.</p>'\n  + '<table style=\"border-collapse:collapse\">'\n  + detalle.map(([k, v]) => '<tr><th style=\"text-align:left;padding:8px;border:1px solid #ddd\">' + esc(k) + '</th><td style=\"padding:8px;border:1px solid #ddd\">' + esc(v) + '</td></tr>').join('')\n  + '</table></body></html>';\n\nreturn [{ json: { ...r, email_subject: asunto, email_html: html, aviso_precio_motivo: causa } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24656,
+        15232
+      ],
+      "id": "59ad0933-a94f-4587-9a57-c1cc1fa95a93",
+      "name": "Preparar aviso de precio faltante",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - Distingue si la hoja no se leyo o si el servicio falta en ella."
+    },
+    {
+      "parameters": {
+        "sendTo": "=contacto@insidespa.com.mx,ymartinez@weplash.com,hola@insidespa.com.mx",
+        "subject": "={{ $json.email_subject }}",
+        "message": "={{ $json.email_html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        24880,
+        15456
+      ],
+      "id": "ca45c7b9-8206-4c09-b48f-a208e5b2de37",
+      "name": "Gmail aviso precio faltante",
+      "notesInFlow": true,
+      "webhookId": "3cf0e51c-7eb9-4278-8c7c-8e3ed056a7c5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WswXtonsIYkb9R0Z",
+          "name": "Wepla"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Aviso de precio no encontrado en pago manual. Un fallo de correo no detiene la conversion. No activar reintentos: duplicarian el aviso."
+    },
+    {
+      "parameters": {
+        "content": "## Confirmación de pago manual\nPublicar después de instalar SQL. Procesa un pago pendiente por minuto. No crea ni cancela citas. Verifica las citas retenidas, registra la nota, relee, traslada a reservas y envía plantilla por el canal existente. Envía la conversión a Weplash con el precio real del servicio desde la pestaña Precios_Conversion (nunca con el importe transferido). Omite la conversión si la conversación no se resolvió, si no hay monto, o si la reserva ya fue reportada por Stripe (evita doble conteo).\nSi falla, el pago queda protegido y el trabajo en procesando para revisión. No se reintenta automáticamente: revisar la ejecución antes de recuperar. Un fallo de ManyChat posterior al traslado no deshace la reserva ni reenvía la plantilla por sí solo.",
         "height": 270,
         "width": 650
       },
-      "id": "4816444c-76ac-42f1-9d0f-26064da12810",
+      "id": "fffd4718-f1ad-4901-9fcb-ecc8a34ec398",
       "name": "Instrucciones de recuperación",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        4128,
-        6688
+        17920,
+        14368
       ]
     },
     {
@@ -490,13 +690,13 @@
         },
         "options": {}
       },
-      "id": "ce47d30b-e6cc-4fc1-8b15-32867d4a9f02",
+      "id": "4edcac59-06eb-4e27-8dc3-dac5942d6c71",
       "name": "IF citas activas en Pabau",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        4416,
-        7520
+        18208,
+        15200
       ],
       "notes": "false = la pre-reserva se libero por falta de pago: hay que recrear la cita antes de anotar el abono."
     },
@@ -504,13 +704,13 @@
       "parameters": {
         "jsCode": "const d = $input.first().json || {};\n\n// Bases de Pabau por sucursal (mismas que usa el 4.1 y el propio 4.5).\nconst BASE = {\n  '24077': { agua: 'https://api.oauth.pabau.com/cg50463j391eb4i6hb9b315idc8id5ga90g493jf29734a4e9aj3ha5a5gb52a65', masaje: 'https://api.oauth.pabau.com/cg50463j391eb4i6hb9b315idc8id5ga90g493jf29734a4e9aj3ha5a5gb52a65' },\n  '24079': { agua: 'https://api.oauth.pabau.com/28006aa905jfdg1jd39cbbh878bajb72h4be3ba3a339314cchdife73i3e80g1f', masaje: 'https://api.oauth.pabau.com/Xvbasv8U5qwLi3SsD79GycTxjxoXTyiIeLUh6urzOQU' },\n  '24080': { agua: 'https://api.oauth.pabau.com/a4dj4ebj49g2b15bf841hd0bafi3hb7icccdf9494gf1cc22id9606j79d29ig91', masaje: 'https://api.oauth.pabau.com/a4dj4ebj49g2b15bf841hd0bafi3hb7icccdf9494gf1cc22id9606j79d29ig91' },\n  '24082': { agua: 'https://api.oauth.pabau.com/i15b16i0cah9aif6263d82h7a7h72b0hcef5ac1698d2f2ih62ebia7f0j5e571d', masaje: 'https://api.oauth.pabau.com/i15b16i0cah9aif6263d82h7a7h72b0hcef5ac1698d2f2ih62ebia7f0j5e571d' },\n  '24221': { agua: 'https://api.oauth.pabau.com/F9jYXMXcdM98vl9kvo1JsRglq2YHuIB2N7FSLPWFyRg', masaje: 'https://api.oauth.pabau.com/F9jYXMXcdM98vl9kvo1JsRglq2YHuIB2N7FSLPWFyRg' },\n};\n\nconst tx = v => String(v ?? '').trim();\nconst hora = v => {\n  const s = tx(v).replace(' ', 'T');\n  return /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/.test(s) ? s.slice(0, 19) : '';\n};\n\nconst sucursal = tx(d.sucursal);\nconst config = BASE[sucursal];\nconst personas = Number(d.numero_personas ?? d.personas ?? d.terapeutas_necesarios);\nconst contacto = tx(d.contact_id);\nconst items = [];\nconst motivos = [];\n\nif (!config) motivos.push('SUCURSAL_SIN_PABAU');\nif (!contacto) motivos.push('SIN_CONTACT_ID');\nif (!Number.isInteger(personas) || personas < 1) motivos.push('SIN_NUMERO_PERSONAS');\n\nconst inicioAgua = hora(d.jacuzzi_inicio);\nconst inicioMasaje = hora(d.masaje_inicio);\n\n// Agua / sauna / temazcal: se recrea con el recurso que ya estaba asignado.\nif (config && tx(d.service_agua_id)) {\n  const recurso = tx(d.recurso_agua_asignado) || tx((Array.isArray(d.recursos_agua_asignados) ? d.recursos_agua_asignados : [])[0]);\n  if (!recurso) motivos.push('SIN_RECURSO_AGUA');\n  else if (!inicioAgua) motivos.push('SIN_HORA_AGUA');\n  else items.push({ ...d, tipo_cita_recreada: 'agua', pabau_base: config.agua, employee_id: recurso, servicio_agua_id: tx(d.service_agua_id), start_time: inicioAgua });\n}\n\n// Masajes: un terapeuta por persona, los que ya tenía el borrador.\nif (config && Number.isInteger(personas) && personas > 0) {\n  if (!tx(d.service_terapeuta_id)) motivos.push('SIN_SERVICIO_MASAJE');\n  else if (!inicioMasaje) motivos.push('SIN_HORA_MASAJE');\n  else {\n    for (let i = 1; i <= personas; i++) {\n      const terapeuta = tx(d['terapeuta_' + i]);\n      if (!terapeuta) { motivos.push('SIN_TERAPEUTA_' + i); continue; }\n      items.push({ ...d, tipo_cita_recreada: 'masaje', pabau_base: config.masaje, employee_id: terapeuta, servicio_terapeuta_id: tx(d.service_terapeuta_id), start_time: inicioMasaje });\n    }\n  }\n}\n\nif (motivos.length || !items.length) {\n  return [{ json: { ...d, citas_recreadas_ok: false, motivo_recreacion: motivos.join(',') || 'SIN_CITAS_A_RECREAR', citas_a_recrear: 0, items_recreacion: [] } }];\n}\nreturn [{ json: { ...d, citas_recreadas_ok: null, motivo_recreacion: null, citas_a_recrear: items.length, items_recreacion: items } }];"
       },
-      "id": "8f672422-3a47-4a77-bfff-648d522340e3",
+      "id": "a2d60953-76d2-41b6-a212-ce4281e88a5b",
       "name": "Preparar recreacion de citas liberadas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4640,
-        8096
+        18432,
+        15776
       ],
       "notes": "Calcula las citas a recrear (agua + un masaje por persona) con los datos que ya tenia el borrador."
     },
@@ -539,26 +739,26 @@
         },
         "options": {}
       },
-      "id": "6d721646-596d-410b-bb1a-4c381801dd48",
+      "id": "5e880c27-bfb8-41cd-af72-30d8577d1e48",
       "name": "IF hay citas por recrear",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        4864,
-        8096
+        18656,
+        15776
       ]
     },
     {
       "parameters": {
         "jsCode": "// Convierte la lista calculada en items para el nodo HTTP de Pabau.\nconst d = $input.first().json || {};\nconst items = Array.isArray(d.items_recreacion) ? d.items_recreacion : [];\nif (!items.length) return [{ json: { ...d, citas_recreadas_ok: false, motivo_recreacion: d.motivo_recreacion || 'SIN_CITAS_A_RECREAR' } }];\nreturn items.map(item => ({ json: item, pairedItem: { item: 0 } }));"
       },
-      "id": "3d14b740-a90c-4e13-91a4-cece165b3597",
+      "id": "bb76be44-6df3-41a4-8495-83b4ec063271",
       "name": "Separar citas por recrear",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5088,
-        8160
+        18880,
+        15840
       ]
     },
     {
@@ -606,13 +806,13 @@
           "timeout": 20000
         }
       },
-      "id": "2f76c9be-595e-48da-984d-c133a168f3e4",
+      "id": "4f23a0d0-4d85-4446-ad98-93ab6656055b",
       "name": "Recrear citas en Pabau",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        5312,
-        8160
+        19104,
+        15840
       ],
       "onError": "continueErrorOutput",
       "notes": "POST /appointments/create. Sin reintentos: un reintento crearia citas duplicadas. Si el horario ya se ocupo, Pabau responde error y el pago va a revision."
@@ -621,13 +821,13 @@
       "parameters": {
         "jsCode": "const entrada = $('Preparar recreacion de citas liberadas').first().json || {};\nconst esperadas = Number(entrada.citas_a_recrear || 0);\nconst origen = $('Separar citas por recrear').all().map(i => i.json || {});\nconst respuestas = $input.all().map((item, k) => {\n  const idx = (item.pairedItem && !Array.isArray(item.pairedItem)) ? item.pairedItem.item : k;\n  return { r: item.json || {}, src: origen[(idx >= 0 && idx < origen.length) ? idx : k] || {} };\n});\n\nfunction idCita(r) {\n  const b = r.body ?? r;\n  const id = b.appointment_id ?? b.data?.appointment_id ?? b.data?.appointment?.id ?? b.appointment?.id ?? b.data?.id ?? b.id;\n  return /^[1-9]\\d*$/.test(String(id ?? '')) ? String(id) : null;\n}\nfunction exitosa(r) {\n  const b = r.body ?? r;\n  return !r.error && Number(r.statusCode) >= 200 && Number(r.statusCode) < 300 && b.success !== false && b.status !== 'error' && !!idCita(r);\n}\n\nconst aguas = [];\nconst masajes = [];\nconst fallidas = [];\nrespuestas.forEach(({ r, src }) => {\n  if (!exitosa(r)) { fallidas.push(String(r.error?.message || r.body?.message || r.statusCode || 'ERROR')); return; }\n  const id = idCita(r);\n  const tipo = String(src.tipo_cita_recreada ?? r.tipo_cita_recreada ?? '');\n  if (tipo === 'agua') aguas.push(id); else masajes.push(id);\n});\n\nconst personas = Number(entrada.numero_personas ?? entrada.personas ?? entrada.terapeutas_necesarios);\nconst ok = !fallidas.length && respuestas.length === esperadas && esperadas > 0\n  && masajes.length === personas && new Set([...aguas, ...masajes]).size === aguas.length + masajes.length\n  && (!entrada.service_agua_id || aguas.length === Number(entrada.jacuzzis_necesarios || 1));\n\nreturn [{ json: {\n  ...entrada,\n  citas_recreadas_ok: ok,\n  motivo_recreacion: ok ? null : ('RECREACION_INCOMPLETA_' + fallidas.join('|')).slice(0, 240),\n  pabau_citas_agua_ids: ok ? aguas : (entrada.pabau_citas_agua_ids ?? []),\n  pabau_citas_masaje_ids: ok ? masajes : (entrada.pabau_citas_masaje_ids ?? []),\n  pabau_reservado: ok ? true : entrada.pabau_reservado,\n  retencion_pabau_at: entrada.retencion_pabau_at ?? new Date().toISOString(),\n  total_citas_recreadas: aguas.length + masajes.length\n} }];"
       },
-      "id": "e1d57661-bdb1-40a2-80ee-e1a0c77850bc",
+      "id": "63667271-3fcf-4389-8b35-79cfd7c7dd16",
       "name": "Validar citas recreadas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5536,
-        8160
+        19328,
+        15840
       ]
     },
     {
@@ -641,13 +841,13 @@
         "jsonBody": "={{ {p_reserva_draft_id:$json.id,p_subscriber_id:String($json.subscriber_id),p_citas_agua:$json.pabau_citas_agua_ids ?? [],p_citas_masaje:$json.pabau_citas_masaje_ids ?? [],p_retencion_pabau_at:$json.retencion_pabau_at} }}",
         "options": {}
       },
-      "id": "a6855c82-3d03-413b-b4af-f30e4f6f0c79",
+      "id": "917c3551-1f0d-49ac-a9e0-cee49d94a958",
       "name": "Guardar citas recreadas en el borrador",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        5984,
-        8240
+        19776,
+        15920
       ],
       "retryOnFail": true,
       "credentials": {
@@ -683,13 +883,13 @@
         },
         "options": {}
       },
-      "id": "9c3def62-5b07-4989-a0b9-1b356ff918fe",
+      "id": "989cb920-67bc-4c0e-9019-cbd547dd7fb9",
       "name": "IF citas recreadas",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        5760,
-        8160
+        19552,
+        15840
       ]
     },
     {
@@ -699,10 +899,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        6208,
-        8240
+        20000,
+        15920
       ],
-      "id": "1d245405-f196-4718-aba2-8e3b8f68b82d",
+      "id": "f09dcbcd-ef2b-449c-b525-3168036273d0",
       "name": "Validar guardado de citas recreadas"
     },
     {
@@ -733,11 +933,1016 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        6432,
-        8240
+        20224,
+        15920
       ],
-      "id": "e8c72aa2-6b15-4dd9-aa66-8fe7104e5591",
+      "id": "cb93656a-b436-4230-9270-e7be631248d5",
       "name": "IF guardado de citas recreadas"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "03a716eb-06c3-4e78-80fa-c7877aa0ad1e",
+              "leftValue": "={{ $json.manychat_ruta_valida === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        23760,
+        16416
+      ],
+      "id": "182350ae-2a65-4494-9904-cf9953b7165c",
+      "name": "Stripe ruta de mensaje válida"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json; throw new Error('La reserva y el pago se conservaron; no se pudo enviar la confirmación ManyChat: '+String(d.manychat_error||'RESPUESTA_API_NO_ACEPTADA'));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        23984,
+        16608
+      ],
+      "id": "a18730d1-2aa2-4708-9319-a5296b4a9702",
+      "name": "MC Stripe error de mensajería"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "762b6c2b-d214-4ee4-8abc-9398dbd756f0",
+              "leftValue": "={{ $json.manychat_account_id === 'fb1309803' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        23984,
+        16416
+      ],
+      "id": "cfb7fc40-f44b-42eb-ac7c-994642835a0b",
+      "name": "Stripe elegir cuenta de campos"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/subscriber/setCustomFields",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {subscriber_id:Number($('Preparar campos plantilla confirmación').first().json.subscriber_id),fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        24208,
+        16416
+      ],
+      "id": "bf932b87-cb27-42ed-b360-60cea24afc62",
+      "name": "Cargar campos plantilla principal",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "pNc36dVpM0IM3l3b",
+          "name": "Manychat IS"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Carga los campos requeridos por la plantilla. No invoca al bot ni a un LLM."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Cargar campos plantilla principal. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('MC Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Cargar campos plantilla principal',manychat_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24432,
+        16416
+      ],
+      "id": "6b9ac4f3-d01b-434b-b3c9-cde98fcf00e9",
+      "name": "Validar Cargar campos plantilla principal"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fcb3d75e-8482-406a-b398-1f489af4bb7a",
+              "leftValue": "={{ $json.manychat_account_id === 'fb1309803' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        24656,
+        16416
+      ],
+      "id": "9e3381e6-eac7-4848-b674-4506de46463f",
+      "name": "Stripe elegir cuenta de envío"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260706133514_126519\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        25104,
+        16752
+      ],
+      "id": "44cc9c18-d595-4e11-8817-84fdb191d28d",
+      "name": "Enviar plantilla confirmación IG IS",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "pNc36dVpM0IM3l3b",
+          "name": "Manychat IS"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Envío directo de una plantilla/flow de ManyChat; no retorna respuesta al bot."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar plantilla confirmación IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('MC Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar plantilla confirmación IG IS',manychat_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25328,
+        16752
+      ],
+      "id": "14dbcbaa-6475-4802-9080-a6aa8dab1324",
+      "name": "Validar Enviar plantilla confirmación IG IS"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260718000743_496933\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        25552,
+        16752
+      ],
+      "id": "e649cc25-9f84-41ef-adb6-f8c333c69dca",
+      "name": "Enviar foto_accesoro IG IS",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "pNc36dVpM0IM3l3b",
+          "name": "Manychat IS"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Envío directo de una plantilla/flow de ManyChat; no retorna respuesta al bot."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar foto_accesoro IG IS. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('MC Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar foto_accesoro IG IS',manychat_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25776,
+        16752
+      ],
+      "id": "84820137-5c84-481f-9e7b-2bd4171aaa56",
+      "name": "Validar Enviar foto_accesoro IG IS"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7efec1d7-559a-4fe5-a245-bc8c0fa21703",
+              "leftValue": "={{ $json.manychat_channel === 'tiktok' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        24880,
+        16416
+      ],
+      "id": "fcdfd8ca-8ac5-474e-9f3d-42b82f7aa179",
+      "name": "Stripe elegir canal ISV"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260727160555_940586\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        25104,
+        16368
+      ],
+      "id": "4bd0ba1a-0b55-42f3-b8f5-b9cd510b12bc",
+      "name": "Enviar plantilla confirmación IG",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1LiofL0kiOXKIH7K",
+          "name": "Manychat ISV"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Envío directo de una plantilla/flow de ManyChat; no retorna respuesta al bot."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar plantilla confirmación IG. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('MC Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar plantilla confirmación IG',manychat_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25328,
+        16368
+      ],
+      "id": "635a538f-9dc8-4e0b-a269-f3bb04b923bd",
+      "name": "Validar Enviar plantilla confirmación IG"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260727160555_969729\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        25552,
+        16368
+      ],
+      "id": "5b30ad7b-728c-4c2e-8765-f791702a2197",
+      "name": "Enviar foto_accesoro iG ISV",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1LiofL0kiOXKIH7K",
+          "name": "Manychat ISV"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Envío directo de una plantilla/flow de ManyChat; no retorna respuesta al bot."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar foto_accesoro iG ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('MC Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar foto_accesoro iG ISV',manychat_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25776,
+        16368
+      ],
+      "id": "cd7b733a-b353-4599-adef-330814691462",
+      "name": "Validar Enviar foto_accesoro iG ISV"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260727172417_383894\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        25104,
+        16560
+      ],
+      "id": "4cf8532f-37df-49c6-b320-060dec3b7915",
+      "name": "Enviar plantilla confirmación Tiktok ISV",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1LiofL0kiOXKIH7K",
+          "name": "Manychat ISV"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Envío directo de una plantilla/flow de ManyChat; no retorna respuesta al bot."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar plantilla confirmación Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('MC Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar plantilla confirmación Tiktok ISV',manychat_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25328,
+        16560
+      ],
+      "id": "7e14c872-8c7a-4d64-aaae-df86f9b53bc8",
+      "name": "Validar Enviar plantilla confirmación Tiktok ISV"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": {{ $('Preparar campos plantilla confirmación').first().json.subscriber_id }},\n      \"flow_ns\": \"content20260727173020_411282\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        25552,
+        16560
+      ],
+      "id": "797c9bb7-3cfa-498a-b5ad-a155ad8d5000",
+      "name": "Enviar foto_accesoro Tiktok ISV",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1LiofL0kiOXKIH7K",
+          "name": "Manychat ISV"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Envío directo de una plantilla/flow de ManyChat; no retorna respuesta al bot."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Enviar foto_accesoro Tiktok ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('MC Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Enviar foto_accesoro Tiktok ISV',manychat_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25776,
+        16560
+      ],
+      "id": "c375932c-7867-4b99-8861-c22c7067d1e8",
+      "name": "Validar Enviar foto_accesoro Tiktok ISV"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/subscriber/setCustomFields",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {subscriber_id:Number($('Preparar campos plantilla confirmación').first().json.subscriber_id),fields:$('Preparar campos plantilla confirmación').first().json.output.data} }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        24208,
+        16608
+      ],
+      "id": "6d700a7e-71fd-4bda-8636-e06f373fb7d4",
+      "name": "Cargar campos plantilla ISV",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1LiofL0kiOXKIH7K",
+          "name": "Manychat ISV"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Carga los campos requeridos por la plantilla. No invoca al bot ni a un LLM."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};let b=r.body??r;\nif(typeof b==='string'){try{b=JSON.parse(b)}catch{b={}}}\nconst ok=!r.error&&Number(r.statusCode)>=200&&Number(r.statusCode)<300&&b.status==='success';\nif(!ok)throw new Error('ManyChat no aceptó la operación: Cargar campos plantilla ISV. El pago y la reserva permanecen guardados.');\nreturn [{json:{...$('MC Stripe resolver cuenta y canal').first().json,manychat_ultima_operacion:'Cargar campos plantilla ISV',manychat_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24432,
+        16608
+      ],
+      "id": "aebe96bd-6aa6-49e8-972a-5a258e15e762",
+      "name": "Validar Cargar campos plantilla ISV"
+    },
+    {
+      "parameters": {
+        "url": "https://api.manychat.com/fb/subscriber/getInfo",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "subscriber_id",
+              "value": "={{ Number($('Preparar campos plantilla confirmación').first().json.subscriber_id) }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "id": "8446ed35-e85e-4851-bfba-5346ca2d3167",
+      "name": "MC Stripe buscar contacto ISV",
+      "position": [
+        23088,
+        16416
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "1LiofL0kiOXKIH7K",
+          "name": "Manychat ISV"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.manychat.com/fb/subscriber/getInfo",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "subscriber_id",
+              "value": "={{ Number($('Preparar campos plantilla confirmación').first().json.subscriber_id) }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "id": "e81adc27-7531-482c-a398-06abf987d919",
+      "name": "MC Stripe buscar contacto IS",
+      "position": [
+        23312,
+        16416
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "pNc36dVpM0IM3l3b",
+          "name": "Manychat IS"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Preparar campos plantilla confirmación').first().json;\nconst sid = String(base.subscriber_id ?? '').trim();\nconst clean = v => String(v ?? '').trim();\nconst present = v => !['','0','null','undefined','false'].includes(clean(v).toLowerCase());\nfunction node(name) { try { return $(name).first().json || {}; } catch { return {}; } }\nfunction body(r) {\n  let b = r.body ?? r;\n  if (typeof b === 'string') { try { b = JSON.parse(b); } catch { return {}; } }\n  return b && typeof b === 'object' ? b : {};\n}\nfunction lookup(name, account) {\n  const raw = node(name), b = body(raw), data = b.data || {};\n  const code = Number(raw.statusCode || 0);\n  const reportedAccount=accountURL(data.live_chat_url);\n  const ok = !raw.error && code >= 200 && code < 300 && b.status === 'success'\n    && clean(data.id ?? data.subscriber_id) === sid && (!reportedAccount || reportedAccount===account);\n  return {account, ok, code, data: ok ? data : {},\n    error: ok ? null : (raw.error ? 'ERROR_TRANSPORTE' : code === 401 || code === 403\n      ? 'CREDENCIAL_RECHAZADA' : reportedAccount && reportedAccount!==account ? 'CUENTA_CREDENCIAL_NO_COINCIDE'\n      : b.status === 'success' ? 'ID_NO_COINCIDE' : 'CONTACTO_NO_VALIDADO')};\n}\nfunction accountURL(url) {\n  const m = clean(url).match(/^https:\\/\\/app\\.manychat\\.com\\/(fb1309803|fb1346079)\\/chat\\/(\\d+)(?:[/?#]|$)/i);\n  return m && m[2] === sid ? m[1].toLowerCase() : '';\n}\nfunction channel(v) {\n  const s = clean(v).toLowerCase().replace(/[\\s_-]+/g, '');\n  if (['instagram','ig','igisv','igis'].includes(s)) return 'instagram';\n  if (['tiktok','tt'].includes(s)) return 'tiktok';\n  return '';\n}\nconst results = [lookup('MC Stripe buscar contacto ISV','fb1309803'), lookup('MC Stripe buscar contacto IS','fb1346079')];\nconst found = results.filter(r => r.ok);\nconst requestedAccount = accountURL(base.live_chat_url_recibida || base.live_chat_url);\nlet selected = found.length === 1 ? found[0] : found.find(r => r.account === requestedAccount);\nlet error = !/^[1-9]\\d*$/.test(sid) || !Number.isSafeInteger(Number(sid)) ? 'SUBSCRIBER_ID_INVALIDO' : '';\nif (!error && !selected) error = found.length ? 'CUENTA_AMBIGUA' : 'CONTACTO_NO_ENCONTRADO_O_API_FALLIDA';\n// Una URL de contexto puede desempatar resultados positivos; nunca sustituye getInfo exitoso.\nif (!error && requestedAccount && selected.account !== requestedAccount) error = 'CUENTA_ORIGEN_NO_COINCIDE';\nconst profile = selected?.data || {};\nconst custom = (Array.isArray(profile.custom_fields) ? profile.custom_fields : []).filter(f=>\n  ['canal_origen','canal origen','channel','canal','plataforma'].includes(clean(f.name).toLowerCase())\n).map(f=>channel(f.value)).filter(Boolean);\nconst customChannels=[...new Set(custom)];\nconst sourceChannel = channel(base.manychat_channel_origen || base.canal_origen || base.channel || base.canal || base.platform)\n  || (customChannels.length===1 ? customChannels[0] : '');\nconst hasIG = present(profile.ig_id);\nconst hasTT = present(profile.tt_user_id) || present(profile.tiktok_id) || present(profile.tt_id) || present(profile.tiktok_user_id);\nconst profileChannel = channel(profile.channel || profile.platform);\nlet resolvedChannel = sourceChannel || profileChannel || (hasIG !== hasTT ? (hasIG ? 'instagram' : 'tiktok') : '');\nif (!error && !resolvedChannel) error = hasIG && hasTT ? 'CANAL_AMBIGUO_ENVIAR_CANAL_ORIGEN' : 'CANAL_NO_IDENTIFICADO';\nif (!error && selected.account === 'fb1346079' && resolvedChannel !== 'instagram') error = 'CANAL_NO_CONFIGURADO_PARA_CUENTA';\nif (!error && !sourceChannel && profileChannel === 'instagram' && !hasIG) error = 'PERFIL_INSTAGRAM_NO_VALIDADO';\nconst flows = {\n  'fb1309803:instagram': {message:'content20260727160555_940586', transfer:'content20260727160555_959292'},\n  'fb1309803:tiktok': {message:'content20260727172417_383894', transfer:'content20260727171146_206702'},\n  'fb1346079:instagram': {message:'content20260706133514_126519', transfer:'content20260715195103_467329'},\n};\nconst key = selected ? selected.account + ':' + resolvedChannel : '';\nconst flow = flows[key];\nif (!error && !flow) error = 'FLUJO_NO_CONFIGURADO';\nconst account = selected?.account || '';\nreturn [{json:{...base,\n  manychat_account_id: account,\n  manychat_channel: resolvedChannel,\n  manychat_message_flow_ns: !error ? flow.message : '',\n  manychat_transfer_flow_ns: !error ? flow.transfer : '',\n  manychat_ruta_valida: !error,\n  manychat_error: error || null,\n  manychat_diagnostico: results.map(({account,ok,code,error})=>({account,ok,http_status:code,error})),\n  live_chat_url: selected ? 'https://app.manychat.com/'+account+'/chat/'+sid : '',\n  url_manychat_resuelta: Boolean(selected),\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        23536,
+        16416
+      ],
+      "id": "6465ffc0-e257-42d7-bd2c-80ec427b6dc2",
+      "name": "MC Stripe resolver cuenta y canal"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "16056e50-13dc-4409-98e6-e25b78a2692a",
+              "leftValue": "={{ $json.weplash_ruta_valida === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        23760,
+        15232
+      ],
+      "id": "33836a8f-5331-4d1b-bf46-f135df3b7b73",
+      "name": "IF conversación en Weplash",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - true: la conversacion se leyo en nuestra API -> confirmacion y conversion por Weplash. false: contacto de ManyChat."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json; throw new Error('La reserva y el pago se conservaron; no se pudo enviar la confirmación: '+String(d.weplash_error||d.manychat_error||'RESPUESTA_API_NO_ACEPTADA'));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24208,
+        15232
+      ],
+      "id": "0813228d-e33c-4330-8398-c98fa98a2d82",
+      "name": "Stripe error de mensajería",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - Falla solo cuando la API de Weplash no dio una respuesta definitiva."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d3e91ad1-a043-44fa-8a10-3f4cd7913834",
+              "leftValue": "={{ !/^premium_day_spa/.test(String($('Preparar campos plantilla confirmación').first().json.servicio ?? '').trim().toLowerCase()) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        25552,
+        16144
+      ],
+      "id": "0888964a-bcea-4e4c-b823-2ad1a1f967a5",
+      "name": "MC IF foto iG ISV",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - No envia la foto de accesorios cuando el servicio es premium_day_spa (ni su variante & Facial)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7a7c7fae-f805-4235-ace2-100b241fc71c",
+              "leftValue": "={{ !/^premium_day_spa/.test(String($('Preparar campos plantilla confirmación').first().json.servicio ?? '').trim().toLowerCase()) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        25552,
+        16336
+      ],
+      "id": "13eefe7b-6a94-4a59-a40d-b891c28c5e11",
+      "name": "MC IF foto Tiktok ISV",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - No envia la foto de accesorios cuando el servicio es premium_day_spa (ni su variante & Facial)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3c3dbf72-bc93-482c-a3ce-687518724dc4",
+              "leftValue": "={{ !/^premium_day_spa/.test(String($('Preparar campos plantilla confirmación').first().json.servicio ?? '').trim().toLowerCase()) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        25552,
+        16528
+      ],
+      "id": "15d5edf0-2531-45df-9d15-477f7275aee4",
+      "name": "MC IF foto IG IS",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - No envia la foto de accesorios cuando el servicio es premium_day_spa (ni su variante & Facial)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3718928d-16e3-4952-bd39-7bc45e0fd791",
+              "leftValue": "={{ !/^premium_day_spa/.test(String($('Preparar campos plantilla confirmación').first().json.servicio ?? '').trim().toLowerCase()) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        24208,
+        15456
+      ],
+      "id": "96ff2015-50be-421d-bc9d-8aaeaf9fb666",
+      "name": "IF enviar foto de accesorios",
+      "notesInFlow": true,
+      "notes": "WEPLASH v2 - No envia la foto de accesorios cuando el servicio es premium_day_spa (ni su variante & Facial)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WEPLASH_TOOL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"conversationId\": \"{{ $('Stripe resolver cuenta y canal').first().json.weplash_conversation_id }}\",\n  \"idempotencyKey\": \"foto-accesorios-manual-{{ $execution.id }}\",\n  \"media\": [ { \"branchMediaTitle\": \"Accesorios\" } ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        24432,
+        15456
+      ],
+      "id": "3170a070-94bb-4dd5-9ad1-510aff372812",
+      "name": "Enviar foto de accesorios",
+      "retryOnFail": false,
+      "notesInFlow": true,
+      "onError": "continueErrorOutput",
+      "notes": "WEPLASH v2 - Adjunto de accesorios en la ruta Weplash. La API busca la imagen por titulo."
+    },
+    {
+      "parameters": {
+        "jsCode": "// El identificador dice de que sistema viene el contacto, y de eso depende por donde sale el\n// mensaje: ManyChat usa solo numeros; nuestra conversacion es un UUID. Cualquier otra cosa no se\n// manda: se reporta, porque no hay transporte que la pueda resolver.\nconst d = $input.first().json ?? {};\nconst id = String(d.subscriber_id ?? '').trim();\nconst esManyChat = /^\\d+$/.test(id);\nconst esConversacion = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);\nconst destino = esManyChat ? 'manychat' : esConversacion ? 'zernio' : 'desconocido';\n\nreturn [{\n  json: {\n    ...d,\n    subscriber_id: id,\n    conversation_id: esConversacion ? id.toLowerCase() : '',\n    destino_mensajeria: destino,\n    identificador_es_manychat: esManyChat,\n    identificador_es_conversacion: esConversacion,\n    manychat_ruta_valida: esManyChat,\n    weplash_ruta_valida: esConversacion,\n    weplash_error: destino === 'desconocido'\n      ? ('IDENTIFICADOR_NO_RECONOCIDO: ' + (id || 'SIN_IDENTIFICADOR'))\n      : null,\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "d451f1a0-0000-4000-8000-000000000001",
+      "name": "Stripe clasificar identificador",
+      "position": [
+        23088,
+        15328
+      ],
+      "notes": "WEPLASH v2 - Clasifica el identificador: solo numeros es del proveedor anterior; UUID es nuestra conversacion."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d451f1a0-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.destino_mensajeria === 'manychat' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "id": "d451f1a0-0000-4000-8000-000000000002",
+      "name": "Stripe identificador es de ManyChat",
+      "position": [
+        23312,
+        15208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d451f1a0-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.destino_mensajeria === 'zernio' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "id": "d451f1a0-0000-4000-8000-000000000003",
+      "name": "Stripe identificador es de Zernio",
+      "position": [
+        23312,
+        15448
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Stripe resolver cuenta y canal').first().json;\nconst raw=$input.first().json || {}; let b=raw.body ?? raw;\nif(typeof b==='string') {try{b=JSON.parse(b);}catch{b={};}}\nconst status=Number(raw.statusCode || 0);\nconst item=b.item||{};\nconst operacionOk=!raw.error && status>=200 && status<300 && typeof item.id==='string' && item.id.length>0 &&\n  ['queued','sending','sent'].includes(String(item.status));\nif(!operacionOk) {\n  const texto=String(b.message ?? raw.error?.message ?? raw.error ?? '').replace(/https?:\\/\\/\\S+/g,'[URL]')\n    .replace(/Bearer\\s+\\S+/gi,'[CREDENCIAL]').slice(0,350);\n  throw new Error('La API no acepto confirmacion_manual. El pago y la reserva permanecen guardados: ' + (texto || 'RESPUESTA_INVALIDA'));\n}\nreturn [{json:{...base,operacion_ok:true,operacion_etapa:'confirmacion_manual',operacion_http_status:status,weplash_error:null,\n  weplash_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "d451f1a0-0000-4000-8000-000000000004",
+      "name": "Validar envío de confirmación manual",
+      "position": [
+        23984,
+        15208
+      ],
+      "notes": "WEPLASH v2 - La API acepta el envio o la ejecucion falla."
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Stripe resolver cuenta y canal').first().json;\nconst raw=$input.first().json || {}; let b=raw.body ?? raw;\nif(typeof b==='string') {try{b=JSON.parse(b);}catch{b={};}}\nconst status=Number(raw.statusCode || 0);\nconst item=b.item||{};\nconst operacionOk=!raw.error && status>=200 && status<300 && typeof item.id==='string' && item.id.length>0 &&\n  ['queued','sending','sent'].includes(String(item.status));\nif(!operacionOk) {\n  const texto=String(b.message ?? raw.error?.message ?? raw.error ?? '').replace(/https?:\\/\\/\\S+/g,'[URL]')\n    .replace(/Bearer\\s+\\S+/gi,'[CREDENCIAL]').slice(0,350);\n  throw new Error('La API no acepto foto_accesorios. El pago y la reserva permanecen guardados: ' + (texto || 'RESPUESTA_INVALIDA'));\n}\nreturn [{json:{...base,operacion_ok:true,operacion_etapa:'foto_accesorios',operacion_http_status:status,weplash_error:null,\n  weplash_envio_aceptado:true}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "d451f1a0-0000-4000-8000-000000000005",
+      "name": "Validar envío de foto",
+      "position": [
+        24656,
+        15656
+      ],
+      "notes": "WEPLASH v2 - La API acepta la foto o la ejecucion falla."
     }
   ],
   "pinData": {},
@@ -952,32 +2157,14 @@
       "main": [
         [
           {
-            "node": "Stripe buscar contacto ISV",
+            "node": "Stripe clasificar identificador",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Stripe buscar contacto ISV": {
-      "main": [
-        [
-          {
-            "node": "Stripe buscar contacto IS",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Stripe buscar contacto IS",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Stripe buscar contacto IS": {
+    "Stripe leer conversación": {
       "main": [
         [
           {
@@ -999,7 +2186,7 @@
       "main": [
         [
           {
-            "node": "Enviar confirmación al contacto",
+            "node": "IF conversación en Weplash",
             "type": "main",
             "index": 0
           }
@@ -1010,7 +2197,14 @@
       "main": [
         [
           {
-            "node": "Continuar registro después de plantilla",
+            "node": "Validar envío de confirmación manual",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar envío de confirmación manual",
             "type": "main",
             "index": 0
           }
@@ -1161,6 +2355,641 @@
           }
         ]
       ]
+    },
+    "Continuar registro después de plantilla": {
+      "main": [
+        [
+          {
+            "node": "Leer precios de conversión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer precios de conversión": {
+      "main": [
+        [
+          {
+            "node": "Preparar conversión manual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar conversión manual": {
+      "main": [
+        [
+          {
+            "node": "IF conversión manual válida",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF precio real encontrado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF conversión manual válida": {
+      "main": [
+        [
+          {
+            "node": "Enviar conversión manual",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Conversión manual omitida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar conversión manual": {
+      "main": [
+        [
+          {
+            "node": "Validar conversión manual",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar conversión manual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar conversión manual": {
+      "main": [
+        [
+          {
+            "node": "Fin conversión manual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF precio real encontrado": {
+      "main": [
+        [
+          {
+            "node": "Preparar aviso de precio faltante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar aviso de precio faltante": {
+      "main": [
+        [
+          {
+            "node": "Gmail aviso precio faltante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe ruta de mensaje válida": {
+      "main": [
+        [
+          {
+            "node": "Stripe elegir cuenta de campos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MC Stripe error de mensajería",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe elegir cuenta de campos": {
+      "main": [
+        [
+          {
+            "node": "Cargar campos plantilla ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cargar campos plantilla principal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar campos plantilla principal": {
+      "main": [
+        [
+          {
+            "node": "Validar Cargar campos plantilla principal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Cargar campos plantilla principal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Cargar campos plantilla principal": {
+      "main": [
+        [
+          {
+            "node": "Stripe elegir cuenta de envío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe elegir cuenta de envío": {
+      "main": [
+        [
+          {
+            "node": "Stripe elegir canal ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar plantilla confirmación IG IS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar plantilla confirmación IG IS": {
+      "main": [
+        [
+          {
+            "node": "Validar Enviar plantilla confirmación IG IS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Enviar plantilla confirmación IG IS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Enviar plantilla confirmación IG IS": {
+      "main": [
+        [
+          {
+            "node": "MC IF foto IG IS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar foto_accesoro IG IS": {
+      "main": [
+        [
+          {
+            "node": "Validar Enviar foto_accesoro IG IS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Enviar foto_accesoro IG IS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Enviar foto_accesoro IG IS": {
+      "main": [
+        [
+          {
+            "node": "Continuar registro después de plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe elegir canal ISV": {
+      "main": [
+        [
+          {
+            "node": "Enviar plantilla confirmación Tiktok ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar plantilla confirmación IG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar plantilla confirmación IG": {
+      "main": [
+        [
+          {
+            "node": "Validar Enviar plantilla confirmación IG",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Enviar plantilla confirmación IG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Enviar plantilla confirmación IG": {
+      "main": [
+        [
+          {
+            "node": "MC IF foto iG ISV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar foto_accesoro iG ISV": {
+      "main": [
+        [
+          {
+            "node": "Validar Enviar foto_accesoro iG ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Enviar foto_accesoro iG ISV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Enviar foto_accesoro iG ISV": {
+      "main": [
+        [
+          {
+            "node": "Continuar registro después de plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar plantilla confirmación Tiktok ISV": {
+      "main": [
+        [
+          {
+            "node": "Validar Enviar plantilla confirmación Tiktok ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Enviar plantilla confirmación Tiktok ISV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Enviar plantilla confirmación Tiktok ISV": {
+      "main": [
+        [
+          {
+            "node": "MC IF foto Tiktok ISV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar foto_accesoro Tiktok ISV": {
+      "main": [
+        [
+          {
+            "node": "Validar Enviar foto_accesoro Tiktok ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Enviar foto_accesoro Tiktok ISV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Enviar foto_accesoro Tiktok ISV": {
+      "main": [
+        [
+          {
+            "node": "Continuar registro después de plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar campos plantilla ISV": {
+      "main": [
+        [
+          {
+            "node": "Validar Cargar campos plantilla ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Cargar campos plantilla ISV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Cargar campos plantilla ISV": {
+      "main": [
+        [
+          {
+            "node": "Stripe elegir cuenta de envío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MC Stripe buscar contacto ISV": {
+      "main": [
+        [
+          {
+            "node": "MC Stripe buscar contacto IS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MC Stripe buscar contacto IS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MC Stripe buscar contacto IS": {
+      "main": [
+        [
+          {
+            "node": "MC Stripe resolver cuenta y canal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MC Stripe resolver cuenta y canal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MC Stripe resolver cuenta y canal": {
+      "main": [
+        [
+          {
+            "node": "Stripe ruta de mensaje válida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF conversación en Weplash": {
+      "main": [
+        [
+          {
+            "node": "Enviar confirmación al contacto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stripe error de mensajería",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MC IF foto iG ISV": {
+      "main": [
+        [
+          {
+            "node": "Enviar foto_accesoro iG ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Enviar foto_accesoro iG ISV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MC IF foto Tiktok ISV": {
+      "main": [
+        [
+          {
+            "node": "Enviar foto_accesoro Tiktok ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Enviar foto_accesoro Tiktok ISV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MC IF foto IG IS": {
+      "main": [
+        [
+          {
+            "node": "Enviar foto_accesoro IG IS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Enviar foto_accesoro IG IS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF enviar foto de accesorios": {
+      "main": [
+        [
+          {
+            "node": "Enviar foto de accesorios",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Continuar registro después de plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar foto de accesorios": {
+      "main": [
+        [
+          {
+            "node": "Validar envío de foto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar envío de foto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe clasificar identificador": {
+      "main": [
+        [
+          {
+            "node": "Stripe identificador es de ManyChat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe identificador es de ManyChat": {
+      "main": [
+        [
+          {
+            "node": "MC Stripe buscar contacto ISV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stripe identificador es de Zernio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe identificador es de Zernio": {
+      "main": [
+        [
+          {
+            "node": "Stripe leer conversación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stripe error de mensajería",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar envío de confirmación manual": {
+      "main": [
+        [
+          {
+            "node": "IF enviar foto de accesorios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar envío de foto": {
+      "main": [
+        [
+          {
+            "node": "Continuar registro después de plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -1169,7 +2998,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "8c5d90ce-e00d-4a0a-bc7c-fe9204b94102",
+  "versionId": "94cee646-8d7c-4288-b1ce-9199811532ac",
   "meta": {
     "instanceId": "2cfe4a887556d1f1b47192ccff3a8e3e8c4536aaa0322bcbe16d74b0c595f5b1"
   },

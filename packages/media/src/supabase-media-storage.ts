@@ -10,6 +10,7 @@ import type { MediaStorage } from './store-remote-media';
 export type SupabaseLikeStorage = {
   storage: {
     from(bucket: string): {
+      remove?(paths: string[]): PromiseLike<{ error: unknown }>;
       upload(
         path: string,
         bytes: Buffer,
@@ -31,6 +32,14 @@ export type SupabaseLikeStorage = {
  */
 export function supabaseMediaStorage(supabase: SupabaseLikeStorage): MediaStorage {
   return {
+    remove: async ({ bucket, path }) => {
+      const almacen = supabase.storage.from(bucket);
+      // Un almacen que no sabe borrar devuelve `false`, que es exactamente lo que significa: el
+      // archivo sigue ahi. Inventar un exito dejaria creyendo que se limpio lo que no se limpio.
+      if (typeof almacen.remove !== 'function') return false;
+      const { error } = await almacen.remove([path]);
+      return !error;
+    },
     upload: async ({ bucket, bytes, contentType, path }) => {
       const { error } = await supabase.storage
         .from(bucket)

@@ -29,6 +29,14 @@ export type MediaStorage = {
     contentType: string;
     path: string;
   }): Promise<boolean>;
+  /**
+   * Borra un archivo del almacen.
+   *
+   * Opcional a proposito: subir y firmar es lo que necesitan los tres consumidores, y borrar solo lo
+   * necesita la biblioteca de material de las sedes. Un doble de prueba que no borre nada no tiene por
+   * que implementarlo, y quien llama trata `false` como «no se pudo borrar el archivo», que es cierto.
+   */
+  remove?(input: { bucket: string; path: string }): Promise<boolean>;
 };
 
 export type StoredMedia = {

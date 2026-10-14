@@ -309,13 +309,35 @@ export class ToolMessagesService {
       .from('branch_media')
       .select('id, kind, storage_object_path')
       .eq('tenant_id', tenantId);
-    const { data, error } = id
-      ? await consulta.eq('id', id)
-      : await consulta
-          .eq('branch_id', await this.sedeDeLaConversacion(supabase, tenantId, conversationId))
-          .ilike('title', this.patronDeTitulo(titulo as string))
+    let data: unknown;
+    let error: unknown;
+    if (id) {
+      ({ data, error } = await consulta.eq('id', id));
+    } else {
+      const sede = await this.sedeDeLaConversacion(supabase, tenantId, conversationId);
+      const buscar = async (patron: string): Promise<unknown[]> => {
+        const { data: filas, error: fallo } = await supabase
+          .from('branch_media')
+          .select('id, kind, storage_object_path')
+          .eq('tenant_id', tenantId)
+          .eq('branch_id', sede)
+          .ilike('title', patron)
           .order('sort_order', { ascending: true })
           .limit(1);
+        if (fallo) throw new InternalServerErrorException('No fue posible leer la multimedia.');
+        return Array.isArray(filas) ? filas : [];
+      };
+
+      // Primero el titulo exacto -- sin distinguir mayusculas -- y solo si no hay, uno que lo
+      // contenga. El titulo es la clave por la que el bot pide el material, y quien lo escribe es una
+      // persona: «Accesorios», «accesorios» y «Accesorios spa» tienen que encontrar la misma foto, con
+      // preferencia por la que se llama exactamente igual.
+      const exacto = await buscar(this.patronDeTitulo(titulo as string));
+      const filas =
+        exacto.length > 0 ? exacto : await buscar(this.patronDeTitulo(titulo as string, true));
+      data = filas;
+      error = null;
+    }
     if (error) throw new InternalServerErrorException('No fue posible leer la multimedia.');
 
     const filas = (Array.isArray(data) ? data : []) as Array<Record<string, unknown>>;
@@ -361,8 +383,14 @@ export class ToolMessagesService {
     return sede;
   }
 
-  /** El titulo se busca tal cual: los comodines de SQL se escapan para que no cambien la busqueda. */
-  private patronDeTitulo(titulo: string): string {
-    return titulo.replace(/[\\%_]/g, (caracter) => '\\' + caracter);
+  /**
+   * El titulo se busca por su texto: los comodines de SQL se escapan para que no cambien la busqueda.
+   *
+   * Con `contiene` se busca ademas en cualquier parte del titulo, que es la tolerancia que evita que
+   * «Accesorios spa» deje de encontrar lo que un flujo pide como «accesorios».
+   */
+  private patronDeTitulo(titulo: string, contiene = false): string {
+    const escapado = titulo.replace(/[\\%_]/g, (caracter) => '\\' + caracter);
+    return contiene ? `%${escapado}%` : escapado;
   }
 }

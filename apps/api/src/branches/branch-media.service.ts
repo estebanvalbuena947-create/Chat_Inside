@@ -57,6 +57,22 @@ const uploadBranchMediaSchema = z.object({
   title: z.string().trim().max(160).optional()
 });
 
+/**
+ * Lo que se puede cambiar de un archivo ya cargado.
+ *
+ * El titulo es lo que le da significado al material: es por donde el bot lo pide (`accesorios`) y lo
+ * que ve quien lo usa desde la bandeja. Por eso se puede corregir sin volver a subir el archivo. El
+ * titulo vacio se guarda como nulo, que es "sin titulo", no "titulo en blanco".
+ */
+export const updateBranchMediaSchema = z
+  .object({
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+    title: z.string().trim().max(160).nullable().optional()
+  })
+  .refine((valor) => valor.title !== undefined || valor.sortOrder !== undefined, {
+    message: 'Hace falta el titulo o el orden.'
+  });
+
 @Injectable()
 export class BranchMediaService {
   constructor(
@@ -221,6 +237,134 @@ export class BranchMediaService {
       tenantId,
       title: parsed.data.title
     });
+  }
+
+  /**
+   * Cambia el titulo o el orden de un archivo ya cargado.
+   *
+   * Existe porque el titulo no es decorativo: es la clave por la que el bot pide el material
+   * (`accesorios`) y lo que ve quien lo usa desde la bandeja. Un archivo cargado sin titulo -- o con
+   * el titulo equivocado -- no deberia obligar a subirlo otra vez desde cero, que es lo que pasaba.
+   *
+   * La sede va en el camino y se comprueba: un archivo de otra sede de este espacio no se edita desde
+   * aqui, y el de otro espacio no existe.
+   */
+  async update(
+    authorization: unknown,
+    tenantId: string,
+    branchSlug: string,
+    mediaId: string,
+    rawBody: unknown
+  ): Promise<unknown> {
+    const identity = await this.requestAuthenticator.authenticate(authorization);
+    await this.tenantAccessService.assertMembership(identity.userId, tenantId);
+
+    const parsed = updateBranchMediaSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new UnprocessableEntityException(
+        'Hace falta el titulo o el orden que quieres cambiar.'
+      );
+    }
+
+    const supabase = this.supabaseServerClientFactory.create();
+    const sede = await this.resolveBranch(supabase, tenantId, branchSlug);
+
+    const cambios: Record<string, unknown> = {};
+    if (parsed.data.title !== undefined) {
+      // Un titulo en blanco es "sin titulo": guardarlo como cadena vacia dejaria dos formas de decir
+      // lo mismo y el bot no encontraria ni una.
+      cambios.title =
+        parsed.data.title === null || parsed.data.title === '' ? null : parsed.data.title;
+    }
+    if (parsed.data.sortOrder !== undefined) cambios.sortOrder = parsed.data.sortOrder;
+
+    const { data, error } = await supabase
+      .from('branch_media')
+      .update({
+        ...(cambios.title !== undefined ? { title: cambios.title } : {}),
+        ...(cambios.sortOrder !== undefined ? { sort_order: cambios.sortOrder } : {})
+      })
+      .eq('tenant_id', tenantId)
+      .eq('branch_id', String(sede.id))
+      .eq('id', mediaId)
+      .select('id, kind, sort_order, title')
+      .maybeSingle();
+
+    if (error) throw new InternalServerErrorException('No fue posible actualizar el material.');
+    if (!data) throw new NotFoundException('Ese archivo no está en el material de esta sede.');
+
+    const fila = data as Record<string, unknown>;
+    return {
+      id: String(fila.id ?? ''),
+      kind: String(fila.kind ?? 'image'),
+      sortOrder: Number(fila.sort_order ?? 0),
+      tenantId,
+      title: fila.title === null || fila.title === undefined ? null : String(fila.title)
+    };
+  }
+
+  /**
+   * Quita un archivo del material de la sede.
+   *
+   * Primero la fila y despues el archivo: si algo falla por el camino, lo que queda es un archivo sin
+   * registro (invisible, y recuperable volviendo a importarlo), no una fila apuntando a un archivo que
+   * ya no esta -- eso si se veria como una imagen rota en la pantalla.
+   *
+   * El archivo solo se borra si ningun otro registro lo comparte: la misma copia puede estar
+   * registrada en dos sedes si se importo el mismo origen.
+   */
+  async remove(
+    authorization: unknown,
+    tenantId: string,
+    branchSlug: string,
+    mediaId: string
+  ): Promise<unknown> {
+    const identity = await this.requestAuthenticator.authenticate(authorization);
+    await this.tenantAccessService.assertMembership(identity.userId, tenantId);
+
+    const supabase = this.supabaseServerClientFactory.create();
+    const sede = await this.resolveBranch(supabase, tenantId, branchSlug);
+
+    const { data: fila, error: errorLectura } = await supabase
+      .from('branch_media')
+      .select('id, storage_object_path')
+      .eq('tenant_id', tenantId)
+      .eq('branch_id', String(sede.id))
+      .eq('id', mediaId)
+      .maybeSingle();
+    if (errorLectura) throw new InternalServerErrorException('No fue posible leer el material.');
+    if (!fila) throw new NotFoundException('Ese archivo no está en el material de esta sede.');
+
+    const ruta = (fila as { storage_object_path?: unknown }).storage_object_path;
+    const path = typeof ruta === 'string' ? ruta : '';
+
+    const { error: errorBorrado } = await supabase
+      .from('branch_media')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .eq('branch_id', String(sede.id))
+      .eq('id', mediaId);
+    if (errorBorrado) throw new InternalServerErrorException('No fue posible quitar el material.');
+
+    let archivoBorrado = false;
+    if (path) {
+      const { data: otros } = await supabase
+        .from('branch_media')
+        .select('id')
+        .eq('storage_object_path', path)
+        .limit(1);
+      if (!Array.isArray(otros) || otros.length === 0) {
+        // Un almacen sin borrado devuelve `false`, y eso es lo que se informa: el archivo sigue ahi.
+        const almacen = supabaseMediaStorage(supabase);
+        archivoBorrado = almacen.remove
+          ? await almacen.remove({ bucket: BRANCH_MEDIA_BUCKET, path })
+          : false;
+      }
+    }
+
+    // El archivo que no se pudo borrar se informa en la respuesta: no cambia lo que pidio quien
+    // llamo, pero deja de ser un misterio de almacenamiento.
+    return { id: mediaId, objectDeleted: archivoBorrado, tenantId };
   }
 
   private kindForContentType(contentType: string): 'image' | 'video' | null {

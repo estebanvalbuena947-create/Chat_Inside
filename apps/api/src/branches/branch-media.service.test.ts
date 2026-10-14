@@ -39,23 +39,42 @@ const GUARDADO = {
   path: 'tenant-1/branch-1/abc123.jpg'
 };
 
-function crearServicio(opciones: { miembro?: boolean; sedeExiste?: boolean } = {}) {
+function crearServicio(
+  opciones: {
+    borradoSoportado?: boolean;
+    mediaRespuestas?: Array<{ data: unknown; error: unknown }>;
+    miembro?: boolean;
+    sedeExiste?: boolean;
+  } = {}
+) {
   const { argumentosDe, cliente, llamadasDe } = crearClienteSupabase({
-    branch_media: {
-      data: {
-        id: 'media-1',
-        kind: 'image',
-        sort_order: 0,
-        storage_object_path: GUARDADO.path,
-        title: 'Fachada'
-      },
-      error: null
-    },
+    branch_media:
+      opciones.mediaRespuestas ??
+      ({
+        data: {
+          id: 'media-1',
+          kind: 'image',
+          sort_order: 0,
+          storage_object_path: GUARDADO.path,
+          title: 'Fachada'
+        },
+        error: null
+      } as { data: unknown; error: unknown }),
     branches: { data: opciones.sedeExiste === false ? null : SEDE, error: null }
   });
 
   const storageUpload = vi.fn(async () => ({ error: null }));
-  const supabase = { ...cliente, storage: { from: vi.fn(() => ({ upload: storageUpload })) } };
+  const storageRemove = vi.fn(async () => ({ error: null }));
+  const supabase = {
+    ...cliente,
+    storage: {
+      from: vi.fn(() =>
+        opciones.borradoSoportado === false
+          ? { upload: storageUpload }
+          : { remove: storageRemove, upload: storageUpload }
+      )
+    }
+  };
 
   const assertMembership = vi.fn(async () => {
     if (opciones.miembro === false) throw new ForbiddenException('Sin pertenencia.');
@@ -69,7 +88,7 @@ function crearServicio(opciones: { miembro?: boolean; sedeExiste?: boolean } = {
     { create: () => supabase } as unknown as SupabaseServerClientFactory
   );
 
-  return { argumentosDe, assertMembership, llamadasDe, servicio, storageUpload };
+  return { argumentosDe, assertMembership, llamadasDe, servicio, storageRemove, storageUpload };
 }
 
 beforeEach(() => {
@@ -363,5 +382,157 @@ describe('listado de administracion', () => {
 
     expect(resultado.items).toHaveLength(0);
     expect(createSignedUrls).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Corregir el material ya cargado.
+ *
+ * El titulo no es decorativo: es la clave por la que el bot pide el material («accesorios») y lo que
+ * ve quien lo usa. Las 24 filas que se cargaron sin titulo dejaron la confirmacion de pago fallando,
+ * y la unica salida era volver a subir el archivo. Estas pruebas fijan que corregirlo no toca el
+ * archivo.
+ */
+describe('cambiar el titulo o el orden', () => {
+  const FILA_ESCRITA = {
+    id: 'media-1',
+    kind: 'image',
+    sort_order: 0,
+    storage_object_path: GUARDADO.path,
+    title: 'Fachada'
+  };
+
+  it('cambia el titulo sin volver a subir ni descargar nada', async () => {
+    // El doble no refleja lo escrito: devuelve la fila que se le da, ya con el titulo nuevo. Lo que se
+    // afirma del servicio es lo que DECIDE escribir, y que no toca el archivo por el camino.
+    const { argumentosDe, servicio, storageUpload } = crearServicio({
+      mediaRespuestas: [{ data: { ...FILA_ESCRITA, title: 'Accesorios' }, error: null }]
+    });
+
+    const resultado = (await servicio.update('Bearer token', 'tenant-1', 'valle', 'media-1', {
+      title: 'Accesorios'
+    })) as { title: string };
+
+    expect(argumentosDe('branch_media', 'update')?.[0]).toMatchObject({ title: 'Accesorios' });
+    expect(resultado.title).toBe('Accesorios');
+    expect(storageUpload).not.toHaveBeenCalled();
+    expect(storeRemoteMedia).not.toHaveBeenCalled();
+  });
+
+  it('un titulo en blanco se guarda como sin titulo, no como cadena vacia', async () => {
+    const { argumentosDe, servicio } = crearServicio();
+
+    await servicio.update('Bearer token', 'tenant-1', 'valle', 'media-1', { title: '   ' });
+
+    // Dos formas de decir "sin titulo" dejarian al bot sin encontrar ninguna.
+    expect(argumentosDe('branch_media', 'update')?.[0]).toMatchObject({ title: null });
+  });
+
+  it('el orden se puede cambiar sin tocar el titulo', async () => {
+    const { argumentosDe, servicio } = crearServicio();
+
+    await servicio.update('Bearer token', 'tenant-1', 'valle', 'media-1', { sortOrder: 3 });
+
+    const parche = argumentosDe('branch_media', 'update')?.[0] as Record<string, unknown>;
+    expect(parche).toMatchObject({ sort_order: 3 });
+    expect('title' in parche).toBe(false);
+  });
+
+  it('sin titulo ni orden la peticion se rechaza antes de escribir', async () => {
+    const { argumentosDe, servicio } = crearServicio();
+
+    await expect(
+      servicio.update('Bearer token', 'tenant-1', 'valle', 'media-1', {})
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    expect(argumentosDe('branch_media', 'update')).toBeUndefined();
+  });
+
+  it('un archivo de otra sede no se puede editar', async () => {
+    const { argumentosDe, servicio } = crearServicio({ sedeExiste: false });
+
+    await expect(
+      servicio.update('Bearer token', 'tenant-1', 'ajena', 'media-1', { title: 'Accesorios' })
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(argumentosDe('branch_media', 'update')).toBeUndefined();
+  });
+});
+
+/**
+ * Quitar material de una sede.
+ *
+ * Dos cosas que importan: el archivo solo se borra si ningun otro registro lo comparte (la misma
+ * copia puede estar en dos sedes) y un archivo que no existe no borra nada.
+ */
+describe('quitar material de una sede', () => {
+  const FILA = {
+    id: 'media-1',
+    storage_object_path: GUARDADO.path,
+    title: 'Fachada'
+  };
+
+  it('borra el registro y el archivo cuando nadie mas lo usa', async () => {
+    const { argumentosDe, servicio, storageRemove } = crearServicio({
+      mediaRespuestas: [
+        { data: FILA, error: null },
+        { data: null, error: null },
+        { data: [], error: null }
+      ]
+    });
+
+    const resultado = (await servicio.remove('Bearer token', 'tenant-1', 'valle', 'media-1')) as {
+      objectDeleted: boolean;
+    };
+
+    expect(argumentosDe('branch_media', 'delete')).toHaveLength(0);
+    expect(storageRemove).toHaveBeenCalledWith([GUARDADO.path]);
+    expect(resultado.objectDeleted).toBe(true);
+  });
+
+  it('conserva el archivo si otro registro lo comparte', async () => {
+    const { servicio, storageRemove } = crearServicio({
+      mediaRespuestas: [
+        { data: FILA, error: null },
+        { data: null, error: null },
+        { data: [{ id: 'media-2' }], error: null }
+      ]
+    });
+
+    const resultado = (await servicio.remove('Bearer token', 'tenant-1', 'valle', 'media-1')) as {
+      objectDeleted: boolean;
+    };
+
+    expect(storageRemove).not.toHaveBeenCalled();
+    expect(resultado.objectDeleted).toBe(false);
+  });
+
+  it('un almacen que no sabe borrar lo dice en vez de fingir que limpio', async () => {
+    const { servicio } = crearServicio({
+      borradoSoportado: false,
+      mediaRespuestas: [
+        { data: FILA, error: null },
+        { data: null, error: null },
+        { data: [], error: null }
+      ]
+    });
+
+    const resultado = (await servicio.remove('Bearer token', 'tenant-1', 'valle', 'media-1')) as {
+      objectDeleted: boolean;
+    };
+
+    expect(resultado.objectDeleted).toBe(false);
+  });
+
+  it('un archivo que no esta no borra nada', async () => {
+    const { servicio, storageRemove } = crearServicio({
+      mediaRespuestas: [{ data: null, error: null }]
+    });
+
+    await expect(
+      servicio.remove('Bearer token', 'tenant-1', 'valle', 'media-1')
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(storageRemove).not.toHaveBeenCalled();
   });
 });

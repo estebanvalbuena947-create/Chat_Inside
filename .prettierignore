@@ -6,6 +6,10 @@ example-spa/
 specs/TEMPLATE.md
 plans/TEMPLATE.md
 
+# Manifiestos que escribe la herramienta: formatearlos a mano pelea con pnpm y ensucia cada commit.
+# Se revisan por su contenido, no por su estilo.
+pnpm-lock.yaml
+
 # Exportaciones de n8n y datos de trabajo: no son codigo fuente.
 Flujos/
 Flujos_v2/

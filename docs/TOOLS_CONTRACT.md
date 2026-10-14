@@ -92,6 +92,35 @@ esa conversación · `422` falta la conversación o la clave, no hay ni texto ni
 del bot está apagado en el espacio, la ventana de 24 horas de WhatsApp está cerrada, o `whatsappTemplate`
 viene mezclado con texto, multimedia o `templateName`.
 
+### Un solo camino de respuesta
+
+**Una respuesta, un nodo.** El canal lo resuelve la API a partir de la conversación: no lo elige el
+flujo. Por eso ningún flujo se ramifica por cuenta, por canal ni por los campos del contacto para
+decidir cómo responde: un envío es **una** llamada a esta ruta. La única rama legítima es el error.
+
+Vale también para los verificadores. El verificador lee `item.status` de la respuesta del POST, así
+que **el nodo que envía no puede ser un `IF` ni un `Code`**: si en la cadena hay un IF donde debía
+estar el envío, el verificador lee algo sin `statusCode`, publica `operacion_ok: false` con
+`operacion_http_status: 0` y el mensaje nunca sale — un fallo silencioso, porque la ejecución termina
+sin que el envío aparezca como error.
+
+Los **campos del contacto no son transporte**. Escribirlos antes de enviar
+(`POST /v1/tools/contact-fields`) es andamiaje del proveedor anterior: si un flujo necesita ese dato
+como perfil del contacto, lo escribe sin condicionar el envío ni elegir cuenta con él.
+
+### La identidad es el id de la conversación, no la del proveedor
+
+Todas las rutas de conversación resuelven por `conversations.id`, que es un **UUID**. Un identificador
+del proveedor anterior (numérico) no lo es y responde `404`/`422`, así que el flujo resuelve la
+identidad **antes** de llamar: prefiere el id de la conversación y, si solo tiene el del proveedor, no
+llama —lo reporta con su motivo—. Ningún flujo debe mandar `subscriber_id` a estas rutas.
+
+Mientras un borrador siga trayendo el id del proveedor anterior, el envío se puede **puentear**: una
+sola bifurcación, decidida por la forma del identificador —solo dígitos es del proveedor anterior; un
+UUID es nuestro— que manda cada caso por su transporte. Lo que no se puentea es nada que dependa de
+nuestro extremo: la **conversión** (`/v1/tools/conversions`) solo la hace la API y solo con un id de
+conversación; un id del proveedor anterior la deja omitida y registrada.
+
 ## 2. Sedes — `GET /v1/tools/branches`
 
 ```json
@@ -127,11 +156,14 @@ donde se copió. Por eso un adjunto también se puede pedir por el título que v
 ```
 
 La API busca ese título **dentro de la sede de la conversación** (la que el bot fijó en el punto 6) y
-del espacio del token. Si hay varias coincidencias toma la de menor `sort_order`; si no hay ninguna,
-responde `422` y **no encola nada**. Sin sede en la conversación tampoco se puede buscar por título.
+del espacio del token. La comparación no distingue mayúsculas y, si no hay coincidencia exacta, vale
+que el título **contenga** la palabra: el exacto tiene preferencia, y entre iguales gana el de menor
+`sort_order`. Así `accesorios`, `Accesorios` y `Accesorios spa` encuentran la misma foto, que es lo que
+evita que una palabra de más deje un flujo roto. Si no hay ninguna, responde `422` y **no encola nada**.
+Sin sede en la conversación tampoco se puede buscar por título.
 
-**Antes de activar un flujo que la use**: sube la imagen y titúlala. El procedimiento está en
-`docs/procedimiento-multimedia-sedes.md`.
+**Antes de activar un flujo que la use**: sube la imagen y titúlala. El procedimiento, con la lista de
+títulos acordada y cómo corregir uno ya cargado, está en `docs/procedimiento-multimedia-sedes.md`.
 
 ## 4. Transferir a un asesor — `POST /v1/tools/assignments`
 

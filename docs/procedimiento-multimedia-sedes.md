@@ -47,8 +47,45 @@ llamarse **«Accesorios»**; si hay varias con ese título, se envía la de meno
 imagen no exista, el envío responde 422 con el motivo y **no encola nada**, que es lo correcto: mandar
 el texto sin la foto pasaría desapercibido.
 
-Para cambiar el orden en que se muestran, vuelve a importar el mismo enlace con otro título: la
-importación es idempotente y **actualiza** la fila en lugar de duplicarla.
+## Los títulos, y cómo se organizan
+
+Un título no es un adorno: es la clave por la que el bot pide el material. Conviene tratarlos como una
+**lista corta de roles**, no como descripciones libres. Los que algún flujo pide por su nombre son
+contrato; el resto es catálogo que el agente muestra cuando viene al caso.
+
+| Título       | Para qué                         | ¿Lo pide un flujo? |
+| ------------ | -------------------------------- | ------------------ |
+| `accesorios` | Acompaña la confirmación de pago | **Sí, por nombre** |
+| `fachada`    | Presentar la sede                | No                 |
+| `recepcion`  | Recepción y llegada              | No                 |
+| `sala`       | Sala de masaje                   | No                 |
+| `jacuzzi`    | Tina o jacuzzi                   | No                 |
+| `temazcal`   | Temazcal                         | No                 |
+| `promocion`  | La promo del mes, cuando cambia  | No                 |
+
+Dos reglas prácticas:
+
+- **La comparación no distingue mayúsculas y admite que el título contenga la palabra.** `accesorios`,
+  `Accesorios` y `Accesorios spa` encuentran la misma imagen; el título exacto tiene preferencia sobre
+  el que solo la contiene. Aun así, no mezcles dos roles en un título (`sala y jacuzzi`) salvo que de
+  verdad sea una sola foto de las dos cosas.
+- **Un orden deliberado.** `sort_order` decide en qué orden se muestran y desempata si hay dos con el
+  mismo título. La primera de cada sede es la que más se comparte.
+
+## Corregir, ordenar y quitar
+
+Ya no hace falta reimportar el enlace para cambiar un título. En **Configuración → Multimedia por
+sede**, cada archivo de la lista tiene:
+
+- **Su título editable**: se escribe y se pulsa **Guardar título**. Dejarlo en blanco lo deja _sin
+  título_, que es distinto de un título vacío.
+- **Las flechas ↑ ↓**: mueven el archivo una posición y dejan el orden compacto (los que cambian de
+  sitio reciben su posición; si dos compartían número, queda arreglado).
+- **Quitar**: lo saca del material de la sede. Se pregunta antes, y el archivo del almacén solo se
+  borra si ningún otro registro lo comparte.
+
+Por API, lo mismo: `PATCH /v1/tenants/{id}/branches/{slug}/media/{mediaId}` con `{ "title": "Accesorios" }`
+o `{ "sortOrder": 3 }`, y `DELETE` sobre la misma dirección.
 
 ## Qué se acepta
 

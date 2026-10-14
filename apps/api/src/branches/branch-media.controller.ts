@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
   Inject,
   Param,
+  Patch,
   Post,
   Req,
   UnprocessableEntityException
@@ -48,6 +50,34 @@ export class BranchMediaController {
     // La sede viene en el camino; se añade al cuerpo para que el servicio la valide con el resto.
     const cuerpo = (body ?? {}) as Record<string, unknown>;
     return this.service.importFromUrl(authorization, tenantId, { ...cuerpo, branchSlug });
+  }
+
+  /**
+   * Cambia el titulo o el orden de un archivo ya cargado.
+   *
+   * El titulo es por donde el bot pide el material, asi que corregirlo no puede costar volver a subir
+   * el archivo.
+   */
+  @Patch(':mediaId')
+  async actualizar(
+    @Param('tenantId') tenantId: string,
+    @Param('branchSlug') branchSlug: string,
+    @Param('mediaId') mediaId: string,
+    @Body() body: unknown,
+    @Headers('authorization') authorization: string | undefined
+  ): Promise<unknown> {
+    return this.service.update(authorization, tenantId, branchSlug, mediaId, body);
+  }
+
+  /** Quita un archivo del material de la sede. */
+  @Delete(':mediaId')
+  async quitar(
+    @Param('tenantId') tenantId: string,
+    @Param('branchSlug') branchSlug: string,
+    @Param('mediaId') mediaId: string,
+    @Headers('authorization') authorization: string | undefined
+  ): Promise<unknown> {
+    return this.service.remove(authorization, tenantId, branchSlug, mediaId);
   }
 
   /** Sube un archivo elegido por el administrador; la API reconoce su tipo por los bytes. */

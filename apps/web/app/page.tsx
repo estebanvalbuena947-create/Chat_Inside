@@ -391,8 +391,11 @@ export default function HomePage(): React.ReactNode {
   const [branchMediaFileInputKey, setBranchMediaFileInputKey] = useState(0);
   const [branchMediaTitle, setBranchMediaTitle] = useState('');
   const [branchMediaItems, setBranchMediaItems] = useState<
-    Array<{ id: string; kind: string; title: string | null; url: string | null }>
+    Array<{ id: string; kind: string; sortOrder: number; title: string | null; url: string | null }>
   >([]);
+  /** El titulo que se esta escribiendo en cada tarjeta, por identificador de archivo. */
+  const [branchMediaTitles, setBranchMediaTitles] = useState<Record<string, string>>({});
+  const [branchMediaBusy, setBranchMediaBusy] = useState<string | null>(null);
   const [branchMediaNotice, setBranchMediaNotice] = useState<string | null>(null);
   const [isLoadingBranchMedia, setIsLoadingBranchMedia] = useState(false);
   const [isImportingBranchMedia, setIsImportingBranchMedia] = useState(false);
@@ -409,13 +412,22 @@ export default function HomePage(): React.ReactNode {
       });
       const cuerpo = (await respuesta.json().catch(() => ({}))) as {
         error?: string;
-        items?: Array<{ id: string; kind: string; title: string | null; url: string | null }>;
+        items?: Array<{
+          id: string;
+          kind: string;
+          sortOrder: number;
+          title: string | null;
+          url: string | null;
+        }>;
       };
       if (!respuesta.ok) {
         setBranchMediaNotice(cuerpo.error ?? 'No se pudo leer el material de la sede.');
         return;
       }
-      setBranchMediaItems(Array.isArray(cuerpo.items) ? cuerpo.items : []);
+      const items = Array.isArray(cuerpo.items) ? cuerpo.items : [];
+      setBranchMediaItems(items);
+      // El borrador de cada tarjeta empieza con el titulo guardado: si nadie lo toca, no se escribe.
+      setBranchMediaTitles(Object.fromEntries(items.map((item) => [item.id, item.title ?? ''])));
     } catch {
       setBranchMediaNotice('No se pudo leer el material de la sede.');
     } finally {
@@ -532,6 +544,109 @@ export default function HomePage(): React.ReactNode {
       setIsImportingBranchMedia(false);
     }
   }
+  /**
+   * Corregir el titulo de un archivo ya cargado.
+   *
+   * El titulo es por donde el bot pide el material -- «accesorios» en la confirmacion de pago --, asi
+   * que equivocarse al cargarlo no puede obligar a subirlo otra vez.
+   */
+  async function saveBranchMediaTitle(id: string): Promise<void> {
+    const title = (branchMediaTitles[id] ?? '').trim();
+    setBranchMediaBusy(id);
+    setBranchMediaNotice(null);
+    try {
+      const respuesta = await fetch(
+        `/api/branches/media/${encodeURIComponent(id)}?branchSlug=${encodeURIComponent(branchMediaSlug)}`,
+        {
+          body: JSON.stringify({ title }),
+          headers: { 'Content-Type': 'application/json' },
+          method: 'PATCH'
+        }
+      );
+      const cuerpo = (await respuesta.json().catch(() => ({}))) as { error?: string };
+      if (!respuesta.ok) {
+        setBranchMediaNotice(cuerpo.error ?? 'No se pudo cambiar el titulo.');
+        return;
+      }
+      setBranchMediaNotice(title ? `Titulo guardado: ${title}.` : 'El archivo quedo sin titulo.');
+      await loadBranchMedia(branchMediaSlug);
+    } catch {
+      setBranchMediaNotice('No se pudo cambiar el titulo.');
+    } finally {
+      setBranchMediaBusy(null);
+    }
+  }
+
+  /**
+   * Mueve un archivo una posicion y deja el orden compacto.
+   *
+   * Se reescribe el orden de los que cambian de sitio, no el de todos: si dos filas compartian numero,
+   * esto ademas lo arregla, porque cada una pasa a tener la posicion que ocupa.
+   */
+  async function moveBranchMedia(id: string, direccion: -1 | 1): Promise<void> {
+    const desde = branchMediaItems.findIndex((item) => item.id === id);
+    const hasta = desde + direccion;
+    if (desde < 0 || hasta < 0 || hasta >= branchMediaItems.length) return;
+
+    const reordenados = [...branchMediaItems];
+    const [movido] = reordenados.splice(desde, 1);
+    if (!movido) return;
+    reordenados.splice(hasta, 0, movido);
+
+    setBranchMediaBusy(id);
+    setBranchMediaNotice(null);
+    try {
+      const cambios = reordenados
+        .map((item, indice) => ({ indice, item }))
+        .filter(({ indice, item }) => item.sortOrder !== indice);
+      for (const { indice, item } of cambios) {
+        const respuesta = await fetch(
+          `/api/branches/media/${encodeURIComponent(item.id)}?branchSlug=${encodeURIComponent(branchMediaSlug)}`,
+          {
+            body: JSON.stringify({ sortOrder: indice }),
+            headers: { 'Content-Type': 'application/json' },
+            method: 'PATCH'
+          }
+        );
+        if (!respuesta.ok) {
+          const cuerpo = (await respuesta.json().catch(() => ({}))) as { error?: string };
+          setBranchMediaNotice(cuerpo.error ?? 'No se pudo cambiar el orden.');
+          return;
+        }
+      }
+      await loadBranchMedia(branchMediaSlug);
+    } catch {
+      setBranchMediaNotice('No se pudo cambiar el orden.');
+    } finally {
+      setBranchMediaBusy(null);
+    }
+  }
+
+  /** Quita un archivo del material de la sede. Se pregunta antes: no hay vuelta atras. */
+  async function removeBranchMedia(id: string): Promise<void> {
+    if (!window.confirm('Se quitara este archivo del material de la sede. ¿Continuar?')) return;
+
+    setBranchMediaBusy(id);
+    setBranchMediaNotice(null);
+    try {
+      const respuesta = await fetch(
+        `/api/branches/media/${encodeURIComponent(id)}?branchSlug=${encodeURIComponent(branchMediaSlug)}`,
+        { method: 'DELETE' }
+      );
+      const cuerpo = (await respuesta.json().catch(() => ({}))) as { error?: string };
+      if (!respuesta.ok) {
+        setBranchMediaNotice(cuerpo.error ?? 'No se pudo quitar el archivo.');
+        return;
+      }
+      setBranchMediaNotice('Archivo quitado del material de la sede.');
+      await loadBranchMedia(branchMediaSlug);
+    } catch {
+      setBranchMediaNotice('No se pudo quitar el archivo.');
+    } finally {
+      setBranchMediaBusy(null);
+    }
+  }
+
   const [editingInternalLabel, setEditingInternalLabel] = useState<InternalLabel | null>(null);
   const [internalLabelName, setInternalLabelName] = useState('');
   const [isSavingInternalLabel, setIsSavingInternalLabel] = useState(false);
@@ -4444,7 +4559,7 @@ export default function HomePage(): React.ReactNode {
             <p className="media-view-copy">Esta sede todavia no tiene material.</p>
           ) : (
             <ul className="branch-media-list">
-              {branchMediaItems.map((item) => (
+              {branchMediaItems.map((item, indice) => (
                 <li className="branch-media-list-item" key={item.id}>
                   {item.url ? (
                     item.kind === 'video' ? (
@@ -4462,7 +4577,68 @@ export default function HomePage(): React.ReactNode {
                     // Sin copia en el almacen no hay enlace: se dice, en vez de dejar un hueco.
                     <span className="branch-media-missing">Falta el archivo</span>
                   )}
-                  <span>{item.title ?? 'Sin titulo'}</span>
+                  {/*
+                    El titulo se corrige aqui y no volviendo a subir el archivo: es la clave por la que
+                    el bot pide el material, asi que un titulo mal puesto dejaba un flujo roto.
+                  */}
+                  <div className="branch-media-title">
+                    <input
+                      maxLength={160}
+                      onChange={(evento) =>
+                        setBranchMediaTitles((previo) => ({
+                          ...previo,
+                          [item.id]: evento.target.value
+                        }))
+                      }
+                      onKeyDown={(evento) => {
+                        if (evento.key === 'Enter') {
+                          evento.preventDefault();
+                          void saveBranchMediaTitle(item.id);
+                        }
+                      }}
+                      placeholder="Sin titulo"
+                      value={branchMediaTitles[item.id] ?? ''}
+                    />
+                    <button
+                      className="ghost-button"
+                      disabled={
+                        branchMediaBusy !== null ||
+                        (branchMediaTitles[item.id] ?? '') === (item.title ?? '')
+                      }
+                      onClick={() => void saveBranchMediaTitle(item.id)}
+                      type="button"
+                    >
+                      {branchMediaBusy === item.id ? 'Guardando…' : 'Guardar título'}
+                    </button>
+                  </div>
+                  <div className="branch-media-actions">
+                    <button
+                      aria-label="Mover antes"
+                      className="ghost-button"
+                      disabled={indice === 0 || branchMediaBusy !== null}
+                      onClick={() => void moveBranchMedia(item.id, -1)}
+                      type="button"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      aria-label="Mover despues"
+                      className="ghost-button"
+                      disabled={indice === branchMediaItems.length - 1 || branchMediaBusy !== null}
+                      onClick={() => void moveBranchMedia(item.id, 1)}
+                      type="button"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      className="ghost-button"
+                      disabled={branchMediaBusy !== null}
+                      onClick={() => void removeBranchMedia(item.id)}
+                      type="button"
+                    >
+                      Quitar
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

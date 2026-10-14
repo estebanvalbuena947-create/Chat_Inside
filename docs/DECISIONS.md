@@ -1028,6 +1028,31 @@ reserva y comprobante, e inserta el historial en una única transacción. La cla
 impide repetir el efecto ante reintentos. La migración externa es aditiva y el dashboard anterior sigue
 funcionando durante la transición.
 
+## El material de una sede se organiza por títulos-rol, y se corrige sin volver a subirlo (2026-10-13)
+
+Las 24 imágenes de las sedes se cargaron sin título, y el título es la clave por la que el bot pide el
+material: la confirmación de pago pide `accesorios` y no encontraba nada, así que respondía 422. La
+salida disponible era volver a importar cada enlace con su título, que para 24 archivos es un castigo, y
+no arregla el problema de fondo: un título que solo se puede escribir **al cargar** convierte cualquier
+error de tecleo en un flujo roto.
+
+**Los títulos son roles, no descripciones.** Una lista corta y acordada, en minúsculas y sin acentos.
+Solo los que algún flujo pide por su nombre son contrato —hoy `accesorios`—; el resto (`fachada`,
+`recepcion`, `sala`, `jacuzzi`, `promocion`) es catálogo que el agente muestra cuando viene al caso.
+Cuantos menos nombres de contrato, menos se rompe.
+
+**La comparación es tolerante y con preferencia clara.** Primero el título exacto, sin distinguir
+mayúsculas; si no hay, uno que lo contenga, y entre iguales el de menor `sort_order`. `accesorios`,
+`Accesorios` y `Accesorios spa` encuentran la misma foto. Sin esa tolerancia, una palabra de más dejaba
+un envío fallando por un motivo que nadie podía ver.
+
+**Corregir no cuesta volver a subir.** El título y el orden se editan sobre el archivo ya cargado, y se
+puede quitar del material. Por eso el adaptador del almacén aprendió a borrar —y dice `false` cuando no
+puede, en lugar de fingir que limpió—, y el archivo solo se borra si ningún otro registro lo comparte:
+la misma copia puede estar registrada en dos sedes. La fila se quita antes que el archivo, de modo que un
+fallo a medias deja un archivo invisible —recuperable volviendo a importarlo— y no una imagen rota en la
+pantalla.
+
 ## Las reseñas de Google: el bot contesta las buenas y las malas las contesta una persona (2026-10-12)
 
 El bot responde solo las de cuatro y cinco estrellas, y solo con el texto de una plantilla del espacio.
@@ -1194,3 +1219,107 @@ que se requieran. El servidor convierte el nombre a un slug estable y aplica la 
 la interfaz no mantiene una lista de nombres ni escribe directamente en la base. Crear una sede no
 borra ni modifica conversaciones existentes, y si una futura sede necesita una referencia externa se
 agrega como configuración explícita en su propio corte.
+
+## El nodo que envía no puede ser un IF, y n8n no admite dos nombres iguales (2026-10-14)
+
+El recordatorio de pago de 4.1 se ejecutó completo y **no salió ningún mensaje**. La lectura de la
+conversación funcionó (200, `instagram`), el borrador se marcó y el flujo terminó sin error visible:
+`Recordatorio - validar envío` publicó `operacion_ok: false`, `operacion_http_status: 0` y
+`weplash_error: Recordatorio_ENVIO: RESPUESTA_INVALIDA`, y el borrador quedó en
+`RECORDATORIO_PAGO_1H_ERROR`.
+
+La causa no eran los cuerpos —estaban bien, con el texto escapado y su clave de idempotencia— sino la
+forma del grafo: en el flujo desplegado, el nodo llamado `Recordatorio - enviar mensaje` era un **IF**
+que comprobaba `operacion_ok`, y en ese tramo **no existía ninguna llamada a
+`POST /v1/tools/messages`**. El verificador leyó la salida del IF, que no trae `statusCode`; de ahí el
+`0` y el fallo reportado después de un envío que nunca ocurrió.
+
+**Regla.** Un envío es una llamada HTTP y su verificador lee _esa_ respuesta. Nada más puede ocupar el
+lugar del envío: ni un IF, ni un Code, ni un nodo que ya no está.
+
+**Mecanismo.** n8n **no admite dos nodos con el mismo nombre** y, al importar, se queda con uno sin
+avisar. El corte anterior dejó dos nodos llamados `Recordatorio - enviar mensaje` —el POST y el IF que
+aceptaba el envío— así que al importar sobrevivió el IF y el POST se perdió. El síntoma es
+indistinguible de un envío rechazado, por eso tardó en verse.
+
+**Guardas.** La prueba de estructura de los flujos (`apps/api/src/tools/flow-payloads.test.ts`) ahora
+exige, sobre el grafo y no sobre el texto: nombres únicos por archivo; que todo nodo que promete
+«enviar mensaje» sea el POST a `/v1/tools/messages`; que quien publica `operacion_ok` reciba
+únicamente de un POST a esa ruta; que ningún nodo quede aislado (conectividad sin importar el tipo de
+conexión, para no marcar como sueltas las tools de un agente); y que un flujo ya migrado no conserve
+el andamiaje del proveedor anterior. Se comprobó que delata el caso exacto: con una copia donde el
+envío se sustituye por aquel IF, fallan las dos aserciones nombradas.
+
+**Se rechazó** confiar en la revisión del lienzo —un bloque roto puede quedar conectado entre sí, que
+es lo que pasó con la conversión de 4.2—, revisar solo los cuerpos, y prohibir por nombre cualquier
+IF, porque el camino legítimo también los usa (`- ruta válida`, `Enviar solo si continúa pendiente`).
+
+## El id del proveedor anterior no identifica una conversación (2026-10-14)
+
+`subscriber_id` viene del proveedor anterior y es **numérico**. Nuestros extremos resuelven la
+conversación por `conversations.id`, que es un **UUID** (`tool-conversation.service.ts` filtra por
+`id`), y con cualquier otra forma responden `404`/`422`. El puente que dejó el traductor de entrada
+—rellenar `subscriber_id` con el id de la conversación— es correcto, pero **no convierte el campo en
+nuestro identificador**: mientras una fila traiga el id del proveedor, leerla o escribirle es un fallo
+seguro.
+
+Por eso 4.1 resuelve la identidad antes de tocar la API: prefiere un `conversation_id` explícito —el
+disparador lo acepta—, acepta `subscriber_id` **solo** cuando tiene forma de UUID y, cuando no la
+tiene, **no gasta la llamada**: la cadena se detiene en la rama que maneja ese caso y deja su motivo
+propio (`RECORDATORIO_PAGO_1H_SIN_CONVERSACION`, `LIBERADA_SIN_CONVERSACION`) con el identificador
+recibido. Antes ese caso se reportaba como «respuesta inválida del envío», que señala al lugar
+equivocado: el problema no era el envío, era la identidad.
+
+Lo que falta para que esas filas **sí** se respondan —y que todavía no está decidido—: que el id de la
+conversación llegue en el borrador, o que la API resuelva la conversación por el identificador de
+plataforma (`contacts.platform_user_id` existe en la base, pero ninguna ruta lo expone). Hasta
+entonces, una fila con id del proveedor no se responde: se reporta.
+
+La prueba de los flujos exige que un flujo migrado no mande `subscriber_id` a `/v1/tools/`, así que
+este error no puede volver por descuido.
+
+## El puente de 4.2: el identificador decide el transporte (2026-10-14)
+
+Mientras los borradores sigan guardando el id del proveedor anterior, 4.2 tiene que poder contestar de
+las dos formas. El flujo se parte **una** vez, con una regla explícita:
+
+| Lo que llega en `subscriber_id`   | Transporte                                     |
+| --------------------------------- | ---------------------------------------------- |
+| solo dígitos (id de ManyChat)     | ManyChat                                       |
+| UUID (id de nuestra conversación) | nuestra API                                    |
+| cualquier otra cosa               | nada: se reporta con el identificador recibido |
+
+El nodo `Stripe clasificar identificador` publica `destino_mensajeria` y las dos marcas
+(`identificador_es_manychat`, `identificador_es_conversacion`); dos IF encadenados separan las ramas.
+La rama de ManyChat es la que ya funcionaba —buscar el contacto en las dos cuentas, resolver cuenta y
+canal, cargar los campos de la plantilla y lanzar el flujo correspondiente—, injertada tal cual, con
+sus credenciales; la rama nuestra lee la conversación y envía por `/v1/tools/messages`.
+
+**Se rechazó** detectar el origen con `Number(...)` o `isNaN`: un UUID da `NaN` pero también lo dan la
+cadena vacía y cualquier texto, y un id con ceros a la izquierda se convertiría en otro número. La
+forma se comprueba con expresiones regulares sobre el texto.
+
+**La conversión no se puentea.** Solo la hace nuestra API (`/v1/tools/conversions`) y solo cuando el
+identificador es de una conversación nuestra: con un id del proveedor anterior la compuerta
+`Conversión tiene cuenta configurada` la omite y lo deja escrito (`conversion_omitida`), en lugar de
+mandar el evento con un id que nuestro extremo no puede resolver. La compuerta lee el clasificador
+—que siempre corre— y no la lectura, que en la rama de ManyChat no se ejecuta.
+
+La prueba de los flujos exige que toda llamada a `api.manychat.com` descienda de la rama que clasifica
+el identificador, así que el proveedor anterior no puede volver a colarse por el camino nuestro.
+
+### El mismo corte en 4.5 (2026-10-14)
+
+La copia unificada de 4.5 decidía con otro criterio: intentaba nuestra API y, si la respuesta no
+confirmaba la conversación, caía a ManyChat (`weplash_respuesta_ok`). Sirve mientras la única razón
+para no encontrar la conversación sea que el contacto viene del proveedor anterior, pero mezcla «no es
+nuestra» con «no pude preguntar»: un `404` y un `500` terminaban en la misma rama. Se reemplazó por el
+mismo clasificador de 4.2, que decide por la **forma del id** y no gasta ninguna llamada para saber de
+quién es.
+
+Además, en esa copia: la lectura de la conversación estaba **duplicada** en dos nodos idénticos —y
+nombrados «buscar contacto», que es lo que hacía el proveedor anterior—; el envío nuestro mandaba
+`subscriber_id` como `conversationId`; y **ningún envío tenía verificador**: la salida de error iba
+directo a «continuar», así que un rechazo de la API se perdía en silencio. Quedó con una sola lectura
+(`Stripe leer conversación`), el `conversation_id` en los cuerpos y un verificador por envío
+(`Validar envío de confirmación manual`, `Validar envío de foto`), cada uno alimentado solo por su POST.
