@@ -4461,7 +4461,10 @@ export default function HomePage(): React.ReactNode {
       )}
       {isInternalLabelManagerOpen &&
         (tenant?.role === 'admin' || tenant?.role === 'supervisor') && (
-          <section className="internal-label-manager" aria-label="Administrar etiquetas">
+          <section
+            className="internal-label-manager settings-dialog label-manager-dialog"
+            aria-label="Administrar etiquetas"
+          >
             <div className="internal-label-manager-heading">
               <strong>{editingInternalLabel ? 'Editar etiqueta' : 'Nueva etiqueta'}</strong>
               <button

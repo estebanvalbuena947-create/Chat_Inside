@@ -4481,6 +4481,10 @@ div:has(#won-dialog-title) button:not([aria-label]) {
   font-size: 12px;
   font-weight: 400;
 }
+.internal-label-manager.settings-dialog.label-manager-dialog {
+  height: min(860px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+}
 .settings-dialog-layout {
   display: grid;
   grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
