@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Inject, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Inject, Param, Post, Query } from '@nestjs/common';
 import { ToolBranchesService } from './tool-branches.service';
 
 /** Multimedia de una sede para el bot. Se autentica con la credencial de maquina. */
@@ -21,6 +21,16 @@ export class ToolBranchesController {
     @Headers('authorization') authorization: string | undefined
   ): Promise<unknown> {
     return this.service.listMedia(authorization, slug, channel);
+  }
+
+  /** Comparte, en su orden configurado, todo el material de una sede con una conversación. */
+  @Post(':slug/media/send')
+  async sendMedia(
+    @Param('slug') slug: string,
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown
+  ): Promise<unknown> {
+    return this.service.sendMedia(authorization, slug, body);
   }
 
   @Get(':slug/services')

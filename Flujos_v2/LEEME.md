@@ -8,7 +8,8 @@ la versión vieja se apague: un mensaje, un emisor.
 - **60 nodos** que llamaban a `api.manychat.com` ahora llaman a nuestra API.
 - Nodos de **envío** (plantillas, flujos, fotos, seguimientos) → `POST /v1/tools/messages` → **Zernio**.
 - **Multimedia por sucursal** (`Multimedia_Valle`, `Multimedia_Juarez`, `Multimedia_Lomas`) →
-  `GET /v1/tools/branches/{sede}/media`.
+  `POST /v1/tools/branches/{sede}/media/send` — la API encola un mensaje por archivo, en el orden
+  configurado, y excluye la ficha operativa `Accesorios`.
 - **`Transferir_al_asesor`** → `POST /v1/tools/assignments`.
 - **Lecturas de contacto y estado** → `GET /v1/tools/conversations/{id}`.
 - La credencial de ManyChat se retiró: ahora se envía `Authorization: Bearer` con un token de máquina.

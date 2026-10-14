@@ -2,10 +2,12 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
-  NotFoundException
+  NotFoundException,
+  UnprocessableEntityException
 } from '@nestjs/common';
 import { signMediaPaths } from '@chat-zernio/media';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
+import { ToolMessagesService } from './tool-messages.service';
 import { ToolTokenService } from './tool-token.service';
 
 /**
@@ -24,12 +26,18 @@ import { ToolTokenService } from './tool-token.service';
 // de un enlace que ya no hace falta.
 export const BRANCH_MEDIA_URL_TTL_SECONDS = 600;
 const BRANCH_MEDIA_BUCKET = 'branch-media';
+const ACCESSORIES_TITLE = 'accesorios';
+
+function isAccessoriesMedia(title: unknown): boolean {
+  return typeof title === 'string' && title.trim().toLocaleLowerCase('es') === ACCESSORIES_TITLE;
+}
 
 @Injectable()
 export class ToolBranchesService {
   constructor(
     @Inject(ToolTokenService) private readonly toolTokenService: ToolTokenService,
-    private readonly supabaseServerClientFactory: SupabaseServerClientFactory
+    private readonly supabaseServerClientFactory: SupabaseServerClientFactory,
+    private readonly toolMessagesService: ToolMessagesService
   ) {}
 
   /**
@@ -111,6 +119,66 @@ export class ToolBranchesService {
           url: ruta ? (firmadas.get(ruta) ?? null) : null
         };
       }),
+      tenantId: identity.tenantId
+    };
+  }
+
+  /**
+   * Comparte todos los archivos de una sede en su orden configurado.
+   *
+   * El proveedor admite un archivo por mensaje. Por eso no se devuelve una lista de URLs para que
+   * el agente "recuerde" enviarla: cada archivo se encola aquí, con una clave derivada y estable.
+   * Si n8n reintenta el mismo turno, los ya aceptados no se duplican y continúa con los que falten.
+   */
+  async sendMedia(authorization: unknown, slug: string, rawBody: unknown): Promise<unknown> {
+    const identity = await this.toolTokenService.authenticate(authorization);
+    this.toolTokenService.assertScope(identity, 'media');
+
+    const body = (rawBody ?? {}) as Record<string, unknown>;
+    const conversationId =
+      typeof body.conversationId === 'string' ? body.conversationId.trim() : '';
+    const idempotencyKey =
+      typeof body.idempotencyKey === 'string' ? body.idempotencyKey.trim() : '';
+    if (!conversationId || !idempotencyKey) {
+      throw new UnprocessableEntityException(
+        'Para compartir multimedia hacen falta conversationId e idempotencyKey.'
+      );
+    }
+
+    const supabase = this.supabaseServerClientFactory.create();
+    const sede = await this.resolveBranch(supabase, identity.tenantId, slug);
+    const { data, error } = await supabase
+      .from('branch_media')
+      .select('id, title')
+      .eq('tenant_id', identity.tenantId)
+      .eq('branch_id', String(sede.id))
+      .order('sort_order', { ascending: true });
+    if (error) throw new InternalServerErrorException('No fue posible leer la multimedia.');
+
+    // «accesorios» es una tarjeta operativa de las plantillas, no una foto que se deba repetir
+    // cada vez que alguien pide ver una sede. Se excluye por su rol, no por su posicion o UUID.
+    const mediaIds = (Array.isArray(data) ? data : [])
+      .filter((fila) => !isAccessoriesMedia((fila as Record<string, unknown>).title))
+      .map((fila) => (fila as Record<string, unknown>).id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    if (mediaIds.length === 0) {
+      throw new NotFoundException('La sede no tiene multimedia para compartir.');
+    }
+
+    const messages = [];
+    for (const [index, branchMediaId] of mediaIds.entries()) {
+      messages.push(
+        await this.toolMessagesService.send(authorization, {
+          conversationId,
+          idempotencyKey: `${idempotencyKey}:${slug}:${index + 1}:${branchMediaId}`,
+          media: [{ branchMediaId }]
+        })
+      );
+    }
+
+    return {
+      branch: { name: String(sede.name ?? ''), slug },
+      messages,
       tenantId: identity.tenantId
     };
   }

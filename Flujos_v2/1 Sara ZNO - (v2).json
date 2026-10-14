@@ -84,8 +84,9 @@
     },
     {
       "parameters": {
-        "toolDescription": "Envía el contenido multimedia (fotos y videos) de la sede Valle al cliente actual. Úsalo solo cuando el cliente pida ver fotos o videos específicamente de la sede Valle.",
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/branches/valle/media",
+        "toolDescription": "Envía ahora todas las fotos y videos configurados, en orden, de la sede Valle al cliente actual. Úsalo solo cuando el cliente pida ver fotos o videos específicamente de la sede Valle. No afirmes que los compartiste si esta tool falla.",
+        "method": "POST",
+        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/branches/valle/media/send",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -95,6 +96,9 @@
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"conversationId\": \"{{ $('Detectar imagen ManyChat2').first().json.subscriber_id }}\", \"idempotencyKey\": \"multimedia-valle-{{ $execution.id }}\" }",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequestTool",
@@ -110,8 +114,9 @@
     },
     {
       "parameters": {
-        "toolDescription": "Envía el contenido multimedia (fotos y videos) de la sede Juárez al cliente actual. Úsalo solo cuando el cliente pida ver fotos o videos específicamente de la sede Juárez.",
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/branches/juarez/media",
+        "toolDescription": "Envía ahora todas las fotos y videos configurados, en orden, de la sede Juárez al cliente actual. Úsalo solo cuando el cliente pida ver fotos o videos específicamente de la sede Juárez. No afirmes que los compartiste si esta tool falla.",
+        "method": "POST",
+        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/branches/juarez/media/send",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -121,6 +126,9 @@
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"conversationId\": \"{{ $('Detectar imagen ManyChat2').first().json.subscriber_id }}\", \"idempotencyKey\": \"multimedia-juarez-{{ $execution.id }}\" }",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequestTool",
@@ -136,8 +144,9 @@
     },
     {
       "parameters": {
-        "toolDescription": "Envía el contenido multimedia (fotos y videos) de la sede Lomas al cliente actual. Úsalo solo cuando el cliente pida ver fotos o videos específicamente de la sede Lomas.",
-        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/branches/lomas/media",
+        "toolDescription": "Envía ahora todas las fotos y videos configurados, en orden, de la sede Lomas al cliente actual. Úsalo solo cuando el cliente pida ver fotos o videos específicamente de la sede Lomas. No afirmes que los compartiste si esta tool falla.",
+        "method": "POST",
+        "url": "={{ $env.WEPLASH_API_URL }}/v1/tools/branches/lomas/media/send",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -147,6 +156,9 @@
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"conversationId\": \"{{ $('Detectar imagen ManyChat2').first().json.subscriber_id }}\", \"idempotencyKey\": \"multimedia-lomas-{{ $execution.id }}\" }",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequestTool",

@@ -17,6 +17,12 @@ import { partIdempotencyKey, splitOutboundText } from './outbound-text-splitter'
 import { ToolTokenService } from './tool-token.service';
 import { readPlaceholders } from './tool-templates.service';
 
+const ACCESSORIES_TITLE = 'accesorios';
+
+function isAccessoriesTitle(title: string): boolean {
+  return title.trim().toLocaleLowerCase('es') === ACCESSORIES_TITLE;
+}
+
 /**
  * Envio de mensajes para el bot.
  *
@@ -303,8 +309,9 @@ export class ToolMessagesService {
       );
     }
 
-    // Un identificador de otra sede se acepta solo si es de este espacio; el titulo, en cambio, se
-    // busca SOLO en la sede de la conversacion: dos sedes pueden titular igual su material.
+    // Un identificador de otra sede se acepta solo si es de este espacio. Los titulos normales se
+    // buscan en la sede de la conversacion; «accesorios» es la unica ficha operativa compartida y
+    // se busca una vez en todo el espacio, para no guardar ni enviar la misma tarjeta por sede.
     const consulta = supabase
       .from('branch_media')
       .select('id, kind, storage_object_path')
@@ -314,16 +321,19 @@ export class ToolMessagesService {
     if (id) {
       ({ data, error } = await consulta.eq('id', id));
     } else {
-      const sede = await this.sedeDeLaConversacion(supabase, tenantId, conversationId);
+      const sede = isAccessoriesTitle(titulo as string)
+        ? null
+        : await this.sedeDeLaConversacion(supabase, tenantId, conversationId);
       const buscar = async (patron: string): Promise<unknown[]> => {
-        const { data: filas, error: fallo } = await supabase
+        let consulta = supabase
           .from('branch_media')
           .select('id, kind, storage_object_path')
           .eq('tenant_id', tenantId)
-          .eq('branch_id', sede)
           .ilike('title', patron)
           .order('sort_order', { ascending: true })
           .limit(1);
+        if (sede) consulta = consulta.eq('branch_id', sede);
+        const { data: filas, error: fallo } = await consulta;
         if (fallo) throw new InternalServerErrorException('No fue posible leer la multimedia.');
         return Array.isArray(filas) ? filas : [];
       };
@@ -345,7 +355,9 @@ export class ToolMessagesService {
       throw new UnprocessableEntityException(
         id
           ? 'La imagen no existe en este espacio.'
-          : 'La sede de la conversacion no tiene una imagen con ese titulo.'
+          : isAccessoriesTitle(titulo as string)
+            ? 'No existe una imagen global titulada Accesorios en este espacio.'
+            : 'La sede de la conversacion no tiene una imagen con ese titulo.'
       );
     }
 

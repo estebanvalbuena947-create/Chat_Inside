@@ -142,6 +142,23 @@ Sustituye a **`Multimedia_Valle`, `Multimedia_Juarez`, `Multimedia_Lomas`**.
 La `url` es **firmada y caduca** (10 minutos): se pide justo antes de enviarla. Para enviarla, usa su
 `id` en `media[].branchMediaId` y deja que la API resuelva la URL.
 
+### Compartir toda la multimedia configurada de una sede
+
+El agente no debe listar archivos y luego limitarse a decir que los compartió. Para esa intención usa
+`POST /v1/tools/branches/{slug}/media/send`:
+
+```json
+{ "conversationId": "uuid", "idempotencyKey": "multimedia-valle-{{ $execution.id }}" }
+```
+
+La API toma los archivos de esa sede en su `sort_order` y encola uno por mensaje (límite del canal).
+La clave se deriva por archivo, por lo que repetir la ejecución no duplica los ya aceptados. Si la
+sede no tiene material, responde `404` y no se afirma que se compartió nada.
+
+La tarjeta titulada exactamente `Accesorios` queda fuera de este envío: es el material operativo que
+usan las plantillas. Se conserva una sola copia para todo el espacio; `branchMediaTitle: "Accesorios"`
+la resuelve aunque la conversación aún no tenga sede.
+
 ### Enviar una imagen por su título
 
 Los flujos no conocen los identificadores de la base, y copiar uno a mano solo funciona en el espacio

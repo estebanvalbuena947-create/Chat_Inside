@@ -287,19 +287,17 @@ describe('multimedia pedida por titulo', () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  it('sin sede en la conversacion no se puede buscar por titulo', async () => {
+  it('la tarjeta global de accesorios no exige una sede en la conversacion', async () => {
     const { enqueueOutbound, servicio } = crearServicio({ sede: null });
 
-    await expect(
-      servicio.send('Bearer token', {
-        conversationId: 'conv-1',
-        idempotencyKey: UUID,
-        media: [{ branchMediaTitle: 'Accesorios' }],
-        text: 'Con foto'
-      })
-    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    await servicio.send('Bearer token', {
+      conversationId: 'conv-1',
+      idempotencyKey: UUID,
+      media: [{ branchMediaTitle: 'Accesorios' }],
+      text: 'Con foto'
+    });
 
-    expect(enqueueOutbound).not.toHaveBeenCalled();
+    expect(enqueueOutbound).toHaveBeenCalledTimes(1);
   });
 
   it('no admite las dos formas a la vez para el mismo adjunto', async () => {

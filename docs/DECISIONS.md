@@ -1323,3 +1323,27 @@ nombrados «buscar contacto», que es lo que hacía el proveedor anterior—; el
 directo a «continuar», así que un rechazo de la API se perdía en silencio. Quedó con una sola lectura
 (`Stripe leer conversación`), el `conversation_id` en los cuerpos y un verificador por envío
 (`Validar envío de confirmación manual`, `Validar envío de foto`), cada uno alimentado solo por su POST.
+
+## Compartir una galería de sede es una acción de servidor (2026-10-14)
+
+Las herramientas de n8n `Multimedia_Valle`, `Multimedia_Juarez` y `Multimedia_Lomas` antes hacían
+un `GET` que devolvía enlaces firmados. El agente podía leer ese resultado y responder que había
+compartido fotos, pero no existía ninguna operación que creara mensajes con adjuntos. La ejecución
+del 2026-10-14 lo confirmó: el mensaje final quedó con `attachments: []`.
+
+Se añadió `POST /v1/tools/branches/{slug}/media/send`. La API lee solo el material de esa sede y de
+ese tenant, respeta `sort_order` y encola un mensaje por archivo, porque el canal admite un adjunto
+por mensaje. Cada archivo recibe una clave de idempotencia derivada de la ejecución, sede, posición e
+identificador: reintentar el turno no duplica los archivos ya aceptados. Una galería vacía falla de
+forma visible y no permite que el flujo diga que compartió material.
+
+Se descartó entregar al agente los enlaces para que los reenviara: son temporales, no constituyen un
+envío y vuelven a separar el catálogo de la operación externa que debe quedar trazada.
+
+## La ficha de accesorios es única y no forma parte de una galería (2026-10-14)
+
+La imagen de instrucciones «Accesorios» estaba repetida en varias sedes, por lo que aparecía cada vez
+que alguien pedía fotos. No representa la sede ni es parte de su recorrido visual: es una ficha que
+acompaña plantillas de pago. Se conserva una sola fila titulada exactamente `Accesorios`; el envío de
+una galería la excluye y los nodos de plantilla la buscan en todo el tenant, incluso sin sede en la
+conversación. El resto de archivos se titula por sede y posición (`Valle (1)`, `Lomas (1)`, etc.).

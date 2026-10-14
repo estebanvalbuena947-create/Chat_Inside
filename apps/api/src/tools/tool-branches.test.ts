@@ -58,6 +58,7 @@ function crearServicio(
   opciones: {
     fallaFirma?: boolean;
     listarSedes?: boolean;
+    media?: unknown[];
     sedeExiste?: boolean;
     sinMultimedia?: boolean;
   } = {}
@@ -81,7 +82,10 @@ function crearServicio(
         : [{ data: SEDE, error: null }];
 
   const { cliente, argumentosDe, llamadasDe } = crearClienteSupabase({
-    branch_media: { data: opciones.sinMultimedia ? [] : [IMAGEN], error: null },
+    branch_media: {
+      data: opciones.sinMultimedia ? [] : (opciones.media ?? [IMAGEN]),
+      error: null
+    },
     branch_services: { data: SERVICIOS, error: null },
     branches: respuestaSedes
   });
@@ -100,12 +104,15 @@ function crearServicio(
     })
   };
 
+  const send = vi.fn().mockResolvedValue({ item: { id: 'message-1', status: 'queued' } });
+
   const servicio = new ToolBranchesService(
     toolTokenService as unknown as ToolTokenService,
-    { create: () => supabase } as unknown as SupabaseServerClientFactory
+    { create: () => supabase } as unknown as SupabaseServerClientFactory,
+    { send } as unknown as import('./tool-messages.service').ToolMessagesService
   );
 
-  return { argumentosDe, createSignedUrls, llamadasDe, servicio, toolTokenService };
+  return { argumentosDe, createSignedUrls, llamadasDe, send, servicio, toolTokenService };
 }
 
 describe('sede: listado', () => {
@@ -222,5 +229,58 @@ describe('catalogo por canal', () => {
     await servicio.listMedia('Bearer token', 'valle');
 
     expect(llamadasDe('branch_media').some((l) => l.metodo === 'in')).toBe(false);
+  });
+});
+
+describe('compartir multimedia de sede', () => {
+  it('encola cada archivo en el orden configurado y deriva una clave estable por archivo', async () => {
+    const { send, servicio } = crearServicio();
+
+    const result = (await servicio.sendMedia('Bearer token', 'valle', {
+      conversationId: 'conversation-1',
+      idempotencyKey: 'turn-123'
+    })) as { messages: unknown[] };
+
+    expect(send).toHaveBeenCalledWith(
+      'Bearer token',
+      expect.objectContaining({
+        conversationId: 'conversation-1',
+        idempotencyKey: 'turn-123:valle:1:m1',
+        media: [{ branchMediaId: 'm1' }]
+      })
+    );
+    expect(result.messages).toHaveLength(1);
+  });
+
+  it('no dice que compartio archivos si la sede no tiene ninguno', async () => {
+    const { send, servicio } = crearServicio({ sinMultimedia: true });
+
+    await expect(
+      servicio.sendMedia('Bearer token', 'valle', {
+        conversationId: 'conversation-1',
+        idempotencyKey: 'turn-123'
+      })
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('excluye la tarjeta de accesorios de la galeria normal', async () => {
+    const { send, servicio } = crearServicio({
+      media: [
+        { ...IMAGEN, id: 'accessories-card', title: 'Accesorios' },
+        { ...IMAGEN, id: 'normal-photo', title: 'Valle (1)' }
+      ]
+    });
+
+    await servicio.sendMedia('Bearer token', 'valle', {
+      conversationId: 'conversation-1',
+      idempotencyKey: 'turn-123'
+    });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(
+      'Bearer token',
+      expect.objectContaining({ media: [{ branchMediaId: 'normal-photo' }] })
+    );
   });
 });
