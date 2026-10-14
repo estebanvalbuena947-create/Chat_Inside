@@ -10,7 +10,10 @@
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.2,
-      "position": [-304, -16],
+      "position": [
+        -304,
+        -16
+      ],
       "id": "e5a880ba-1a4b-4e7e-9414-581e1c93c0c1",
       "name": "Webhook",
       "webhookId": "306fab1c-9f38-4235-b198-346a6abcab56",
@@ -28,7 +31,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-80, -16],
+      "position": [
+        -80,
+        -16
+      ],
       "id": "b7c1a2f0-0000-4000-8000-000000000001",
       "name": "Leer aviso de reseña",
       "notes": "Traduce el aviso a lo que decide el flujo. La regla de Google -- una sola respuesta por resena -- se comprueba aqui una vez."
@@ -60,10 +66,13 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [144, -16],
+      "position": [
+        144,
+        -16
+      ],
       "id": "c8d2b3a1-0000-4000-8000-000000000003",
       "name": "IF respuesta automatica",
-      "notes": "Cuatro y cinco estrellas se contestan solas. De una a tres estrellas las responde una persona."
+      "notes": "Cuatro y cinco estrellas se contestan solas. Lo que no, pasa al segundo IF: de una a tres estrellas van a una persona y las que ya tienen respuesta no se tocan."
     },
     {
       "parameters": {
@@ -94,7 +103,10 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [368, -112],
+      "position": [
+        368,
+        -112
+      ],
       "id": "d9e3c4b2-0000-4000-8000-000000000004",
       "name": "Responder automaticamente",
       "notes": "El texto NO va aqui: se pide la plantilla 'resena_google_positiva' del espacio y el servidor rellena {nombre}. Cambiar la respuesta es editar una fila, no este flujo."
@@ -105,7 +117,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [592, -112],
+      "position": [
+        592,
+        -112
+      ],
       "id": "ea4d5c3b-0000-4000-8000-000000000005",
       "name": "Validar respuesta",
       "notes": "Un fallo aqui deja la ejecucion marcada y visible en n8n: la resena se queda sin responder, no a medias."
@@ -137,7 +152,10 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [368, 112],
+      "position": [
+        368,
+        112
+      ],
       "id": "fb5e6d4c-0000-4000-8000-000000000006",
       "name": "Derivar al asesor",
       "notes": "Deja la resena esperando respuesta en la bandeja de resenas de la interfaz. El aviso ya lo tiene el equipo: la resena aparece con lo que escribio el cliente."
@@ -148,7 +166,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [592, 112],
+      "position": [
+        592,
+        112
+      ],
       "id": "ac6f7e5d-0000-4000-8000-000000000007",
       "name": "Validar derivacion",
       "notes": "Si esto falla, la resena no esta en la bandeja: hay que verlo, no darlo por hecho."
@@ -157,38 +178,156 @@
       "parameters": {},
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [816, -16],
+      "position": [
+        816,
+        -16
+      ],
       "id": "bd708f6e-0000-4000-8000-000000000008",
       "name": "Fin"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2b3c4d5e-0000-4000-8000-000000000009",
+              "leftValue": "={{ $json.derivar_a_asesor }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        368,
+        16
+      ],
+      "id": "ce8f9a70-0000-4000-8000-000000000010",
+      "name": "IF derivar a asesor",
+      "notes": "Una resena que ya tiene respuesta no se toca: Google guarda una sola respuesta del propietario y publicar otra reemplazaria la que hay, incluida una escrita a mano."
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Leer aviso de reseña", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Leer aviso de reseña",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Leer aviso de reseña": {
-      "main": [[{ "node": "IF respuesta automatica", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "IF respuesta automatica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "IF respuesta automatica": {
       "main": [
-        [{ "node": "Responder automaticamente", "type": "main", "index": 0 }],
-        [{ "node": "Derivar al asesor", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Responder automaticamente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF derivar a asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Responder automaticamente": {
-      "main": [[{ "node": "Validar respuesta", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Validar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Derivar al asesor": {
-      "main": [[{ "node": "Validar derivacion", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Validar derivacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validar respuesta": {
-      "main": [[{ "node": "Fin", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Fin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validar derivacion": {
-      "main": [[{ "node": "Fin", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Fin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF derivar a asesor": {
+      "main": [
+        [
+          {
+            "node": "Derivar al asesor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "pinData": {
     "Webhook": [
       {
