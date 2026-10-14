@@ -202,6 +202,15 @@ function conversationStatusLabel(status: Conversation['status']): string {
   };
   return labels[status];
 }
+/*
+ * La bandeja tiene dos estados operativos: el bot responde o no responde. El dominio decide lo
+ * mismo (`getAgentInvocationEligibility`: solo `auto` autoriza al bot), y `suggest` --el valor
+ * historico que nadie implemento-- cae del lado de "no responde". Se lee en un solo sitio para
+ * que la pildora, el color y el boton no se contradigan entre si.
+ */
+function botResponds(automationMode: Conversation['automationMode']): boolean {
+  return automationMode === 'auto';
+}
 function channelPlatformLabel(platform: Conversation['channelPlatform']): string {
   if (!platform) return 'Canal no identificado';
 
@@ -3478,7 +3487,7 @@ export default function HomePage(): React.ReactNode {
               <h2>{selectedConversation.contactName}</h2>
               <p>Contacto de la conversación</p>
               <span className="channel-pill">
-                Bot {selectedConversation.automationMode === 'auto' ? 'activado' : 'desactivado'}
+                Bot {botResponds(selectedConversation.automationMode) ? 'responde' : 'no responde'}
               </span>
             </div>
             <section className="details-section attributes" aria-label="Resumen de la conversación">
@@ -3511,17 +3520,17 @@ export default function HomePage(): React.ReactNode {
               <div className="section-title">Acciones</div>
               <button
                 className={`automation-action ${
-                  selectedConversation.automationMode === 'auto' ? 'is-active' : 'is-paused'
+                  botResponds(selectedConversation.automationMode) ? 'is-active' : 'is-paused'
                 }`}
                 disabled={isUpdatingAutomation}
                 onClick={() =>
                   void changeConversationAutomation(
-                    selectedConversation.automationMode === 'auto' ? 'paused' : 'auto'
+                    botResponds(selectedConversation.automationMode) ? 'paused' : 'auto'
                   )
                 }
                 type="button"
               >
-                {selectedConversation.automationMode === 'auto' ? 'Desactivar bot' : 'Activar bot'}
+                {botResponds(selectedConversation.automationMode) ? 'Pausar bot' : 'Activar bot'}
               </button>
               <div className="conversation-actions" aria-label="Cambiar estado de conversación">
                 {selectedConversation.status !== 'open' && (

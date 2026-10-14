@@ -1361,9 +1361,11 @@ h2 {
   background: #e8f0fe;
   color: #47536b;
 }
+/* "Activar bot" avisa de que el bot no responde: fondo rojo y texto blanco.
+   El rosado claro anterior dejaba el texto blanco en 1.25:1 y no se leia. */
 .automation-action.is-paused {
-  background: #f4e2df;
-  color: #8a5d5c;
+  background: #c0392b;
+  color: #ffffff;
 }
 .automation-action:disabled {
   cursor: wait;
@@ -3138,14 +3140,18 @@ h2 {
    Contraste sobre el verde (matcha)
 
    Todo lo que lleva fondo matcha necesita texto claro. El color oscuro que se veia en
-   "Desactivar bot" y en "Etiquetas" venia de las reglas antiguas: aqui se corrigen todas.
+   el boton del bot y en "Etiquetas" venia de las reglas antiguas: aqui se corrigen todas.
    Y dos piezas de la barra que quedaban verdes sobre verde: el cuadro del logo y el desplegable
    de plataformas.
+
+   El boton del bot tiene dos fondos oscuros —matcha cuando el bot responde y rojo cuando no
+   responde—, asi que se enumeran sus dos estados en vez de la clase suelta: un estado claro futuro
+   no hereda el texto blanco por accidente.
    ============================================================================================ */
 
 .workspace .send-button,
-.workspace .automation-action,
 .workspace .automation-action.is-active,
+.workspace .automation-action.is-paused,
 .workspace .canned-response-save,
 .workspace .canned-response-cancel,
 .workspace .private-note-form button,

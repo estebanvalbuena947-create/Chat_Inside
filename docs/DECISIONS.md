@@ -4,6 +4,71 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-054 - La bandeja nombra el efecto del interruptor (responde o no responde), no los valores del contrato (2026-10-14)
+
+- **Fecha:** 2026-10-14
+- **Estado:** aceptada
+- **Contexto:** El contrato y la base declaran tres valores (`auto`, `suggest`, `paused`), pero solo dos
+  son reales: el PATCH de la bandeja acepta únicamente `auto` y `paused` (ADR-029) y el gateway del
+  worker bloquea `suggest` igual que `paused` —hay una prueba que fija que con `suggest` no se llama al
+  transporte—. La spec maestra, en cambio, prometía que `suggest` «genera un borrador», y ese camino no
+  existe. La bandeja comparaba `automationMode === 'auto'` en tres sitios distintos (píldora, color y
+  botón) y los tres rotulaban el estado como `activado`/`desactivado`, así que una conversación con el
+  valor histórico `suggest` se leía exactamente como una en `paused` y la interfaz insinuaba un modo que
+  nadie implementó.
+- **Decisión:** La bandeja presenta **dos estados operativos** y los nombra por su efecto observable, no
+  por el valor de la columna: la píldora dice `Bot responde` o `Bot no responde`, y el botón
+  `Pausar bot` o `Activar bot` (el valor que escribe al pausar es `paused`, que es el mismo que el dato
+  usa). La lectura del modo vive en una sola función (`botResponds`), de modo que píldora, color y botón
+  no puedan contradecirse entre sí. `suggest` no se muestra como tercer estado: cae del lado «no
+  responde» porque eso es lo que el sistema hace con él. La spec maestra deja de afirmar que genera un
+  borrador y queda marcado como declarado pero no implementado.
+- **Alternativas consideradas:** Mostrar un tercer estado «Sugerir» en la bandeja, que anuncia una
+  capacidad inexistente y que además la bandeja no puede activar; implementar `suggest` de verdad
+  —gateway, worker, dónde vive el borrador sugerido, API y UI de aprobación—, que es un cambio central
+  con especificación y diseño propios y no pertenece a este corte; y conservar `activado`/`desactivado`,
+  que se lee como el valor de una columna y oculta lo único que la asesora necesita saber.
+- **Consecuencias:** La interfaz dice lo que importa —si contesta el bot o contesta una persona— y no
+  promete modos ausentes. Sigue existiendo un valor (`suggest`) que la bandeja no puede producir; si
+  algún día se implementa, hará falta un tercer estado y una UI para aprobar el borrador sugerido. No
+  cambia ninguna regla: la autoridad sigue siendo el gateway del worker.
+- **Cómo se verifica:** La prueba del gateway que fija que `suggest` no llama al transporte
+  (`apps/worker/src/agent-gateway.test.ts`), el esquema del PATCH que solo admite `auto` y `paused`
+  (`packages/contracts/src/index.ts`), y revisión manual de la píldora y el botón en los dos estados,
+  porque la interfaz no tiene pruebas automáticas en este repositorio.
+
+---
+
+## ADR-053 - El estado pausado del bot se pinta en rojo, y la regla de texto blanco enumera sus dos estados (2026-10-14)
+
+- **Fecha:** 2026-10-14
+- **Estado:** aceptada
+- **Contexto:** El botón de la bandeja alterna entre «Pausar bot» (bot automático) y «Activar bot»
+  (bot detenido). El estado detenido usaba el rosado claro de la paleta (`#f4e2df`) con texto oscuro,
+  pero la regla de contraste de la marca —«todo lo que lleva fondo verde necesita texto claro»— se
+  había escrito sobre la clase `.automation-action` **sin distinguir el estado**, así que forzaba
+  `color: #ffffff !important` también al rosado claro. Medido: **1.25:1**, por debajo del mínimo AA
+  (4.5:1), y el botón se leía como un rectángulo rosado sin texto.
+- **Decisión:** El estado pausado se pinta con el rojo que el proyecto ya usa para acciones
+  destructivas (`#c0392b`, 5.44:1 con blanco) y conserva el texto blanco. La regla de contraste de la
+  marca deja de apuntar a la clase suelta y **enumera los dos estados con fondo oscuro**
+  (`is-active` en matcha y `is-paused` en rojo), de modo que un estado claro no herede texto blanco.
+  El botón sigue mostrando la acción a realizar, no el estado actual: cuando el bot está pausado
+  ofrece «Activar bot».
+- **Alternativas consideradas:** Mantener el rosado claro y oscurecer el texto (`#8a5d5c`, 4.42:1),
+  que conserva la paleta pero deja el aviso de «bot pausado» sin la urgencia que el usuario pidió;
+  y acotar el arreglo al `!important` del estado pausado, que dejaría la regla general rota para el
+  siguiente estado que se añada.
+- **Consecuencias:** El aviso de bot pausado se lee y conserva su función de alerta. Queda una
+  excepción deliberada a la convención «rojo = destructivo» (hoy `channel-remove-trigger`): el rojo
+  aquí señala «el bot no responde», no una pérdida de datos. El texto blanco de este botón ya no
+  depende de una regla que incluía fondos claros.
+- **Cómo se verifica:** Contraste calculado sobre los colores finales (blanco sobre `#c0392b` =
+  5.44:1; el rosado anterior daba 1.25:1) y revisión visual del botón en sus dos estados. La interfaz
+  no tiene pruebas automáticas de estilos en este repositorio.
+
+---
+
 ## ADR-052 - Las listas de Reservas se filtran por fecha operativa en la API (2026-10-12)
 
 - **Fecha:** 2026-10-12

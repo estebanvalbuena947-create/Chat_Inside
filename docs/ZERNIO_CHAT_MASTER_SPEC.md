@@ -25,7 +25,7 @@ Conversación: `open`, `pending`, `resolved`. Un mensaje entrante debe reabrir u
 
 Mensaje saliente: `draft`, `queued`, `sending`, `sent`, `delivered`, `read`, `failed`. Los eventos duplicados o fuera de orden no pueden degradar el máximo estado confirmado. Las capacidades concretas de estado dependen del canal y quedan **REQUIERE VERIFICACIÓN OFICIAL**.
 
-Automatización: `auto`, `suggest`, `paused`. En `auto` la respuesta validada puede crear un envío; en `suggest` genera un borrador; en `paused` no se invoca n8n. Una transferencia a humano cambia a `paused` por defecto.
+Automatización: `auto`, `suggest`, `paused`. En `auto` la respuesta validada puede crear un envío; en `paused` no se invoca n8n. Una transferencia a humano cambia a `paused` por defecto. `suggest` está **declarado pero NO IMPLEMENTADO** (2026-10-14): el gateway no invoca al agente con ese valor —lo bloquea igual que `paused`, con prueba que lo fija—, la bandeja solo alterna entre `auto` y `paused`, y el borrador sugerido que describe esta línea no existe todavía. Implementarlo exige especificación, diseño y plan propios (véase ADR-054).
 
 ## 4. Integraciones
 
