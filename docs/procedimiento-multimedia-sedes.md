@@ -87,6 +87,24 @@ sede**, cada archivo de la lista tiene:
 Por API, lo mismo: `PATCH /v1/tenants/{id}/branches/{slug}/media/{mediaId}` con `{ "title": "Accesorios" }`
 o `{ "sortOrder": 3 }`, y `DELETE` sobre la misma dirección.
 
+## Identificar lo que ya está cargado
+
+Cuando el material se cargó sin títulos —o hace meses y ya no se recuerda qué es cada archivo— hay una
+herramienta que arma una **hoja de contactos por sede**: firma cada archivo, lo descarga y compone una
+imagen con cada tramo numerado (sede, orden y los primeros caracteres del identificador).
+
+```bash
+python tools/hoja-contactos-sedes.py
+```
+
+Deja las hojas y los archivos sueltos en `%TEMP%\wepflash-media\` y un `resumen.jsonl` con una línea por
+fila (sede, orden, identificador, tipo, tamaño y, si falló, el motivo). **No escribe nada** en la base ni
+en el repositorio: sirve para mirar y decidir. Con la hoja delante, titular es cosa de un minuto en la
+pantalla.
+
+Ojo con lo que la hoja **no** muestra: los vídeos aparecen en el resumen pero no como tramo. Un vídeo sin
+título también hay que titularlo si algún flujo lo va a pedir.
+
 ## Qué se acepta
 
 - **Imágenes y vídeos.** Cualquier otro archivo se rechaza; la propia tabla solo admite esos dos
