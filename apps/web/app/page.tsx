@@ -4447,7 +4447,17 @@ export default function HomePage(): React.ReactNode {
               {branchMediaItems.map((item) => (
                 <li className="branch-media-list-item" key={item.id}>
                   {item.url ? (
-                    <img alt={item.title ?? 'Material de la sede'} loading="lazy" src={item.url} />
+                    item.kind === 'video' ? (
+                      <video controls preload="metadata" src={item.url}>
+                        Tu navegador no puede reproducir este video.
+                      </video>
+                    ) : (
+                      <img
+                        alt={item.title ?? 'Material de la sede'}
+                        loading="lazy"
+                        src={item.url}
+                      />
+                    )
                   ) : (
                     // Sin copia en el almacen no hay enlace: se dice, en vez de dejar un hueco.
                     <span className="branch-media-missing">Falta el archivo</span>

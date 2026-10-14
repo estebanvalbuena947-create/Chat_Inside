@@ -4440,6 +4440,13 @@ div:has(#won-dialog-title) button:not([aria-label]) {
   height: 150px;
   border-radius: 7px;
 }
+.branch-media-manager .branch-media-list-item video {
+  width: 100%;
+  height: 150px;
+  border-radius: 7px;
+  background: #1e211b;
+  object-fit: cover;
+}
 @media (max-width: 720px) {
   .branch-media-manager {
     display: flex;
