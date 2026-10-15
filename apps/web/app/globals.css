@@ -5760,3 +5760,110 @@ button:not(:disabled):active {
     inset: 0 0 68px;
   }
 }
+
+/*
+ * Desplegables operativos: todos conservan el control nativo para teclado y lector de pantalla,
+ * pero comparten una flecha, foco y respuesta al puntero propios de la interfaz.
+ */
+.workspace select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: #fffdf9 !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3E%3Cpath d='m3.5 5.75 4.5 4.5 4.5-4.5' stroke='%23596746' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E") !important;
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  border-radius: 14px !important;
+  cursor: pointer;
+  min-height: 38px;
+  padding-right: 40px !important;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.workspace select:hover {
+  background-color: #eef4e9 !important;
+  border-color: #a6b497 !important;
+  box-shadow: 0 3px 10px rgb(74 92 56 / 10%);
+}
+
+.workspace select:focus,
+.workspace select:focus-visible {
+  background-color: #fff !important;
+  border-color: var(--brand-matcha) !important;
+  box-shadow: 0 0 0 3px rgb(101 117 78 / 18%) !important;
+  outline: 0;
+}
+
+.workspace select option {
+  background: #fffdf9;
+  color: var(--brand-tinta);
+}
+
+.workspace select option:checked {
+  background: #dfe9d5;
+  color: var(--brand-matcha-oscuro);
+}
+
+/* El filtro de etiquetas es un menu propio: replica los mismos estados que los selects. */
+.label-filter-trigger {
+  background: #fffdf9;
+  border-color: var(--ui-border);
+  border-radius: 14px;
+  cursor: pointer;
+  min-height: 38px;
+  padding: 8px 34px 8px 11px;
+  position: relative;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.label-filter-trigger::after {
+  border-bottom: 1.7px solid currentColor;
+  border-right: 1.7px solid currentColor;
+  content: '';
+  height: 7px;
+  position: absolute;
+  right: 13px;
+  top: calc(50% - 5px);
+  transform: rotate(45deg);
+  width: 7px;
+}
+
+.label-filter-trigger:hover,
+.label-filter-trigger.active {
+  background: #eef4e9;
+  border-color: #a6b497;
+  box-shadow: 0 3px 10px rgb(74 92 56 / 10%);
+  color: var(--brand-matcha-oscuro);
+}
+
+.label-filter-trigger:focus-visible {
+  box-shadow: 0 0 0 3px rgb(101 117 78 / 18%);
+  outline: 0;
+}
+
+.label-filter-menu {
+  border-color: #cfdac3;
+  border-radius: 14px;
+  box-shadow: 0 12px 24px rgb(57 73 43 / 14%);
+  padding: 6px;
+}
+
+.label-filter-menu button {
+  border-radius: 10px;
+  min-height: 34px;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.label-filter-menu button:hover,
+.label-filter-menu button.selected {
+  background: #e6f0dc;
+  color: var(--brand-matcha-oscuro);
+}
