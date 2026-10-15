@@ -294,6 +294,91 @@ function SidebarIcon({ paths }: { paths: string[] }) {
     </svg>
   );
 }
+
+type AppSelectOption = { label: string; value: string };
+
+function AppSelect({
+  ariaLabel,
+  className = '',
+  disabled = false,
+  id,
+  onChange,
+  options,
+  value
+}: {
+  ariaLabel?: string;
+  className?: string;
+  disabled?: boolean;
+  id?: string;
+  onChange: (value: string) => void;
+  options: AppSelectOption[];
+  value: string;
+}): React.ReactNode {
+  const [isOpen, setIsOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    const closeWhenClickingOutside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', closeWhenClickingOutside);
+    return () => document.removeEventListener('mousedown', closeWhenClickingOutside);
+  }, []);
+
+  const selectOption = (nextValue: string) => {
+    onChange(nextValue);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className={`app-select ${className}`} ref={rootRef}>
+      <button
+        aria-controls={id ? `${id}-options` : undefined}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={ariaLabel}
+        className="app-select-trigger"
+        disabled={disabled}
+        id={id}
+        onClick={() => setIsOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setIsOpen(false);
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const currentIndex = Math.max(
+              0,
+              options.findIndex((option) => option.value === value)
+            );
+            const step = event.key === 'ArrowDown' ? 1 : -1;
+            const nextIndex = (currentIndex + step + options.length) % options.length;
+            onChange(options[nextIndex].value);
+          }
+        }}
+        type="button"
+      >
+        <span>{selected?.label}</span>
+        <span aria-hidden="true" className="app-select-chevron" />
+      </button>
+      {isOpen && (
+        <div className="app-select-menu" id={id ? `${id}-options` : undefined} role="listbox">
+          {options.map((option) => (
+            <button
+              aria-selected={option.value === value}
+              className={option.value === value ? 'selected' : ''}
+              key={option.value}
+              onClick={() => selectOption(option.value)}
+              role="option"
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 export default function HomePage(): React.ReactNode {
   const [inbox, setInbox] = useState<InboxState>({ kind: 'loading' });
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -2521,20 +2606,20 @@ export default function HomePage(): React.ReactNode {
           </div>
           <div className="brand-filter">
             <span>Plataformas</span>
-            <select
+            <AppSelect
               aria-label="Filtrar por plataforma"
               className="status-select brand-platform"
               id="conversation-platform-filter"
-              onChange={(event) => setPlatformFilter(event.target.value)}
+              onChange={setPlatformFilter}
+              options={[
+                { label: 'Todas', value: '' },
+                ...channelPlatforms.map((platform) => ({
+                  label: platform.charAt(0).toUpperCase() + platform.slice(1),
+                  value: platform
+                }))
+              ]}
               value={platformFilter}
-            >
-              <option value="">Todas</option>
-              {channelPlatforms.map((platform) => (
-                <option key={platform} value={platform}>
-                  {platform.charAt(0).toUpperCase() + platform.slice(1)}
-                </option>
-              ))}
-            </select>
+            />
           </div>
         </div>
         <nav>
@@ -2829,34 +2914,36 @@ export default function HomePage(): React.ReactNode {
             <label className="status-select-label" htmlFor="conversation-status-filter">
               Estado
             </label>
-            <select
+            <AppSelect
               className="status-select"
               id="conversation-status-filter"
-              onChange={(event) => setStatusFilter(event.target.value as ConversationFilter)}
+              onChange={(value) => setStatusFilter(value as ConversationFilter)}
+              options={[
+                { label: 'Todas', value: 'all' },
+                { label: 'Abiertas', value: 'open' },
+                { label: 'Pendientes', value: 'pending' },
+                { label: 'Resueltas', value: 'resolved' }
+              ]}
               value={statusFilter}
-            >
-              <option value="all">Todas</option>
-              <option value="open">Abiertas</option>
-              <option value="pending">Pendientes</option>
-              <option value="resolved">Resueltas</option>
-            </select>
+            />
           </div>
           <div className="status-filter-field">
             <label className="status-select-label" htmlFor="conversation-attention-filter">
               Espera
             </label>
-            <select
+            <AppSelect
               className="status-select"
               id="conversation-attention-filter"
-              onChange={(event) => setAttentionFilter(event.target.value as AttentionFilter)}
+              onChange={(value) => setAttentionFilter(value as AttentionFilter)}
+              options={[
+                { label: 'Todos', value: 'all' },
+                { label: 'Normal', value: 'ok' },
+                { label: 'En demora', value: 'aviso' },
+                { label: 'Urgente', value: 'alto' },
+                { label: 'Sin espera', value: 'no_wait' }
+              ]}
               value={attentionFilter}
-            >
-              <option value="all">Todos</option>
-              <option value="ok">Normal</option>
-              <option value="aviso">En demora</option>
-              <option value="alto">Urgente</option>
-              <option value="no_wait">Sin espera</option>
-            </select>
+            />
           </div>
           <button
             aria-pressed={assignmentScope === 'assigned_to_me'}
@@ -3690,20 +3777,20 @@ export default function HomePage(): React.ReactNode {
               <label className="visually-hidden" htmlFor="conversation-platform-filter">
                 Plataforma
               </label>
-              <select
+              <AppSelect
                 aria-label="Filtrar por plataforma"
                 className="status-select brand-platform"
                 id="conversation-platform-filter"
-                onChange={(event) => setPlatformFilter(event.target.value)}
+                onChange={setPlatformFilter}
+                options={[
+                  { label: 'Todas', value: '' },
+                  ...channelPlatforms.map((platform) => ({
+                    label: platform.charAt(0).toUpperCase() + platform.slice(1),
+                    value: platform
+                  }))
+                ]}
                 value={platformFilter}
-              >
-                <option value="">Todas</option>
-                {channelPlatforms.map((platform) => (
-                  <option key={platform} value={platform}>
-                    {platform.charAt(0).toUpperCase() + platform.slice(1)}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <p className="preview-note">Historial protegido · la bandeja consulta la API propia.</p>
           </>
@@ -4050,21 +4137,19 @@ export default function HomePage(): React.ReactNode {
                       <div className="team-member-actions">
                         <label>
                           <span>Rol</span>
-                          <select
+                          <AppSelect
                             aria-label={`Rol de ${memberLabel(member)}`}
                             disabled={updatingMemberId === member.userId}
-                            onChange={(event) =>
-                              void changeMemberRole(
-                                member,
-                                event.target.value as TenantMember['role']
-                              )
+                            onChange={(value) =>
+                              void changeMemberRole(member, value as TenantMember['role'])
                             }
+                            options={[
+                              { label: 'Administrador', value: 'admin' },
+                              { label: 'Supervisor', value: 'supervisor' },
+                              { label: 'Agente', value: 'agent' }
+                            ]}
                             value={member.role}
-                          >
-                            <option value="admin">Administrador</option>
-                            <option value="supervisor">Supervisor</option>
-                            <option value="agent">Agente</option>
-                          </select>
+                          />
                         </label>
                         <button
                           className="channel-rename-cancel"
@@ -4094,16 +4179,15 @@ export default function HomePage(): React.ReactNode {
                   </label>
                   <label>
                     Rol
-                    <select
-                      onChange={(event) =>
-                        setInviteRole(event.target.value as TenantMember['role'])
-                      }
+                    <AppSelect
+                      onChange={(value) => setInviteRole(value as TenantMember['role'])}
+                      options={[
+                        { label: 'Agente', value: 'agent' },
+                        { label: 'Supervisor', value: 'supervisor' },
+                        { label: 'Administrador', value: 'admin' }
+                      ]}
                       value={inviteRole}
-                    >
-                      <option value="agent">Agente</option>
-                      <option value="supervisor">Supervisor</option>
-                      <option value="admin">Administrador</option>
-                    </select>
+                    />
                   </label>
                   <button
                     className="channel-rename-save"
@@ -4165,19 +4249,18 @@ export default function HomePage(): React.ReactNode {
               </label>
               <label>
                 Tipo
-                <select
-                  onChange={(event) =>
-                    setMediaKind(event.target.value as '' | MessageAttachment['kind'])
-                  }
+                <AppSelect
+                  onChange={(value) => setMediaKind(value as '' | MessageAttachment['kind'])}
+                  options={[
+                    { label: 'Comprobantes (imágenes)', value: 'image' },
+                    { label: 'Archivos', value: 'file' },
+                    { label: 'Vídeos', value: 'video' },
+                    { label: 'Audios', value: 'audio' },
+                    { label: 'Publicaciones compartidas', value: 'share' },
+                    { label: 'Todo', value: '' }
+                  ]}
                   value={mediaKind}
-                >
-                  <option value="image">Comprobantes (imágenes)</option>
-                  <option value="file">Archivos</option>
-                  <option value="video">Vídeos</option>
-                  <option value="audio">Audios</option>
-                  <option value="share">Publicaciones compartidas</option>
-                  <option value="">Todo</option>
-                </select>
+                />
               </label>
               <button
                 className="channel-rename-cancel"
@@ -4465,19 +4548,14 @@ export default function HomePage(): React.ReactNode {
           </div>
           <label>
             Sede
-            <select
-              onChange={(event) => {
-                setBranchMediaSlug(event.target.value);
-                void loadBranchMedia(event.target.value);
+            <AppSelect
+              onChange={(value) => {
+                setBranchMediaSlug(value);
+                void loadBranchMedia(value);
               }}
+              options={branchMediaBranches.map((sede) => ({ label: sede.name, value: sede.slug }))}
               value={branchMediaSlug}
-            >
-              {branchMediaBranches.map((sede) => (
-                <option key={sede.slug} value={sede.slug}>
-                  {sede.name}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <fieldset className="branch-media-source">
             <legend>Origen del archivo</legend>
@@ -5005,16 +5083,17 @@ function MetricsPanel({
         <div className="date-filter-controls">
           <label className="metrics-select-label">
             <span className="metrics-card-label">Periodo</span>
-            <select
+            <AppSelect
               aria-label="Periodo de las métricas"
-              onChange={(event) => onChangeDays(Number(event.target.value))}
-              value={days}
-            >
-              <option value={1}>Hoy</option>
-              <option value={7}>Últimos 7 días</option>
-              <option value={30}>Últimos 30 días</option>
-              <option value={90}>Últimos 90 días</option>
-            </select>
+              onChange={(value) => onChangeDays(Number(value))}
+              options={[
+                { label: 'Hoy', value: '1' },
+                { label: 'Últimos 7 días', value: '7' },
+                { label: 'Últimos 30 días', value: '30' },
+                { label: 'Últimos 90 días', value: '90' }
+              ]}
+              value={String(days)}
+            />
           </label>
           <label className="metrics-select-label date-filter-field">
             <span className="metrics-card-label">Fecha específica</span>

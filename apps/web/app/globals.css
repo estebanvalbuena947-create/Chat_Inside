@@ -5867,3 +5867,100 @@ button:not(:disabled):active {
   background: #e6f0dc;
   color: var(--brand-matcha-oscuro);
 }
+
+/* Selectores propios: evita los menus y flechas del navegador, que cambian entre dispositivos. */
+.app-select {
+  min-width: 0;
+  position: relative;
+  width: 100%;
+}
+
+.app-select-trigger {
+  align-items: center;
+  background: #fffdf9;
+  border: 1px solid #cbd7c0;
+  border-radius: 14px;
+  color: var(--brand-tinta);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 8px 12px;
+  text-align: left;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+  width: 100%;
+}
+
+.app-select-trigger:hover,
+.app-select-trigger[aria-expanded='true'] {
+  background: #eef4e9;
+  border-color: #8ca17b;
+  box-shadow: 0 4px 12px rgb(74 92 56 / 12%);
+}
+
+.app-select-trigger:focus-visible {
+  box-shadow: 0 0 0 3px rgb(101 117 78 / 22%);
+  outline: 0;
+}
+
+.app-select-trigger:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.app-select-chevron {
+  border-bottom: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  height: 8px;
+  margin-left: 12px;
+  transform: rotate(45deg) translateY(-2px);
+  width: 8px;
+}
+
+.app-select-trigger[aria-expanded='true'] .app-select-chevron {
+  transform: rotate(225deg) translate(-2px, -2px);
+}
+
+.app-select-menu {
+  background: #fffefa;
+  border: 1px solid #cbd7c0;
+  border-radius: 14px;
+  box-shadow: 0 14px 28px rgb(57 73 43 / 18%);
+  left: 0;
+  max-height: 240px;
+  min-width: 100%;
+  overflow-y: auto;
+  padding: 6px;
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 70;
+}
+
+.app-select-menu button {
+  background: transparent;
+  border-radius: 10px;
+  color: var(--brand-tinta);
+  display: block;
+  font: inherit;
+  min-height: 36px;
+  padding: 8px 10px;
+  text-align: left;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+  width: 100%;
+}
+
+.app-select-menu button:hover,
+.app-select-menu button[aria-selected='true'] {
+  background: #dfead4;
+  color: var(--brand-matcha-oscuro);
+}
+
+.metrics-period .app-select-trigger {
+  min-height: 44px;
+}
