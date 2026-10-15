@@ -4,6 +4,21 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-055 - Cerrar, atender y ganar son tres métricas independientes (2026-10-14)
+
+- **Estado:** aceptada
+- **Contexto:** El panel llamaba «por el Bot» a una conversación sin mensajes de asesor. Esa es una
+  atribución de atención útil, pero no prueba quién ejecutó el cierre. Además, una conversión ganada
+  es un resultado comercial y sumarla a cierres mezcla dos hechos que pueden ocurrir juntos.
+- **Decisión:** Cada transición real a `resolved` registra un evento inmutable con el actor que la
+  ejecutó. El cierre atendido se atribuye a un único actor: el último asesor que respondió antes del
+  cierre, o Bot si no hubo respuesta humana. Las ganadas se cuentan de forma independiente y se
+  atribuyen al actor que las registró. La pantalla expone las tres columnas, no una suma.
+- **Consecuencias:** Los cierres técnicos son auditables desde la migración; no se inventa actor para
+  datos anteriores. Reabrir no borra el evento histórico y un reintento idempotente no crea otro.
+
+---
+
 ## ADR-054 - La bandeja nombra el efecto del interruptor (responde o no responde), no los valores del contrato (2026-10-14)
 
 - **Fecha:** 2026-10-14

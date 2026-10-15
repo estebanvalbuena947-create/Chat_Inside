@@ -4893,6 +4893,7 @@ export default function HomePage(): React.ReactNode {
 type MetricsPayload = {
   closedConversations: number;
   closure: { byAdvisor: number; byBot: number };
+  closureActions: { byAdvisor: number; byBot: number };
   error?: string;
   messagesByChannel: Array<{ platform: string; received: number; sent: number }>;
   messageBreakdown: { inbound: number; byBot: number; byAdvisor: number };
@@ -4900,10 +4901,12 @@ type MetricsPayload = {
   participants: Array<{
     averageFirstResponseSeconds: number | null;
     closedConversations: number;
+    executedClosures: number;
     firstResponses: number;
     kind: 'advisor' | 'bot';
     label: string;
     messagesSent: number;
+    wonConversations: number;
   }>;
   periodDays: number;
   responseTime: {
@@ -4997,6 +5000,10 @@ function MetricsPanel({
     state.kind === 'ready'
       ? Math.max(1, ...state.data.messagesPerDay.map((dia) => dia.received + dia.sent))
       : 1;
+  const maximoPorParticipante =
+    state.kind === 'ready'
+      ? Math.max(1, ...state.data.participants.map((participant) => participant.messagesSent))
+      : 1;
   return (
     <section className="metrics-panel">
       <div className="metrics-period">
@@ -5061,7 +5068,11 @@ function MetricsPanel({
               <p className="metrics-card-label">Conversaciones cerradas</p>
               <p className="metrics-card-value">{state.data.closedConversations}</p>
               <p className="metrics-hint">
-                {state.data.closure.byBot} por el bot · {state.data.closure.byAdvisor} por un asesor
+                Atendidas: {state.data.closure.byBot} Bot · {state.data.closure.byAdvisor} asesor
+              </p>
+              <p className="metrics-hint">
+                Registradas: {state.data.closureActions.byBot} Bot ·{' '}
+                {state.data.closureActions.byAdvisor} asesor
               </p>
             </div>
             <div className="metrics-card metrics-card-visual amber">
@@ -5114,21 +5125,33 @@ function MetricsPanel({
                   <span
                     className="metrics-bar"
                     style={{
-                      width: String(Math.max(8, Math.min(100, participant.messagesSent * 10))) + '%'
+                      width:
+                        String(
+                          participant.messagesSent
+                            ? Math.max(6, (participant.messagesSent / maximoPorParticipante) * 100)
+                            : 0
+                        ) + '%'
                     }}
                   >
                     <span />
                   </span>
                   <span className="metrics-row-values">
                     {participant.kind === 'advisor' ? (
-                      <>
+                      <span className="metrics-row-detail">
                         <strong>{esperaEnPalabras(participant.averageFirstResponseSeconds)}</strong>{' '}
                         de espera promedio · {participant.firstResponses} medidas ·{' '}
                         {participant.messagesSent} enviadas
-                      </>
+                      </span>
                     ) : (
-                      <>{participant.messagesSent} respuestas enviadas</>
+                      <span className="metrics-row-detail">
+                        {participant.messagesSent} respuestas enviadas
+                      </span>
                     )}
+                    <span className="metrics-activity-badges">
+                      <span>{participant.closedConversations} atendidas</span>
+                      <span>{participant.executedClosures} cerradas</span>
+                      <span>{participant.wonConversations} ganadas</span>
+                    </span>
                   </span>
                 </div>
               ))

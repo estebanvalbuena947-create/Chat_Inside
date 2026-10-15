@@ -94,6 +94,8 @@ describe('cerrar una conversacion desde el bot', () => {
     });
     // La fecha de cierre la pone la regla del dominio, no este archivo.
     expect(typeof parche.resolved_at).toBe('string');
+    expect(parche.closure_actor_type).toBe('bot');
+    expect(parche.closure_actor_user_id).toBeNull();
     expect(resultado).toMatchObject({
       automationMode: 'paused',
       status: 'resolved',

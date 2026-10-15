@@ -5,6 +5,7 @@ import {
   operationalDayRange,
   summarizeClosure,
   summarizeMessages,
+  summarizeParticipants,
   summarizeResponseTimes,
   type MetricRow,
   type ResponseRow
@@ -36,6 +37,7 @@ const opciones = (
   extra: Partial<Parameters<typeof summarizeMessages>[1]> = {}
 ): Parameters<typeof summarizeMessages>[1] => ({
   closure: { byAdvisor: 0, byBot: 0 },
+  closureActions: { byAdvisor: 0, byBot: 0 },
   days: 30,
   responseTime: summarizeResponseTimes([], { since: DESDE }),
   truncated: false,
@@ -129,6 +131,43 @@ describe('cierre de conversaciones: quien las atendio', () => {
 
   it('no cuenta dos veces una conversacion aunque tenga varias respuestas de asesor', () => {
     expect(summarizeClosure(['a'], ['a', 'a'])).toEqual({ byAdvisor: 1, byBot: 0 });
+  });
+});
+
+describe('actividad por actor', () => {
+  it('mantiene separados los mensajes, cierres atendidos, cierres ejecutados y ganadas', () => {
+    const participants = summarizeParticipants(
+      [
+        {
+          conversationId: 'c-1',
+          createdAt: '2026-10-01T10:00:00.000Z',
+          direction: 'outbound',
+          senderType: 'agent',
+          senderUserId: 'advisor-1'
+        }
+      ],
+      new Map([['advisor-1', 'Ana']]),
+      new Map([
+        ['advisor:advisor-1', { closedConversations: 2, executedClosures: 1, wonConversations: 3 }],
+        ['bot', { executedClosures: 4 }]
+      ])
+    );
+
+    expect(participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          closedConversations: 2,
+          executedClosures: 1,
+          label: 'Ana',
+          wonConversations: 3
+        }),
+        expect.objectContaining({
+          executedClosures: 4,
+          kind: 'bot',
+          messagesSent: 0
+        })
+      ])
+    );
   });
 });
 

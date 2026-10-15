@@ -793,6 +793,9 @@ export const metricsClosureSchema = z.object({
 
 export type MetricsClosure = z.infer<typeof metricsClosureSchema>;
 
+/** Cierres cuya acción quedó auditada desde la migración. */
+export const metricsClosureActionsSchema = metricsClosureSchema;
+
 /** Cuando una respuesta de asesor deja de ser buena. Viaja en la respuesta para no repetirla en la interfaz. */
 export const metricsResponseThresholdsSchema = z.object({
   amberSeconds: z.number().int(),
@@ -815,10 +818,12 @@ export type MetricsResponseTime = z.infer<typeof metricsResponseTimeSchema>;
 export const metricsParticipantSchema = z.object({
   averageFirstResponseSeconds: z.number().int().nullable(),
   closedConversations: z.number().int(),
+  executedClosures: z.number().int(),
   firstResponses: z.number().int(),
   kind: z.enum(['advisor', 'bot']),
   label: z.string(),
-  messagesSent: z.number().int()
+  messagesSent: z.number().int(),
+  wonConversations: z.number().int()
 });
 
 export type MetricsParticipant = z.infer<typeof metricsParticipantSchema>;
@@ -826,6 +831,7 @@ export type MetricsParticipant = z.infer<typeof metricsParticipantSchema>;
 export const metricsSummarySchema = z.object({
   closedConversations: z.number().int(),
   closure: metricsClosureSchema,
+  closureActions: metricsClosureActionsSchema,
   messageBreakdown: metricsMessageBreakdownSchema,
   messagesByChannel: z.array(metricsChannelSchema),
   messagesPerDay: z.array(metricsDaySchema),

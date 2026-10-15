@@ -615,6 +615,8 @@ describe('TenantConversationService status', () => {
     expect(fake.callsIn('conversations', 'eq')).toContainEqual(['status_version', 1]);
     expect(fake.callsIn('conversations', 'update')).toContainEqual([
       {
+        closure_actor_type: null,
+        closure_actor_user_id: null,
         resolved_at: null,
         status: 'pending',
         status_version: 2,
@@ -639,6 +641,8 @@ describe('TenantConversationService status', () => {
 
     expect(fake.callsIn('conversations', 'update')).toContainEqual([
       {
+        closure_actor_type: 'advisor',
+        closure_actor_user_id: '22222222-2222-4222-8222-222222222222',
         resolved_at: expect.any(String),
         status: 'resolved',
         status_version: 2,

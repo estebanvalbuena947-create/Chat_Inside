@@ -72,7 +72,14 @@ export type ResponseRow = {
 };
 
 /** Cuenta mensajes salientes por actor. El Bot es `automation`; la identidad humana llega de la fila. */
-export function summarizeParticipants(rows: ResponseRow[], labels = new Map<string, string>()) {
+export function summarizeParticipants(
+  rows: ResponseRow[],
+  labels = new Map<string, string>(),
+  counts = new Map<
+    string,
+    { closedConversations?: number; executedClosures?: number; wonConversations?: number }
+  >()
+) {
   const values = new Map<
     string,
     { kind: 'advisor' | 'bot'; label: string; messagesSent: number }
@@ -92,6 +99,18 @@ export function summarizeParticipants(rows: ResponseRow[], labels = new Map<stri
     };
     current.messagesSent += 1;
     values.set(key, current);
+  }
+  // Un asesor que solo cerró o registró una ganada también debe verse en la tabla, aunque no haya
+  // enviado mensajes en el periodo.
+  for (const key of counts.keys()) {
+    if (values.has(key)) continue;
+    const isBot = key === 'bot';
+    const userId = isBot ? '' : key.replace(/^advisor:/, '');
+    values.set(key, {
+      kind: isBot ? 'bot' : 'advisor',
+      label: isBot ? 'Bot' : (labels.get(userId) ?? 'Asesor sin identificar'),
+      messagesSent: 0
+    });
   }
   const waits = new Map<string, number[]>();
   const byConversation = new Map<string, ResponseRow[]>();
@@ -127,13 +146,16 @@ export function summarizeParticipants(rows: ResponseRow[], labels = new Map<stri
   }
   return [...values.entries()].map(([key, value]) => {
     const durations = waits.get(key) ?? [];
+    const participantCounts = counts.get(key);
     return {
       ...value,
       averageFirstResponseSeconds: durations.length
         ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
         : null,
-      closedConversations: 0,
-      firstResponses: durations.length
+      closedConversations: participantCounts?.closedConversations ?? 0,
+      executedClosures: participantCounts?.executedClosures ?? 0,
+      firstResponses: durations.length,
+      wonConversations: participantCounts?.wonConversations ?? 0
     };
   });
 }
@@ -211,6 +233,7 @@ export function summarizeMessages(
   rows: MetricRow[],
   options: {
     closure: MetricsClosure;
+    closureActions: MetricsClosure;
     days: number;
     responseTime: MetricsResponseTime;
     participants?: ReturnType<typeof summarizeParticipants>;
@@ -245,6 +268,7 @@ export function summarizeMessages(
   return metricsSummarySchema.parse({
     closedConversations: options.closure.byAdvisor + options.closure.byBot,
     closure: options.closure,
+    closureActions: options.closureActions,
     messageBreakdown: { inbound, byBot, byAdvisor },
     messagesByChannel: [...porCanal.entries()]
       .map(([platform, conteo]) => ({ platform, ...conteo }))
@@ -353,11 +377,11 @@ export class MetricsService {
 
     // Cerradas DENTRO del periodo: `status = 'resolved'` dice cuantas estan cerradas hoy, no cuantas
     // se cerraron en estos dias.
-    const cerradas = await leerPorPaginas<{ id?: unknown }>(
+    const cerradas = await leerPorPaginas<{ id?: unknown; resolved_at?: unknown }>(
       (desdeFila, hastaFila) =>
         supabase
           .from('conversations')
-          .select('id')
+          .select('id, resolved_at')
           .eq('tenant_id', tenantId)
           .eq('status', 'resolved')
           .gte('resolved_at', desde)
@@ -369,14 +393,25 @@ export class MetricsService {
     );
 
     const resueltasDelPeriodo = cerradas.filas.map((fila) => String(fila.id)).filter(Boolean);
+    const closedAtByConversation = new Map(
+      cerradas.filas.flatMap((fila) =>
+        typeof fila.id === 'string' && typeof fila.resolved_at === 'string'
+          ? [[fila.id, fila.resolved_at] as const]
+          : []
+      )
+    );
 
     // Quienes de esas conversaciones tuvieron respuesta de una persona, en cualquier momento: es el
     // hecho que decide si la llevo el bot o un asesor.
-    let conAsesor: string[] = [];
+    let respuestasHumanas: Array<{
+      conversation_id?: unknown;
+      sender_user_id?: unknown;
+      created_at?: unknown;
+    }> = [];
     if (resueltasDelPeriodo.length) {
       const { data: humanas, error: humanasError } = await supabase
         .from('messages')
-        .select('conversation_id')
+        .select('conversation_id, sender_user_id, created_at')
         .eq('tenant_id', tenantId)
         .eq('sender_type', 'agent')
         .in('conversation_id', resueltasDelPeriodo);
@@ -386,8 +421,90 @@ export class MetricsService {
           'No fue posible saber quien atendio cada conversación.'
         );
       }
-      conAsesor = ((humanas ?? []) as Array<{ conversation_id?: unknown }>).map((fila) =>
-        String(fila.conversation_id)
+      respuestasHumanas = (humanas ?? []) as typeof respuestasHumanas;
+    }
+
+    const cierresAuditados = await leerPorPaginas<{
+      closed_by_type?: unknown;
+      closed_by_user_id?: unknown;
+    }>(
+      (desdeFila, hastaFila) =>
+        supabase
+          .from('conversation_closures')
+          .select('closed_by_type, closed_by_user_id')
+          .eq('tenant_id', tenantId)
+          .gte('closed_at', desde)
+          .lt('closed_at', period.end)
+          .order('closed_at', { ascending: false })
+          .range(desdeFila, hastaFila),
+      MAX_ROWS,
+      'No fue posible leer la auditoría de cierres.'
+    );
+
+    const ganadas = await leerPorPaginas<{
+      outcome_set_by?: unknown;
+      outcome_set_by_user_id?: unknown;
+    }>(
+      (desdeFila, hastaFila) =>
+        supabase
+          .from('conversations')
+          .select('outcome_set_by, outcome_set_by_user_id')
+          .eq('tenant_id', tenantId)
+          .eq('outcome', 'ganado')
+          .gte('outcome_set_at', desde)
+          .lt('outcome_set_at', period.end)
+          .order('outcome_set_at', { ascending: false })
+          .range(desdeFila, hastaFila),
+      MAX_ROWS,
+      'No fue posible leer las conversaciones ganadas.'
+    );
+
+    const counts = new Map<
+      string,
+      { closedConversations?: number; executedClosures?: number; wonConversations?: number }
+    >();
+    const increment = (
+      key: string,
+      field: 'closedConversations' | 'executedClosures' | 'wonConversations'
+    ) => {
+      const value = counts.get(key) ?? {};
+      value[field] = (value[field] ?? 0) + 1;
+      counts.set(key, value);
+    };
+    const lastAdvisorByConversation = new Map<string, { userId: string; createdAt: string }>();
+    for (const row of respuestasHumanas) {
+      if (typeof row.conversation_id !== 'string' || typeof row.sender_user_id !== 'string')
+        continue;
+      const current = lastAdvisorByConversation.get(row.conversation_id);
+      const createdAt = typeof row.created_at === 'string' ? row.created_at : '';
+      const closedAt = closedAtByConversation.get(row.conversation_id);
+      if (closedAt && createdAt > closedAt) continue;
+      if (!current || current.createdAt < createdAt)
+        lastAdvisorByConversation.set(row.conversation_id, {
+          userId: row.sender_user_id,
+          createdAt
+        });
+    }
+    for (const id of resueltasDelPeriodo) {
+      const owner = lastAdvisorByConversation.get(id);
+      increment(owner ? `advisor:${owner.userId}` : 'bot', 'closedConversations');
+    }
+    let actionsByBot = 0;
+    let actionsByAdvisor = 0;
+    for (const row of cierresAuditados.filas) {
+      const isBot = row.closed_by_type === 'bot';
+      if (isBot) actionsByBot += 1;
+      else actionsByAdvisor += 1;
+      increment(
+        isBot ? 'bot' : `advisor:${String(row.closed_by_user_id ?? 'unknown')}`,
+        'executedClosures'
+      );
+    }
+    for (const row of ganadas.filas) {
+      const isBot = row.outcome_set_by === 'bot';
+      increment(
+        isBot ? 'bot' : `advisor:${String(row.outcome_set_by_user_id ?? 'unknown')}`,
+        'wonConversations'
       );
     }
 
@@ -399,14 +516,24 @@ export class MetricsService {
       senderUserId: typeof fila.sender_user_id === 'string' ? fila.sender_user_id : null
     }));
     const labels = new Map<string, string>();
+    const advisorIds = new Set<string>([
+      ...responseRows.flatMap((row) =>
+        row.senderType === 'agent' && row.senderUserId ? [row.senderUserId] : []
+      ),
+      ...[...lastAdvisorByConversation.values()].map((row) => row.userId),
+      ...cierresAuditados.filas.flatMap((row) =>
+        row.closed_by_type === 'advisor' && typeof row.closed_by_user_id === 'string'
+          ? [row.closed_by_user_id]
+          : []
+      ),
+      ...ganadas.filas.flatMap((row) =>
+        row.outcome_set_by === 'persona' && typeof row.outcome_set_by_user_id === 'string'
+          ? [row.outcome_set_by_user_id]
+          : []
+      )
+    ]);
     await Promise.all(
-      [
-        ...new Set(
-          responseRows.flatMap((row) =>
-            row.senderType === 'agent' && row.senderUserId ? [row.senderUserId] : []
-          )
-        )
-      ].map(async (id) => {
+      [...advisorIds].map(async (id) => {
         const { data } = await supabase.auth.admin.getUserById(id);
         const name = data.user?.user_metadata?.display_name;
         labels.set(
@@ -429,11 +556,17 @@ export class MetricsService {
             : null
       })),
       {
-        closure: summarizeClosure(resueltasDelPeriodo, conAsesor),
+        closure: summarizeClosure(resueltasDelPeriodo, lastAdvisorByConversation.keys()),
+        closureActions: { byAdvisor: actionsByAdvisor, byBot: actionsByBot },
         days,
         responseTime: summarizeResponseTimes(responseRows, { since: desde }),
-        truncated: actividad.truncado || respuestas.truncado || cerradas.truncado,
-        participants: summarizeParticipants(responseRows, labels)
+        truncated:
+          actividad.truncado ||
+          respuestas.truncado ||
+          cerradas.truncado ||
+          cierresAuditados.truncado ||
+          ganadas.truncado,
+        participants: summarizeParticipants(responseRows, labels, counts)
       }
     );
   }

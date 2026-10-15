@@ -238,7 +238,8 @@ export class ToolConversationService {
       identity,
       conversationId,
       { status: 'resolved' },
-      pausar ? handoffToHuman() : null
+      pausar ? handoffToHuman() : null,
+      'bot'
     );
     console.log(
       JSON.stringify({
@@ -289,7 +290,8 @@ export class ToolConversationService {
     identity: ToolIdentity,
     conversationId: string,
     estado: { status?: ConversationStatus },
-    modo: AutomationMode | null
+    modo: AutomationMode | null,
+    closureActor: 'bot' | null = null
   ): Promise<{ automationMode: string; conversationId: string; status: string }> {
     const supabase = this.supabaseServerClientFactory.create();
     const { data: actual, error: lecturaError } = await supabase
@@ -322,6 +324,8 @@ export class ToolConversationService {
     const parche: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (cambiaEstado) {
       Object.assign(parche, conversationStatusPatch(estado.status as ConversationStatus));
+      parche.closure_actor_type = estado.status === 'resolved' ? closureActor : null;
+      parche.closure_actor_user_id = null;
       parche.status_version = versionStatus + 1;
     }
     if (cambiaModo) {

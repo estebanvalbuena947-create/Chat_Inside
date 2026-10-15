@@ -710,6 +710,10 @@ export class TenantConversationService {
           // conversacion: se sella la fecha al cerrar y se limpia al reabrir, para poder decir
           // cuantas se cerraron EN UN PERIODO y no cuantas estan cerradas hoy.
           ...conversationStatusPatch(input.status),
+          // La base audita esta transición junto con el update. El actor no viene del navegador:
+          // es la identidad ya autenticada en este caso de uso.
+          closure_actor_type: input.status === 'resolved' ? 'advisor' : null,
+          closure_actor_user_id: input.status === 'resolved' ? identity.userId : null,
           status_version: input.statusVersion + 1,
           updated_at: new Date().toISOString()
         })

@@ -3454,6 +3454,27 @@ h2 {
   white-space: normal;
 }
 
+.metrics-row-detail {
+  display: block;
+}
+
+.metrics-activity-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+  margin-top: 7px;
+}
+
+.metrics-activity-badges span {
+  background: #f1f4eb;
+  border-radius: 999px;
+  color: var(--brand-matcha-oscuro);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+}
+
 .metrics-bar {
   background: rgba(101, 117, 78, 0.14);
   border-radius: 999px;
