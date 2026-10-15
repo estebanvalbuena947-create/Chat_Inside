@@ -4,6 +4,18 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-056 - El enlace de invitación que no sirve lo dice, y el secreto nunca viaja al acceso (2026-10-14)
+
+- **Fecha:** 2026-10-14
+- **Estado:** aceptada
+- **Contexto:** En la operación una persona invitada quedó fuera: el enlace no concedió sesión y la aplicación la dejó en el formulario de acceso, idéntico al de una contraseña equivocada. El callback solo distinguía «hay tokens» de «no hay tokens»: descartaba el error que Auth sí devuelve (por ejemplo `otp_expired`) y el acceso ignoraba por completo el aviso, así que ni la persona ni quien administra podían saber si el enlace se había gastado, había llegado incompleto o había sido rechazado. Diagnosticarlo obligaba a revisar la configuración del proveedor a ciegas, y en ese camino se cambió la configuración de un proyecto que no era el que usa el chat.
+- **Decisión:** El callback clasifica el retorno de Auth en cuatro resultados —sesión lista, código de canje, enlace usado o vencido, enlace incompleto— y manda al acceso un motivo propio. El veredicto del proveedor manda sobre el fragmento; un código de error no traducido se presenta como rechazo genérico, sin inventarle causa. El acceso traduce el motivo a un texto propio y nunca pinta el valor recibido, y un acceso sin motivo no muestra aviso, de modo que el error de credenciales siga siendo un error de credenciales. El secreto no viaja: la dirección del acceso solo lleva el identificador del motivo.
+- **Alternativas consideradas:** Registrar el motivo en el servidor, que obligaría a llevar el enlace a un registro y roza el secreto; mostrar el texto del proveedor, que expone códigos y descripciones en inglés a quien no puede actuar sobre ellos; dejar el acceso como estaba, que es exactamente lo que falló; y condicionar por el correo o por el enlace concretos, que no resuelve la clase.
+- **Consecuencias:** Un enlace gastado o rechazado deja de confundirse con una credencial equivocada. Queda un camino que este aviso no puede nombrar: cuando Auth no puede volver al callback porque la dirección de retorno no está autorizada en el proyecto, el fragmento nunca llega al servidor y la persona aterriza en la raíz del sitio; ahí el aviso depende de que `${APP_PUBLIC_URL}/auth/callback` figure entre las redirecciones autorizadas, requisito ya anotado en `specs/015`. El motivo viaja en la dirección, así que no conviene añadirle datos de la persona.
+- **Cómo se verifica:** 14 pruebas unitarias de la clasificación y de los textos: tokens en el fragmento y en la consulta, código de canje, `otp_expired`, cuatro códigos desconocidos, error sin código, un solo token, token vacío y token en blanco, error con tokens, ausencia del secreto en el resultado y en los textos, motivo ausente, motivo heredado del objeto, y la dirección del acceso llevando solo el error y el motivo. La comprobación manual exige un enlace real: se abre uno nuevo y se confirma que un enlace ya usado lleva al acceso con su aviso.
+
+---
+
 ## ADR-055 - Cerrar, atender y ganar son tres métricas independientes (2026-10-14)
 
 - **Estado:** aceptada

@@ -3,7 +3,7 @@
 - **Estado:** implementada
 - **Responsable:** acceso y tenancy
 - **Fecha:** 2026-09-28
-- **Cierre:** implementada el 2026-09-28 sin migración, sobre `memberships`. Corregida el 2026-10-08: el enlace se emite una sola vez y el callback del navegador guarda su sesión antes de crear la contraseña. El enlace se muestra en pantalla para que el administrador lo comparta; este flujo no envía correo automático.
+- **Cierre:** implementada el 2026-09-28 sin migración, sobre `memberships`. Corregida el 2026-10-08: el enlace se emite una sola vez y el callback del navegador guarda su sesión antes de crear la contraseña. El enlace se muestra en pantalla para que el administrador lo comparta; este flujo no envía correo automático. Ampliada el 2026-10-14 (ADR-056, `specs/036`): cuando el enlace no concede sesión, el acceso dice el motivo en lugar de mostrar un formulario indistinguible de un error de credenciales.
 
 ## Resultado
 

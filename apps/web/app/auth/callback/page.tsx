@@ -1,36 +1,39 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { invitationLoginPath, readInvitationCallback } from '../../../lib/auth/invitation-callback';
 import { createClient } from '../../../lib/supabase/client';
 
 /**
  * Auth entrega las invitaciones generadas por administracion con tokens en el fragmento URL.
  * Ese fragmento nunca llega al servidor, asi que el navegador guarda la sesion antes de borrar
  * los secretos de la barra de direcciones y mostrar el formulario de contrasena.
+ *
+ * Cuando el enlace no concede sesion, el motivo viaja al acceso: sin el, la persona ve un formulario
+ * indistinguible de un error de credenciales y nadie puede saber que paso con la invitacion.
  */
 export default function AuthCallbackPage(): React.ReactNode {
   const router = useRouter();
-  const [message, setMessage] = useState('Verificando tu invitación…');
 
   useEffect(() => {
     async function establishInvitationSession(): Promise<void> {
-      const parameters = new URLSearchParams(window.location.hash.slice(1));
-      const accessToken = parameters.get('access_token');
-      const refreshToken = parameters.get('refresh_token');
-
-      if (!accessToken || !refreshToken) {
-        router.replace('/login?error=invite');
+      const result = readInvitationCallback(window.location.href);
+      if (result.kind === 'problem') {
+        router.replace(invitationLoginPath(result.problem));
         return;
       }
 
       const supabase = createClient();
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken
-      });
+      const { error } =
+        result.kind === 'code'
+          ? await supabase.auth.exchangeCodeForSession(result.code)
+          : await supabase.auth.setSession({
+              access_token: result.accessToken,
+              refresh_token: result.refreshToken
+            });
       if (error) {
-        router.replace('/login?error=invite');
+        router.replace(invitationLoginPath('sesion-no-establecida'));
         return;
       }
 
@@ -39,7 +42,7 @@ export default function AuthCallbackPage(): React.ReactNode {
     }
 
     void establishInvitationSession().catch(() => {
-      setMessage('No fue posible verificar la invitación. Pide al administrador un enlace nuevo.');
+      router.replace(invitationLoginPath('sesion-no-establecida'));
     });
   }, [router]);
 
@@ -47,7 +50,7 @@ export default function AuthCallbackPage(): React.ReactNode {
     <main className="login-page">
       <section className="login-card" aria-live="polite">
         <p className="login-brand">INSIDE SPA · CHAT</p>
-        <p className="login-hint">{message}</p>
+        <p className="login-hint">Verificando tu invitación…</p>
       </section>
     </main>
   );

@@ -11,7 +11,7 @@
     "dev": "corepack pnpm --parallel --filter @chat-zernio/web --filter @chat-zernio/api --filter @chat-zernio/worker run dev",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings=0",
-    "test": "corepack pnpm --filter @chat-zernio/contracts build && corepack pnpm --filter @chat-zernio/domain --filter @chat-zernio/api --filter @chat-zernio/worker --filter @chat-zernio/media test",
+    "test": "corepack pnpm --filter @chat-zernio/contracts build && corepack pnpm --filter @chat-zernio/domain --filter @chat-zernio/api --filter @chat-zernio/worker --filter @chat-zernio/media --filter @chat-zernio/web test",
     "typecheck": "corepack pnpm --filter @chat-zernio/contracts build && corepack pnpm --recursive run typecheck"
   },
   "pnpm": {
