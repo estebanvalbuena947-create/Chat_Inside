@@ -50,7 +50,7 @@ export function invitationProblemFromProviderCode(
 
 export const INVITATION_MESSAGES: Record<InvitationProblem, string> = {
   'enlace-usado':
-    'Ese enlace ya se usó o caducó: cada invitación sirve una sola vez. Pide a quien te invitó que genere una nueva.',
+    'Ese enlace ya se usó o caducó: cada enlace sirve una sola vez. Solicita un enlace nuevo e inténtalo de nuevo.',
   'enlace-rechazado':
     'No pudimos verificar la invitación. Pide a quien te invitó que genere un enlace nuevo.',
   'enlace-incompleto':
