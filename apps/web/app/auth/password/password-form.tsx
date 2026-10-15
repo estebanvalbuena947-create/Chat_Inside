@@ -48,7 +48,7 @@ export function PasswordForm({ requiresName = true }: { requiresName?: boolean }
       return;
     }
     const { error } = await supabase.auth.updateUser(
-      requiresName ? { data: { full_name: nombreLimpio }, password } : { password }
+      requiresName ? { data: { display_name: nombreLimpio }, password } : { password }
     );
     setGuardando(false);
 
