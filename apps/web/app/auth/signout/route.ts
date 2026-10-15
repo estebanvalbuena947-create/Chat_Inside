@@ -9,5 +9,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     await supabase.auth.signOut();
   }
 
-  return NextResponse.redirect(new URL('/login', request.url), { status: 302 });
+  // request.url puede resolver a localhost detras del proxy: la web usa su dominio publico y, si no
+  // esta configurado, el origen de la propia peticion. Asi el cierre de sesion siempre vuelve al
+  // acceso de este mismo sitio, nunca a un host interno.
+  const base = (process.env.APP_PUBLIC_URL ?? request.nextUrl.origin).replace(/\/$/, '');
+  return NextResponse.redirect(new URL('/login', base), { status: 302 });
 }

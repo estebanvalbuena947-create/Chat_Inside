@@ -79,6 +79,8 @@ services:
     command: ['sh', '-c', 'cd apps/web && ./node_modules/.bin/next start -p 3000']
     environment:
       NODE_ENV: production
+      # Dominio publico del chat, para redirigir al acceso sin depender del Host que vea el proxy.
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL}
       # La web llama a la API por dentro de la red del swarm.
       # Dentro del swarm, el nombre del servicio resuelve solo: no hace falta DNS ni dominio.
       INTERNAL_API_URL: http://wepflash_api:4000
