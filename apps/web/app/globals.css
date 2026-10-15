@@ -5875,6 +5875,21 @@ button:not(:disabled):active {
   width: 100%;
 }
 
+/* Las clases heredadas de los selectores nativos solo identifican el componente; no dibujan otro marco. */
+.app-select.status-select {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.workspace .primary-nav .app-select.status-select {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
 .app-select-trigger {
   align-items: center;
   background: #fffdf9;
