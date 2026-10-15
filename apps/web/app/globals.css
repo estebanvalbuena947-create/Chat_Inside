@@ -5660,3 +5660,103 @@ button:not(:disabled):active {
   cursor: default;
   opacity: 0.5;
 }
+
+/*
+ * Navegacion movil: la barra vertical reservaba una columna fija y dejaba la bandeja demasiado
+ * estrecha. En telefono pasa a la parte inferior, donde el contenido usa todo el ancho y todos
+ * los accesos siguen disponibles mediante desplazamiento horizontal.
+ */
+@media (max-width: 760px) {
+  .workspace,
+  .workspace.sidebar-open {
+    --nav-width: 0px;
+    display: block;
+    padding-bottom: 68px;
+  }
+
+  .workspace .primary-nav,
+  .workspace.sidebar-open .primary-nav {
+    align-items: center;
+    background: linear-gradient(90deg, #596846 0%, var(--brand-matcha-oscuro) 100%) !important;
+    border-right: 0;
+    border-top: 1px solid rgb(255 253 249 / 20%);
+    bottom: 0;
+    box-shadow: 0 -8px 24px rgb(39 48 29 / 16%);
+    flex-direction: row;
+    gap: 8px;
+    height: 68px;
+    left: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 0 10px;
+    position: fixed;
+    right: 0;
+    top: auto;
+    width: 100%;
+    z-index: 50;
+  }
+
+  .workspace .primary-nav .brand-row,
+  .workspace .primary-nav .sidebar-toggle {
+    display: none;
+  }
+
+  .workspace .primary-nav nav,
+  .workspace .primary-nav .nav-bottom,
+  .workspace.sidebar-open .primary-nav nav,
+  .workspace.sidebar-open .nav-bottom {
+    align-items: center;
+    flex: 0 0 auto;
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .workspace .primary-nav .nav-bottom {
+    margin-top: 0;
+  }
+
+  .workspace .primary-nav .nav-bottom form,
+  .workspace.sidebar-open .nav-bottom form {
+    display: flex;
+    width: auto;
+  }
+
+  .workspace .primary-nav .nav-item,
+  .workspace .primary-nav .nav-user,
+  .workspace.sidebar-open .primary-nav .nav-item,
+  .workspace.sidebar-open .primary-nav .nav-user {
+    flex: 0 0 44px;
+    height: 44px;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0;
+    width: 44px;
+  }
+
+  .workspace .primary-nav .nav-item-stacked,
+  .workspace.sidebar-open .primary-nav .nav-item-stacked {
+    flex-direction: row;
+    min-height: 44px;
+  }
+
+  .workspace .primary-nav .nav-label,
+  .workspace.sidebar-open .primary-nav .nav-label {
+    display: none;
+  }
+
+  .workspace .inbox-column,
+  .workspace .conversation-panel {
+    height: calc(100dvh - 68px);
+    width: 100%;
+  }
+
+  .workspace.mobile-list-open .conversation-panel {
+    grid-column: auto;
+  }
+
+  .metrics-view,
+  .reservations-view-integrated,
+  .media-view {
+    inset: 0 0 68px;
+  }
+}
