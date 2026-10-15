@@ -2,10 +2,79 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import {
+  passwordMeetsRequirements,
+  passwordSaveMessage,
+  PASSWORD_REQUIREMENTS_HINT
+} from '../../../lib/auth/password-save';
 import { createClient } from '../../../lib/supabase/client';
 
-/** Cuantos caracteres exigimos. Ocho es el minimo habitual y no molesta a nadie. */
-const MINIMO = 8;
+/** Icono del boton: ojo abierto cuando esta oculta y ojo tachado cuando ya se ve. */
+function EyeIcon({ visible }: { visible: boolean }): React.ReactNode {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="18"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+      width="18"
+    >
+      <path d="M2.5 12S6 5.75 12 5.75 21.5 12 21.5 12 18 18.25 12 18.25 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3.25" />
+      {visible ? <path d="M4.5 19.5 19.5 4.5" /> : null}
+    </svg>
+  );
+}
+
+/**
+ * Campo de contrasena con boton para ver lo escrito.
+ *
+ * El boton no envia el formulario y anuncia su estado, para que funcione tambien con teclado y
+ * lectores de pantalla.
+ */
+function PasswordField({
+  id,
+  label,
+  onChange,
+  onToggle,
+  value,
+  visible
+}: {
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  onToggle: () => void;
+  value: string;
+  visible: boolean;
+}): React.ReactNode {
+  return (
+    <>
+      <label htmlFor={id}>{label}</label>
+      <span className="login-password">
+        <input
+          autoComplete="new-password"
+          id={id}
+          onChange={(event) => onChange(event.target.value)}
+          type={visible ? 'text' : 'password'}
+          value={value}
+        />
+        <button
+          aria-label={visible ? 'Ocultar la contraseña' : 'Mostrar la contraseña'}
+          aria-pressed={visible}
+          className="login-password-toggle"
+          onClick={onToggle}
+          type="button"
+        >
+          <EyeIcon visible={visible} />
+        </button>
+      </span>
+    </>
+  );
+}
 
 /**
  * Formulario para crear o restablecer la contrasena.
@@ -18,6 +87,7 @@ export function PasswordForm({ requiresName = true }: { requiresName?: boolean }
   const [nombre, setNombre] = useState('');
   const [password, setPassword] = useState('');
   const [repetida, setRepetida] = useState('');
+  const [verPassword, setVerPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -30,8 +100,8 @@ export function PasswordForm({ requiresName = true }: { requiresName?: boolean }
       setErrorMessage('Escribe tu nombre: es el que vera el equipo en la bandeja.');
       return;
     }
-    if (password.length < MINIMO) {
-      setErrorMessage(`La contraseña debe tener al menos ${MINIMO} caracteres.`);
+    if (!passwordMeetsRequirements(password)) {
+      setErrorMessage(PASSWORD_REQUIREMENTS_HINT);
       return;
     }
     if (password !== repetida) {
@@ -53,7 +123,7 @@ export function PasswordForm({ requiresName = true }: { requiresName?: boolean }
     setGuardando(false);
 
     if (error) {
-      setErrorMessage('No fue posible guardar la contraseña. Inténtalo de nuevo en unos minutos.');
+      setErrorMessage(passwordSaveMessage(error.code));
       return;
     }
 
@@ -77,22 +147,23 @@ export function PasswordForm({ requiresName = true }: { requiresName?: boolean }
         </>
       ) : null}
 
-      <label htmlFor="nueva-contrasena">Contraseña</label>
-      <input
-        autoComplete="new-password"
+      <PasswordField
         id="nueva-contrasena"
-        onChange={(event) => setPassword(event.target.value)}
-        type="password"
+        label="Contraseña"
+        onChange={setPassword}
+        onToggle={() => setVerPassword((current) => !current)}
         value={password}
+        visible={verPassword}
       />
+      <p className="login-hint">{PASSWORD_REQUIREMENTS_HINT}</p>
 
-      <label htmlFor="repetir-contrasena">Repite la contraseña</label>
-      <input
-        autoComplete="new-password"
+      <PasswordField
         id="repetir-contrasena"
-        onChange={(event) => setRepetida(event.target.value)}
-        type="password"
+        label="Repite la contraseña"
+        onChange={setRepetida}
+        onToggle={() => setVerPassword((current) => !current)}
         value={repetida}
+        visible={verPassword}
       />
 
       {errorMessage ? (
