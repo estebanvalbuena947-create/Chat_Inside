@@ -1,5 +1,9 @@
 # Plan de ejecución: invitaciones resistentes a previsualizaciones
 
+- **Estado:** implementado
+- **Especificación:** `specs/037-invitaciones-resistentes-a-previsualizaciones.md`
+- **Cierre:** los tres cortes quedaron implementados el 2026-10-14. Ampliado el 2026-10-15 (ADR-058): la entrega pasó al correo oficial de Supabase con SMTP de Resend, el canje dejó de exigir la confirmación intermedia del corte 2, se añadió el tipo `recovery` y el alta exige la política de contraseñas del proyecto. La pantalla de confirmación del corte 2 se retiró por decisión de producto: en operación resultó confusa y añadía un paso que nadie necesitaba.
+
 ## Contexto leído
 
 - `AGENTS.md`, `docs/AI_CONTRACT.md`, `docs/PROJECT_MAP.md`, `docs/ARCHITECTURE.md`,
@@ -41,9 +45,11 @@
 ### Corte 2 — Confirmación explícita de navegador
 
 - Archivos: módulo de lectura de invitación, nueva ruta `apps/web/app/auth/invite/page.tsx`, pruebas.
-- Resultado: abrir la página no llama a Auth; pulsar el botón canjea con `verifyOtp`, borra el
+- Resultado original: abrir la página no llama a Auth; pulsar el botón canjea con `verifyOtp`, borra el
   fragmento y navega según el tipo.
 - Pruebas: tipos válidos, fragmentos inválidos, tipos ajenos y errores del proveedor.
+- **Retirado el 2026-10-15 (ADR-058):** el canje pasó a ocurrir al cargar, sin botón ni pantalla
+  intermedia. Las pruebas de los tipos y de los fragmentos inválidos se conservan.
 
 ### Corte 3 — Compatibilidad, documentación y verificación
 
@@ -51,6 +57,19 @@
 - Resultado: callback antiguo permanece; la documentación deja de exigir la redirección Auth para
   enlaces nuevos.
 - Controles: `format:check`, `lint`, `typecheck`, `test`, `build`.
+
+### Corte 4 — Entrega por correo, recuperación y política de contraseñas (2026-10-15)
+
+- Archivos: `tenant-access.service.ts` y sus pruebas, `packages/contracts`, `apps/web/app/page.tsx`,
+  `apps/web/app/auth/invite/page.tsx`, `apps/web/app/auth/password/`, `apps/web/app/login/`,
+  `apps/web/lib/auth/password-save.ts` y sus pruebas, `docker-stack.yml`.
+- Resultado: Auth envía la invitación y la recuperación por el SMTP del proyecto; el contrato responde
+  `emailSent`; `/auth/invite` canjea al cargar y admite `recovery`; el formulario de contraseña explica
+  los requisitos del proyecto, permite ver lo escrito y traduce el rechazo de Auth; el cierre de sesión
+  vuelve al dominio público mediante `APP_PUBLIC_URL`.
+- Controles: `format:check`, `lint`, `typecheck`, `test` (931 pruebas) y `build`.
+- Pendiente manual: recorrido real en producción con un correo nuevo, una cuenta existente y una
+  recuperación de contraseña.
 
 ## Condición de detención
 

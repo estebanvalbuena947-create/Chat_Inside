@@ -3,9 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
-  passwordMeetsRequirements,
-  passwordSaveMessage,
-  PASSWORD_REQUIREMENTS_HINT
+  passwordRequirementsChecklist,
+  passwordRequirementsMessage,
+  passwordSaveMessage
 } from '../../../lib/auth/password-save';
 import { createClient } from '../../../lib/supabase/client';
 
@@ -100,8 +100,9 @@ export function PasswordForm({ requiresName = true }: { requiresName?: boolean }
       setErrorMessage('Escribe tu nombre: es el que vera el equipo en la bandeja.');
       return;
     }
-    if (!passwordMeetsRequirements(password)) {
-      setErrorMessage(PASSWORD_REQUIREMENTS_HINT);
+    const faltantes = passwordRequirementsMessage(password);
+    if (faltantes) {
+      setErrorMessage(faltantes);
       return;
     }
     if (password !== repetida) {
@@ -155,7 +156,22 @@ export function PasswordForm({ requiresName = true }: { requiresName?: boolean }
         value={password}
         visible={verPassword}
       />
-      <p className="login-hint">{PASSWORD_REQUIREMENTS_HINT}</p>
+      {/*
+        La lista se marca segun se escribe: asi se ve de inmediato cual de los requisitos falta,
+        en lugar de repetir la lista completa cada vez.
+      */}
+      <ul className="login-requirements">
+        {passwordRequirementsChecklist(password).map((requirement) => (
+          <li
+            className={requirement.met ? 'login-requirement met' : 'login-requirement'}
+            key={requirement.id}
+          >
+            <span aria-hidden="true">{requirement.met ? '✓' : '○'}</span>
+            <span>{requirement.label}</span>
+            <span className="visually-hidden">{requirement.met ? 'cumplido' : 'pendiente'}</span>
+          </li>
+        ))}
+      </ul>
 
       <PasswordField
         id="repetir-contrasena"

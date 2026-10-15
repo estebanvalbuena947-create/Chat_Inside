@@ -6,6 +6,16 @@
 
 ## Resultado
 
+## Fase 20 - Entrega de accesos por correo y contraseña guiada
+
+- La invitación y la recuperación las envía Auth por el SMTP configurado en el proyecto. La API deja de devolver un enlace manual: invita con `inviteUserByEmail` cuando la cuenta no existe, solicita el acceso con `signInWithOtp` cuando ya existe y el contrato responde `emailSent`. La clave privada permanece en el servidor y nunca se entrega `action_link`.
+- `/auth/invite` canjea el enlace al cargar, sin pantalla intermedia, y admite los tipos `invite`, `magiclink` y `recovery`; el secreto viaja solo en el fragmento, así que una previsualización HTTP no lo recibe. Se retiró la pantalla de confirmación de ADR-057 por decisión de producto (ADR-058).
+- El formulario de contraseña comprueba la política del proyecto antes de enviar, muestra los requisitos, permite ver lo escrito y traduce el rechazo de Auth (contraseña débil, repetición de la anterior, límite de intentos o sesión vencida) a un motivo propio. La autoridad sigue siendo Auth.
+- El alta guarda el nombre visible como `display_name`, la misma clave que lee la API, para que el equipo vea el nombre y no el correo.
+- El cierre de sesión vuelve al dominio público mediante `APP_PUBLIC_URL` en el servicio web, en lugar del host interno que ve el proxy (ADR-059).
+- Controles: 931 pruebas aprobadas (235 de dominio, 506 de API, 131 de worker, 29 de media y 30 de web), typecheck, lint, formato y compilación de la web.
+- Pendiente manual: el recorrido real en producción con un correo nuevo, una cuenta existente y una recuperación de contraseña.
+
 ## Fase 19 - Plataforma de canal y bandeja adaptable
 
 - El worker toma `message.platform` solo de webhooks Zernio autenticados y sincroniza de forma idempotente la cuenta de canal del mismo tenant. No infiere valores desde contactos, mensajes ni UI.

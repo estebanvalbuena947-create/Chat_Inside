@@ -10,6 +10,73 @@
 export const PASSWORD_REQUIREMENTS_HINT =
   'Al menos 8 caracteres, con una minúscula, una mayúscula, un número y un símbolo.';
 
+/** Cada exigencia de la politica, por separado, para poder decir cual falta. */
+export type PasswordRequirement = 'longitud' | 'minuscula' | 'mayuscula' | 'numero' | 'simbolo';
+
+interface RequirementDefinition {
+  /** Etiqueta en positivo, para la lista que se marca al escribir. */
+  readonly label: string;
+  /** Como se nombra cuando falta, para el aviso concreto. */
+  readonly missing: string;
+}
+
+const REQUIREMENTS: ReadonlyArray<readonly [PasswordRequirement, RequirementDefinition]> = [
+  ['longitud', { label: 'Al menos 8 caracteres', missing: 'alcanzar los 8 caracteres' }],
+  ['minuscula', { label: 'Una minúscula', missing: 'una minúscula' }],
+  ['mayuscula', { label: 'Una mayúscula', missing: 'una mayúscula' }],
+  ['numero', { label: 'Un número', missing: 'un número' }],
+  ['simbolo', { label: 'Un símbolo', missing: 'un símbolo' }]
+];
+
+/** El espacio no cuenta como simbolo: se exige un caracter que no sea letra, numero ni espacio. */
+const MEETS: Record<PasswordRequirement, (value: string) => boolean> = {
+  longitud: (value) => value.length >= 8,
+  minuscula: (value) => /[a-z]/.test(value),
+  mayuscula: (value) => /[A-Z]/.test(value),
+  numero: (value) => /[0-9]/.test(value),
+  simbolo: (value) => /[^A-Za-z0-9\s]/.test(value)
+};
+
+/** Requisitos que la contrasena todavia no cumple, en el orden en que se explican. */
+export function missingPasswordRequirements(value: string): PasswordRequirement[] {
+  return REQUIREMENTS.filter(([id]) => !MEETS[id](value)).map(([id]) => id);
+}
+
+/** Estado de cada requisito, para la lista que la persona ve mientras escribe. */
+export function passwordRequirementsChecklist(
+  value: string
+): Array<{ id: PasswordRequirement; label: string; met: boolean }> {
+  return REQUIREMENTS.map(([id, definition]) => ({
+    id,
+    label: definition.label,
+    met: MEETS[id](value)
+  }));
+}
+
+export function passwordMeetsRequirements(value: string): boolean {
+  return missingPasswordRequirements(value).length === 0;
+}
+
+function joinInSpanish(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
+}
+
+/**
+ * Aviso concreto de lo que falta. Nombra solo los requisitos incumplidos, para que la persona sepa
+ * si le falta un numero, un simbolo o cualquier otra cosa, en lugar de repetirle la lista entera.
+ * Devuelve cadena vacia cuando la contrasena ya cumple todo.
+ */
+export function passwordRequirementsMessage(value: string): string {
+  const missing = missingPasswordRequirements(value);
+  if (missing.length === 0) return '';
+
+  const names = missing.map(
+    (id) => REQUIREMENTS.find(([requirementId]) => requirementId === id)![1].missing
+  );
+  return `Todavía ${names.length > 1 ? 'faltan' : 'falta'} ${joinInSpanish(names)}.`;
+}
+
 /** Motivos por los que Auth no guarda la contrasena. */
 export type PasswordSaveProblem =
   | 'contrasena-debil'
@@ -36,20 +103,6 @@ export const PASSWORD_SAVE_MESSAGES: Record<PasswordSaveProblem, string> = {
     'Tu enlace ya no está activo. Abre otra vez el correo de invitación o pide un enlace nuevo.',
   desconocido: 'No fue posible guardar la contraseña. Inténtalo de nuevo en unos minutos.'
 };
-
-/**
- * Comprobacion previa de los requisitos. El espacio no cuenta como simbolo: se exige un caracter
- * que no sea letra, numero ni espacio, para no aprobar algo que Auth rechazaria.
- */
-export function passwordMeetsRequirements(value: string): boolean {
-  return (
-    value.length >= 8 &&
-    /[a-z]/.test(value) &&
-    /[A-Z]/.test(value) &&
-    /[0-9]/.test(value) &&
-    /[^A-Za-z0-9\s]/.test(value)
-  );
-}
 
 /**
  * Un codigo desconocido no deja a la persona sin salida: recibe el texto general. Se comprueba

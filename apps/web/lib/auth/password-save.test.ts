@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  missingPasswordRequirements,
   PASSWORD_REQUIREMENTS_HINT,
   PASSWORD_SAVE_MESSAGES,
   passwordMeetsRequirements,
+  passwordRequirementsChecklist,
+  passwordRequirementsMessage,
   passwordSaveMessage,
   passwordSaveProblem,
   type PasswordSaveProblem
@@ -12,9 +15,11 @@ describe('requisitos de la contraseña', () => {
   it('acepta una contraseña que cumple la política del proyecto', () => {
     expect(passwordMeetsRequirements('Carmina1!')).toBe(true);
     expect(passwordMeetsRequirements('aB3#aB3#aB3#')).toBe(true);
+    expect(missingPasswordRequirements('Carmina1!')).toEqual([]);
+    expect(passwordRequirementsMessage('Carmina1!')).toBe('');
   });
 
-  it('rechaza lo que Auth rechazaría, nombrando cada requisito que falta', () => {
+  it('rechaza lo que Auth rechazaría', () => {
     for (const value of [
       'carmina1!', // sin mayuscula
       'CARMINA1!', // sin minuscula
@@ -26,11 +31,52 @@ describe('requisitos de la contraseña', () => {
     }
   });
 
-  it('no acepta un espacio como símbolo', () => {
-    expect(passwordMeetsRequirements('Carmina 1')).toBe(false);
+  it('dice exactamente qué falta, sin repetir la lista entera', () => {
+    expect(passwordRequirementsMessage('Carmina12')).toBe('Todavía falta un símbolo.');
+    expect(passwordRequirementsMessage('Carmina!!')).toBe('Todavía falta un número.');
+    expect(passwordRequirementsMessage('carmina1!')).toBe('Todavía falta una mayúscula.');
+    expect(passwordRequirementsMessage('CARMINA1!')).toBe('Todavía falta una minúscula.');
+    expect(passwordRequirementsMessage('Ca1!aB3')).toBe('Todavía falta alcanzar los 8 caracteres.');
   });
 
-  it('explica los requisitos en el mismo texto que usa el mensaje de error', () => {
+  it('nombra varios requisitos juntos cuando faltan a la vez', () => {
+    expect(passwordRequirementsMessage('Carmin1')).toBe(
+      'Todavía faltan alcanzar los 8 caracteres y un símbolo.'
+    );
+    expect(passwordRequirementsMessage('carmina')).toBe(
+      'Todavía faltan alcanzar los 8 caracteres, una mayúscula, un número y un símbolo.'
+    );
+    expect(missingPasswordRequirements('carmina')).toEqual([
+      'longitud',
+      'mayuscula',
+      'numero',
+      'simbolo'
+    ]);
+  });
+
+  it('no acepta un espacio como símbolo', () => {
+    expect(passwordMeetsRequirements('Carmina 1')).toBe(false);
+    expect(passwordRequirementsMessage('Carmina 1')).toBe('Todavía falta un símbolo.');
+  });
+
+  it('marca cada requisito por separado mientras se escribe', () => {
+    const checklist = passwordRequirementsChecklist('Carmina1!');
+    expect(checklist.every((requirement) => requirement.met)).toBe(true);
+    expect(checklist.map((requirement) => requirement.id)).toEqual([
+      'longitud',
+      'minuscula',
+      'mayuscula',
+      'numero',
+      'simbolo'
+    ]);
+
+    const parcial = passwordRequirementsChecklist('carmina');
+    expect(
+      parcial.filter((requirement) => requirement.met).map((requirement) => requirement.id)
+    ).toEqual(['minuscula']);
+  });
+
+  it('explica los requisitos en el mismo texto que usa el mensaje de error del proveedor', () => {
     expect(PASSWORD_REQUIREMENTS_HINT.length).toBeGreaterThan(40);
     expect(PASSWORD_SAVE_MESSAGES['contrasena-debil']).toContain(PASSWORD_REQUIREMENTS_HINT);
   });

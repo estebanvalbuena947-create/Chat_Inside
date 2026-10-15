@@ -2044,6 +2044,29 @@ h2 {
   font-size: 12px;
   line-height: 1.5;
 }
+.login-requirements {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 4px;
+  list-style: none;
+}
+.login-requirement {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #8d9385;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.login-requirement.met {
+  color: #3f7d4e;
+}
+.login-requirement > span:first-child {
+  width: 12px;
+  font-weight: 700;
+  text-align: center;
+}
 .login-password {
   position: relative;
   display: block;
