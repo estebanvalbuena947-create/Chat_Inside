@@ -200,7 +200,7 @@ export class TenantAccessService {
       return inviteTenantMemberResponseSchema.parse({
         item: {
           email,
-          inviteLink: invitation.inviteLink,
+          emailSent: true,
           requiresPassword: invitation.requiresPassword,
           role: existing.role
         }
@@ -219,7 +219,7 @@ export class TenantAccessService {
     return inviteTenantMemberResponseSchema.parse({
       item: {
         email,
-        inviteLink: invitation.inviteLink,
+        emailSent: true,
         requiresPassword: invitation.requiresPassword,
         role: input.role
       }
@@ -290,58 +290,27 @@ export class TenantAccessService {
   private async createInvitation(
     supabase: ReturnType<SupabaseServerClientFactory['create']>,
     email: string
-  ): Promise<{ inviteLink: string; requiresPassword: boolean; userId: string }> {
-    const appPublicUrl = (process.env.APP_PUBLIC_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-
-    // Solo se emite un token por intento. El action_link de Auth se canjea con un GET y una
-    // previsualizacion de WhatsApp podria gastarlo. En su lugar, el hash va solo en el fragmento de
-    // nuestra pagina: no llega al servidor y se canjea unicamente despues de un clic explicito.
-    const invited = await supabase.auth.admin.generateLink({ email, type: 'invite' });
-    const invitedUser = invited.data?.user;
-    const invitedHash = invited.data?.properties?.hashed_token;
-    if (!invited.error) {
-      if (invitedUser && typeof invitedHash === 'string' && invitedHash.trim()) {
-        return {
-          inviteLink: this.invitationConfirmationLink(appPublicUrl, invitedHash, 'invite'),
-          requiresPassword: true,
-          userId: invitedUser.id
-        };
-      }
-      throw new ServiceUnavailableException('No fue posible generar la invitación.');
+  ): Promise<{ requiresPassword: boolean; userId: string }> {
+    const redirectTo = `${(process.env.APP_PUBLIC_URL ?? 'http://localhost:3000').replace(/\/$/, '')}/auth/invite`;
+    const invited = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo });
+    if (!invited.error && invited.data.user) {
+      return { requiresPassword: true, userId: invited.data.user.id };
     }
 
-    // Una cuenta existente no se invita de nuevo: se le entrega un unico enlace magico. El tipo
-    // tambien decide el destino despues de verificarlo: una cuenta existente no cambia contrasena.
+    // Auth no vuelve a invitar una cuenta existente. Generamos solo el correo mágico oficial; nunca
+    // se devuelve ni registra su action_link.
     const existing = await supabase.auth.admin.generateLink({ email, type: 'magiclink' });
     const existingUser = existing.data?.user;
-    const existingHash = existing.data?.properties?.hashed_token;
-    if (
-      existing.error ||
-      !existingUser ||
-      typeof existingHash !== 'string' ||
-      !existingHash.trim()
-    ) {
-      throw new ServiceUnavailableException('No fue posible generar la invitación.');
+    if (existing.error || !existingUser) {
+      throw new ServiceUnavailableException('No fue posible enviar la invitación por correo.');
     }
-
-    return {
-      inviteLink: this.invitationConfirmationLink(appPublicUrl, existingHash, 'magiclink'),
-      requiresPassword: false,
-      userId: existingUser.id
-    };
-  }
-
-  /**
-   * El hash es un secreto, asi que se deja tras #. Los navegadores no mandan el fragmento al servidor
-   * ni a quien previsualiza la pagina; la web lo lee solo despues de que la persona pulsa continuar.
-   */
-  private invitationConfirmationLink(
-    appPublicUrl: string,
-    tokenHash: string,
-    verificationType: 'invite' | 'magiclink'
-  ): string {
-    const fragment = new URLSearchParams({ token_hash: tokenHash, type: verificationType });
-    return `${appPublicUrl}/auth/invite#${fragment.toString()}`;
+    const sent = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo, shouldCreateUser: false }
+    });
+    if (sent.error)
+      throw new ServiceUnavailableException('No fue posible enviar la invitación por correo.');
+    return { requiresPassword: false, userId: existingUser.id };
   }
 
   private async findMembership(

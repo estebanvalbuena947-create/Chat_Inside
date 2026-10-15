@@ -2301,11 +2301,10 @@ export default function HomePage(): React.ReactNode {
         window.location.assign('/login');
         return;
       }
-      if (!response.ok || typeof payload.item?.inviteLink !== 'string') {
-        throw new Error(payload.error ?? 'No fue posible generar la invitación.');
+      if (!response.ok || payload.item?.emailSent !== true) {
+        throw new Error(payload.error ?? 'No fue posible enviar la invitación por correo.');
       }
-      // El enlace es de un solo uso y solo se muestra aquí: no se registra ni se reenvía.
-      setInviteLink(payload.item.inviteLink);
+      setInviteLink('Invitación enviada por correo.');
       setInviteEmail('');
       await refreshTenantMembers();
     } catch (error) {
@@ -4115,16 +4114,8 @@ export default function HomePage(): React.ReactNode {
                   </button>
                 </form>
                 {inviteLink && (
-                  <section className="team-invite-link" aria-label="Enlace de invitación">
-                    <p>
-                      Comparte este enlace con la persona. Es de un solo uso y solo se muestra aquí.
-                    </p>
-                    <input
-                      aria-label="Enlace de invitación"
-                      onFocus={(event) => event.currentTarget.select()}
-                      readOnly
-                      value={inviteLink}
-                    />
+                  <section className="team-invite-link" aria-live="polite">
+                    <p>{inviteLink} Pídele a la persona que revise su bandeja de entrada.</p>
                   </section>
                 )}
               </aside>

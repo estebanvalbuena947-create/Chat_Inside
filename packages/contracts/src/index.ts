@@ -312,7 +312,7 @@ export const inviteTenantMemberSchema = z.object({
 export const inviteTenantMemberResponseSchema = z.object({
   item: z.object({
     email: z.string().min(1).max(200),
-    inviteLink: z.url(),
+    emailSent: z.literal(true),
     requiresPassword: z.boolean(),
     role: tenantRoleSchema
   })

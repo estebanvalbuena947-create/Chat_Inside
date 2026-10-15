@@ -23,7 +23,7 @@ export type InvitationCallbackResult =
   | { readonly kind: 'problem'; readonly problem: InvitationProblem };
 
 /** Tipos que Auth admite para los enlaces que este producto emite. */
-export type InvitationVerificationType = 'invite' | 'magiclink';
+export type InvitationVerificationType = 'invite' | 'magiclink' | 'recovery';
 
 export type InvitationConfirmation =
   | {
@@ -118,7 +118,7 @@ export function readInvitationConfirmation(fragment: string): InvitationConfirma
   const tokenHash = readText(parameters, 'token_hash');
   const type = readText(parameters, 'type');
 
-  if (!tokenHash || (type !== 'invite' && type !== 'magiclink')) {
+  if (!tokenHash || (type !== 'invite' && type !== 'magiclink' && type !== 'recovery')) {
     return { kind: 'problem', problem: 'enlace-incompleto' };
   }
 
@@ -126,9 +126,8 @@ export function readInvitationConfirmation(fragment: string): InvitationConfirma
 }
 
 /** El destino no se toma de la URL: se deriva del tipo que Auth tambien verifica. */
-export function invitationDestination(
-  verificationType: InvitationVerificationType
-): '/' | '/auth/password' {
+export function invitationDestination(verificationType: InvitationVerificationType): string {
+  if (verificationType === 'recovery') return '/auth/password?mode=recovery';
   return verificationType === 'invite' ? '/auth/password' : '/';
 }
 

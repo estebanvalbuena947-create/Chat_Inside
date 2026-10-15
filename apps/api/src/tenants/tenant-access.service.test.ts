@@ -92,7 +92,8 @@ describe('TenantAccessService invitations', () => {
     });
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink
+        generateLink,
+        inviteUserByEmail: generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
@@ -105,15 +106,14 @@ describe('TenantAccessService invitations', () => {
     ).resolves.toEqual({
       item: {
         email: 'nueva.persona@example.com',
-        inviteLink: 'https://chat.example.test/auth/invite#token_hash=hash-invitacion&type=invite',
+        emailSent: true,
         requiresPassword: true,
         role: 'supervisor'
       }
     });
 
-    expect(generateLink).toHaveBeenCalledWith({
-      email: 'nueva.persona@example.com',
-      type: 'invite'
+    expect(generateLink).toHaveBeenCalledWith('nueva.persona@example.com', {
+      redirectTo: 'https://chat.example.test/auth/invite'
     });
     expect(generateLink).toHaveBeenCalledTimes(1);
     expect(fake.callsIn('memberships', 'insert')).toContainEqual([
@@ -121,7 +121,7 @@ describe('TenantAccessService invitations', () => {
     ]);
   });
 
-  it('fails instead of exposing the provider action link when Auth omits the token hash', async () => {
+  it('delivers the invite by email without exposing the provider action link', async () => {
     const fake = createTeamFake({ memberships: [{ data: { role: 'admin' }, error: null }] });
     const generateLink = vi.fn().mockResolvedValue({
       data: {
@@ -131,7 +131,7 @@ describe('TenantAccessService invitations', () => {
       error: null
     });
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
-      admin: { generateLink },
+      admin: { generateLink, inviteUserByEmail: generateLink },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
 
@@ -140,7 +140,9 @@ describe('TenantAccessService invitations', () => {
         email: 'persona@example.com',
         role: 'agent'
       })
-    ).rejects.toThrow('No fue posible generar la invitación.');
+    ).resolves.toMatchObject({
+      item: { email: 'persona@example.com', emailSent: true, requiresPassword: true, role: 'agent' }
+    });
 
     expect(generateLink).toHaveBeenCalledTimes(1);
   });
@@ -164,7 +166,8 @@ describe('TenantAccessService invitations', () => {
     });
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink
+        generateLink,
+        inviteUserByEmail: generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
@@ -177,7 +180,7 @@ describe('TenantAccessService invitations', () => {
     ).resolves.toEqual({
       item: {
         email: 'ya.existe@example.com',
-        inviteLink: 'https://chat.example.test/auth/invite#token_hash=hash-invitacion&type=invite',
+        emailSent: true,
         requiresPassword: true,
         role: 'agent'
       }
@@ -208,7 +211,8 @@ describe('TenantAccessService invitations', () => {
       });
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink
+        generateLink,
+        inviteUserByEmail: generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
@@ -221,13 +225,15 @@ describe('TenantAccessService invitations', () => {
     ).resolves.toEqual({
       item: {
         email: 'cuenta.existente@example.com',
-        inviteLink: 'https://chat.example.test/auth/invite#token_hash=hash-acceso&type=magiclink',
+        emailSent: true,
         requiresPassword: false,
         role: 'agent'
       }
     });
 
-    expect(generateLink).toHaveBeenNthCalledWith(1, expect.objectContaining({ type: 'invite' }));
+    expect(generateLink).toHaveBeenNthCalledWith(1, 'cuenta.existente@example.com', {
+      redirectTo: 'https://chat.example.test/auth/invite'
+    });
     expect(generateLink).toHaveBeenNthCalledWith(2, expect.objectContaining({ type: 'magiclink' }));
     expect(generateLink).toHaveBeenCalledTimes(2);
   });
@@ -237,7 +243,8 @@ describe('TenantAccessService invitations', () => {
     const generateLink = vi.fn();
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink
+        generateLink,
+        inviteUserByEmail: generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
@@ -258,7 +265,8 @@ describe('TenantAccessService invitations', () => {
     const generateLink = vi.fn().mockResolvedValue({ data: null, error: { message: 'nope' } });
     (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
       admin: {
-        generateLink
+        generateLink,
+        inviteUserByEmail: generateLink
       },
       signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
     };
@@ -268,7 +276,7 @@ describe('TenantAccessService invitations', () => {
         email: 'persona@example.com',
         role: 'agent'
       })
-    ).rejects.toThrow('No fue posible generar la invitación.');
+    ).rejects.toThrow('No fue posible enviar la invitación por correo.');
   });
 });
 

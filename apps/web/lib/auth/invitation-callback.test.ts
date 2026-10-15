@@ -115,11 +115,17 @@ describe('confirmación explícita de invitación', () => {
       tokenHash: SECRETO,
       verificationType: 'magiclink'
     });
+    expect(readInvitationConfirmation(`#token_hash=${SECRETO}&type=recovery`)).toEqual({
+      kind: 'verify',
+      tokenHash: SECRETO,
+      verificationType: 'recovery'
+    });
   });
 
   it('deriva el destino del tipo que Auth va a validar, no de la dirección', () => {
     expect(invitationDestination('invite')).toBe('/auth/password');
     expect(invitationDestination('magiclink')).toBe('/');
+    expect(invitationDestination('recovery')).toBe('/auth/password?mode=recovery');
   });
 
   it('no llama a Auth con un fragmento incompleto, vacío o de otro tipo', () => {
@@ -127,7 +133,7 @@ describe('confirmación explícita de invitación', () => {
       '',
       '#token_hash=',
       '#type=invite',
-      `#token_hash=${SECRETO}&type=recovery`,
+      `#token_hash=${SECRETO}&type=signup`,
       `#token_hash=${SECRETO}&type=INVITE`
     ]) {
       expect(readInvitationConfirmation(fragment)).toEqual({

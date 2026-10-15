@@ -13,7 +13,7 @@ const MINIMO = 8;
  * Supabase deja a la persona con una sesion iniciada al abrir el enlace, asi que aqui no se pide
  * correo: solo la contrasena nueva. Si no hubiera sesion, el middleware la habria mandado al acceso.
  */
-export function PasswordForm() {
+export function PasswordForm({ requiresName = true }: { requiresName?: boolean }) {
   const router = useRouter();
   const [nombre, setNombre] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +26,7 @@ export function PasswordForm() {
     setErrorMessage(null);
 
     const nombreLimpio = nombre.trim();
-    if (nombreLimpio.length === 0) {
+    if (requiresName && nombreLimpio.length === 0) {
       setErrorMessage('Escribe tu nombre: es el que vera el equipo en la bandeja.');
       return;
     }
@@ -47,10 +47,9 @@ export function PasswordForm() {
       setErrorMessage('El enlace no es válido o ya caducó. Pide al administrador uno nuevo.');
       return;
     }
-    const { error } = await supabase.auth.updateUser({
-      data: { full_name: nombreLimpio },
-      password
-    });
+    const { error } = await supabase.auth.updateUser(
+      requiresName ? { data: { full_name: nombreLimpio }, password } : { password }
+    );
     setGuardando(false);
 
     if (error) {
@@ -64,15 +63,19 @@ export function PasswordForm() {
 
   return (
     <form className="login-form" onSubmit={(event) => void handleSubmit(event)}>
-      <label htmlFor="nombre">Tu nombre</label>
-      <input
-        autoComplete="name"
-        id="nombre"
-        onChange={(event) => setNombre(event.target.value)}
-        placeholder="Como quieres que te llamen"
-        type="text"
-        value={nombre}
-      />
+      {requiresName ? (
+        <>
+          <label htmlFor="nombre">Tu nombre</label>
+          <input
+            autoComplete="name"
+            id="nombre"
+            onChange={(event) => setNombre(event.target.value)}
+            placeholder="Como quieres que te llamen"
+            type="text"
+            value={nombre}
+          />
+        </>
+      ) : null}
 
       <label htmlFor="nueva-contrasena">Contraseña</label>
       <input
