@@ -4,6 +4,18 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-057 - Una invitación se canjea solo tras confirmación explícita (2026-10-14)
+
+- **Fecha:** 2026-10-14
+- **Estado:** aceptada
+- **Contexto:** El administrador compartió por WhatsApp el `action_link` que devuelve Auth. WhatsApp, o un escáner de enlaces, puede pedir la URL para producir una previsualización; como el enlace empezaba en `/auth/v1/verify`, ese `GET` ya canjeaba el secreto de un solo uso. La persona invitada recibía después `otp_expired` aunque nunca hubiera pulsado el enlace. El aviso de ADR-056 hizo visible el síntoma, pero no evita que un previsualizador lo cause.
+- **Decisión:** La API deja de entregar `action_link`. Toma `hashed_token` y emite `https://<web>/auth/invite#token_hash=<...>&type=<invite|magiclink>`. El fragmento no viaja al servidor ni a previsualizadores HTTP. `/auth/invite` es una página pasiva: no llama a Auth al cargar; solo tras el clic explícito llama `verifyOtp({ token_hash, type })`, borra primero el fragmento con `history.replaceState` y abre la sesión. El tipo es parte del canje que Auth valida y decide el destino: `invite` crea contraseña, `magiclink` entra sin cambiar la existente. El callback anterior queda activo solo para enlaces emitidos antes del corte.
+- **Alternativas consideradas:** Seguir enviando el enlace activo y pedir que se comparta como texto roto, que sirve como contingencia pero depende de operación manual; cambiar el vencimiento, que no impide el consumo; enviar el token en query de nuestra propia ruta, que llegaría a logs y analítica; y autoverificar al cargar la página propia, que vuelve a dejar el flujo vulnerable a un navegador automatizado.
+- **Consecuencias:** El enlace sigue siendo una credencial de un solo uso, pero una vista previa no conoce ni canjea el secreto. Los nuevos enlaces dejan de depender de la lista de redirecciones de Auth; `APP_PUBLIC_URL` sigue siendo necesaria para construir el dominio público. Una cuenta existente ya no cae por error en la pantalla de crear contraseña. El único efecto que queda pendiente de comprobar manualmente es el recorrido real desde WhatsApp en un dispositivo externo.
+- **Cómo se verifica:** Pruebas de API exigen `hashed_token`, verifican que el resultado es `/auth/invite#...`, sin query ni `action_link`, y cubren invitación, cuenta existente y respuesta incompleta. Pruebas de web validan ambos tipos, fragmentos malformados y la traducción de errores. La prueba manual genera un enlace nuevo, comprueba que WhatsApp solo ve la página pasiva y que `verifyOtp` no ocurre hasta pulsar el botón.
+
+---
+
 ## ADR-056 - El enlace de invitación que no sirve lo dice, y el secreto nunca viaja al acceso (2026-10-14)
 
 - **Fecha:** 2026-10-14

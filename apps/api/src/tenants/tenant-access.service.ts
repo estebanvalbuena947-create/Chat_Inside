@@ -291,28 +291,57 @@ export class TenantAccessService {
     supabase: ReturnType<SupabaseServerClientFactory['create']>,
     email: string
   ): Promise<{ inviteLink: string; requiresPassword: boolean; userId: string }> {
-    // El enlace lleva a crear la contrasena: sin eso, la persona entra sin poder volver a entrar.
     const appPublicUrl = (process.env.APP_PUBLIC_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-    const options = { redirectTo: appPublicUrl + '/auth/callback' };
 
-    // Solo se emite un token por intento. Emitir uno para el correo y otro para la pantalla
-    // invalida uno de los dos, porque Auth trata estos enlaces como secretos de un solo uso.
-    const invited = await supabase.auth.admin.generateLink({ email, options, type: 'invite' });
+    // Solo se emite un token por intento. El action_link de Auth se canjea con un GET y una
+    // previsualizacion de WhatsApp podria gastarlo. En su lugar, el hash va solo en el fragmento de
+    // nuestra pagina: no llega al servidor y se canjea unicamente despues de un clic explicito.
+    const invited = await supabase.auth.admin.generateLink({ email, type: 'invite' });
     const invitedUser = invited.data?.user;
-    const invitedLink = invited.data?.properties?.action_link;
-    if (!invited.error && invitedUser && typeof invitedLink === 'string') {
-      return { inviteLink: invitedLink, requiresPassword: true, userId: invitedUser.id };
-    }
-
-    // Una cuenta existente no se invita de nuevo: se le entrega un unico enlace magico.
-    const existing = await supabase.auth.admin.generateLink({ email, options, type: 'magiclink' });
-    const existingUser = existing.data?.user;
-    const existingLink = existing.data?.properties?.action_link;
-    if (existing.error || !existingUser || typeof existingLink !== 'string') {
+    const invitedHash = invited.data?.properties?.hashed_token;
+    if (!invited.error) {
+      if (invitedUser && typeof invitedHash === 'string' && invitedHash.trim()) {
+        return {
+          inviteLink: this.invitationConfirmationLink(appPublicUrl, invitedHash, 'invite'),
+          requiresPassword: true,
+          userId: invitedUser.id
+        };
+      }
       throw new ServiceUnavailableException('No fue posible generar la invitación.');
     }
 
-    return { inviteLink: existingLink, requiresPassword: false, userId: existingUser.id };
+    // Una cuenta existente no se invita de nuevo: se le entrega un unico enlace magico. El tipo
+    // tambien decide el destino despues de verificarlo: una cuenta existente no cambia contrasena.
+    const existing = await supabase.auth.admin.generateLink({ email, type: 'magiclink' });
+    const existingUser = existing.data?.user;
+    const existingHash = existing.data?.properties?.hashed_token;
+    if (
+      existing.error ||
+      !existingUser ||
+      typeof existingHash !== 'string' ||
+      !existingHash.trim()
+    ) {
+      throw new ServiceUnavailableException('No fue posible generar la invitación.');
+    }
+
+    return {
+      inviteLink: this.invitationConfirmationLink(appPublicUrl, existingHash, 'magiclink'),
+      requiresPassword: false,
+      userId: existingUser.id
+    };
+  }
+
+  /**
+   * El hash es un secreto, asi que se deja tras #. Los navegadores no mandan el fragmento al servidor
+   * ni a quien previsualiza la pagina; la web lo lee solo despues de que la persona pulsa continuar.
+   */
+  private invitationConfirmationLink(
+    appPublicUrl: string,
+    tokenHash: string,
+    verificationType: 'invite' | 'magiclink'
+  ): string {
+    const fragment = new URLSearchParams({ token_hash: tokenHash, type: verificationType });
+    return `${appPublicUrl}/auth/invite#${fragment.toString()}`;
   }
 
   private async findMembership(

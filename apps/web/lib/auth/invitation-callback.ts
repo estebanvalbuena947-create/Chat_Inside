@@ -22,6 +22,17 @@ export type InvitationCallbackResult =
   | { readonly kind: 'code'; readonly code: string }
   | { readonly kind: 'problem'; readonly problem: InvitationProblem };
 
+/** Tipos que Auth admite para los enlaces que este producto emite. */
+export type InvitationVerificationType = 'invite' | 'magiclink';
+
+export type InvitationConfirmation =
+  | {
+      readonly kind: 'verify';
+      readonly tokenHash: string;
+      readonly verificationType: InvitationVerificationType;
+    }
+  | { readonly kind: 'problem'; readonly problem: 'enlace-incompleto' };
+
 /**
  * Traduccion de los codigos de Auth que significan que el enlace ya no sirve. Un codigo que no este
  * aqui se presenta como rechazo generico, sin inventarle una causa.
@@ -29,6 +40,13 @@ export type InvitationCallbackResult =
 const PROBLEM_BY_PROVIDER_CODE: Record<string, InvitationProblem> = {
   otp_expired: 'enlace-usado'
 };
+
+/** Un error del proveedor nunca se muestra tal cual: se reduce a un motivo propio y seguro. */
+export function invitationProblemFromProviderCode(
+  code: string | null | undefined
+): InvitationProblem {
+  return (code ? PROBLEM_BY_PROVIDER_CODE[code] : undefined) ?? 'enlace-rechazado';
+}
 
 export const INVITATION_MESSAGES: Record<InvitationProblem, string> = {
   'enlace-usado':
@@ -71,9 +89,10 @@ export function readInvitationCallback(url: string): InvitationCallbackResult {
   const parameters = readAuthParameters(url);
 
   if (readText(parameters, 'error')) {
-    const code = readText(parameters, 'error_code');
-    const known = code ? PROBLEM_BY_PROVIDER_CODE[code] : undefined;
-    return { kind: 'problem', problem: known ?? 'enlace-rechazado' };
+    return {
+      kind: 'problem',
+      problem: invitationProblemFromProviderCode(readText(parameters, 'error_code'))
+    };
   }
 
   const accessToken = readText(parameters, 'access_token');
@@ -88,6 +107,29 @@ export function readInvitationCallback(url: string): InvitationCallbackResult {
   }
 
   return { kind: 'problem', problem: 'enlace-incompleto' };
+}
+
+/**
+ * Fragmento del enlace resistente a previsualizaciones. Se recibe por separado porque los fragmentos
+ * no llegan al servidor: una carga o una vista previa nunca puede canjearlo por accidente.
+ */
+export function readInvitationConfirmation(fragment: string): InvitationConfirmation {
+  const parameters = new URLSearchParams(fragment.replace(/^#/, ''));
+  const tokenHash = readText(parameters, 'token_hash');
+  const type = readText(parameters, 'type');
+
+  if (!tokenHash || (type !== 'invite' && type !== 'magiclink')) {
+    return { kind: 'problem', problem: 'enlace-incompleto' };
+  }
+
+  return { kind: 'verify', tokenHash, verificationType: type };
+}
+
+/** El destino no se toma de la URL: se deriva del tipo que Auth tambien verifica. */
+export function invitationDestination(
+  verificationType: InvitationVerificationType
+): '/' | '/auth/password' {
+  return verificationType === 'invite' ? '/auth/password' : '/';
 }
 
 /**

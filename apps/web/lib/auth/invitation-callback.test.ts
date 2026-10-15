@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   INVITATION_MESSAGES,
+  invitationDestination,
   invitationLoginPath,
   invitationMessage,
+  invitationProblemFromProviderCode,
   readInvitationCallback,
+  readInvitationConfirmation,
   type InvitationProblem
 } from './invitation-callback';
 
@@ -97,6 +100,47 @@ describe('resultado del enlace de invitación', () => {
     expect(invitationMessage(result.kind === 'problem' ? result.problem : null)).not.toContain(
       SECRETO
     );
+  });
+});
+
+describe('confirmación explícita de invitación', () => {
+  it('acepta los dos tipos que emite este producto', () => {
+    expect(readInvitationConfirmation(`#token_hash=${SECRETO}&type=invite`)).toEqual({
+      kind: 'verify',
+      tokenHash: SECRETO,
+      verificationType: 'invite'
+    });
+    expect(readInvitationConfirmation(`#token_hash=${SECRETO}&type=magiclink`)).toEqual({
+      kind: 'verify',
+      tokenHash: SECRETO,
+      verificationType: 'magiclink'
+    });
+  });
+
+  it('deriva el destino del tipo que Auth va a validar, no de la dirección', () => {
+    expect(invitationDestination('invite')).toBe('/auth/password');
+    expect(invitationDestination('magiclink')).toBe('/');
+  });
+
+  it('no llama a Auth con un fragmento incompleto, vacío o de otro tipo', () => {
+    for (const fragment of [
+      '',
+      '#token_hash=',
+      '#type=invite',
+      `#token_hash=${SECRETO}&type=recovery`,
+      `#token_hash=${SECRETO}&type=INVITE`
+    ]) {
+      expect(readInvitationConfirmation(fragment)).toEqual({
+        kind: 'problem',
+        problem: 'enlace-incompleto'
+      });
+    }
+  });
+
+  it('traduce también el error que devuelve verifyOtp', () => {
+    expect(invitationProblemFromProviderCode('otp_expired')).toBe('enlace-usado');
+    expect(invitationProblemFromProviderCode('unexpected_failure')).toBe('enlace-rechazado');
+    expect(invitationProblemFromProviderCode(undefined)).toBe('enlace-rechazado');
   });
 });
 

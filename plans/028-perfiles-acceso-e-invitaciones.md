@@ -3,7 +3,7 @@
 - **Estado:** implementado
 - **Fecha:** 2026-09-28
 - **Especificación:** `specs/015-perfiles-acceso-e-invitaciones.md`
-- **Cierre:** los siete pasos quedaron implementados. Corregido el 2026-10-08: el enlace se emite una sola vez y `/auth/callback` guarda la sesión del fragmento de Auth antes de crear contraseña. Queda pendiente verificar el recorrido completo con una persona real (enlace compartido y URL de callback autorizada) y habilitar la protección contra contraseñas filtradas. Ampliado el 2026-10-14 (`plans/046`, ADR-056): el enlace que no concede sesión llega al acceso con su motivo, así que el recorrido con una persona real ya se puede diagnosticar sin revisar la configuración del proveedor a ciegas.
+- **Cierre:** los siete pasos quedaron implementados. Corregido el 2026-10-08: el enlace se emite una sola vez y `/auth/callback` guarda la sesión del fragmento de Auth antes de crear contraseña. Queda pendiente habilitar la protección contra contraseñas filtradas. Ampliado el 2026-10-14 (`plans/046`, ADR-056): el enlace que no concede sesión llega al acceso con su motivo. Corregido el 2026-10-14 (`plans/047`, ADR-057): el enlace nuevo abre una página propia, pasiva hasta el clic, con el token hash tras `#`; así una previsualización o un escáner de WhatsApp no lo puede gastar antes de la persona invitada.
 
 1. Contratos: esquemas de invitación, cambio de rol y retiro, reutilizando el resumen de integrante existente.
 2. API: invitación con rol `admin` mediante la API de administración de Auth, con enlace de un solo uso y sin registrar el secreto; pertenencia idempotente que nunca cambia el rol existente por efecto secundario.
@@ -16,7 +16,7 @@
 ## Riesgos
 
 - Este flujo no envía correo: el administrador comparte el único enlace que recibe en pantalla.
-- La URL de callback del enlace (`${APP_PUBLIC_URL}/auth/callback`) debe estar autorizada en el proyecto; si no lo está, no se puede canjear el código por sesión.
+- Los enlaces nuevos requieren que `APP_PUBLIC_URL` sea el dominio público del chat; los enlaces antiguos siguen requiriendo que `${APP_PUBLIC_URL}/auth/callback` esté autorizado hasta que expiren.
 - El enlace permite entrar a la cuenta: debe tratarse como credencial. Se entrega solo a quien lo genera y no se registra.
 - Un integrante retirado conserva su cuenta y podría pertenecer a otros tenants: el retiro afecta solo a la pertenencia, no a la persona.
 - Cambiar el rol de alguien que está trabajando en ese momento afecta sus siguientes comandos; la API decide en cada petición, sin caché de permisos en la interfaz.

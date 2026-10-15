@@ -1,10 +1,24 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TenantAccessService } from './tenant-access.service';
 
 const userId = '22222222-2222-4222-8222-222222222222';
 const tenantId = '11111111-1111-4111-8111-111111111111';
 const otherUserId = '33333333-3333-4333-8333-333333333333';
+const originalAppPublicUrl = process.env.APP_PUBLIC_URL;
+const appPublicUrl = 'https://chat.example.test';
+
+beforeEach(() => {
+  process.env.APP_PUBLIC_URL = appPublicUrl;
+});
+
+afterEach(() => {
+  if (originalAppPublicUrl === undefined) {
+    delete process.env.APP_PUBLIC_URL;
+  } else {
+    process.env.APP_PUBLIC_URL = originalAppPublicUrl;
+  }
+});
 
 type FakeResponse = { data: unknown; error: unknown };
 type RecordedCall = { args: unknown[]; method: string };
@@ -68,7 +82,10 @@ describe('TenantAccessService invitations', () => {
     });
     const generateLink = vi.fn().mockResolvedValue({
       data: {
-        properties: { action_link: 'https://proyecto.supabase.co/verify?token=abc' },
+        properties: {
+          action_link: 'https://proyecto.supabase.co/verify?token=action-link-no-compartir',
+          hashed_token: 'hash-invitacion'
+        },
         user: { id: otherUserId }
       },
       error: null
@@ -88,19 +105,44 @@ describe('TenantAccessService invitations', () => {
     ).resolves.toEqual({
       item: {
         email: 'nueva.persona@example.com',
-        inviteLink: 'https://proyecto.supabase.co/verify?token=abc',
+        inviteLink: 'https://chat.example.test/auth/invite#token_hash=hash-invitacion&type=invite',
         requiresPassword: true,
         role: 'supervisor'
       }
     });
 
-    expect(generateLink).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'nueva.persona@example.com', type: 'invite' })
-    );
+    expect(generateLink).toHaveBeenCalledWith({
+      email: 'nueva.persona@example.com',
+      type: 'invite'
+    });
     expect(generateLink).toHaveBeenCalledTimes(1);
     expect(fake.callsIn('memberships', 'insert')).toContainEqual([
       { role: 'supervisor', tenant_id: tenantId, user_id: otherUserId }
     ]);
+  });
+
+  it('fails instead of exposing the provider action link when Auth omits the token hash', async () => {
+    const fake = createTeamFake({ memberships: [{ data: { role: 'admin' }, error: null }] });
+    const generateLink = vi.fn().mockResolvedValue({
+      data: {
+        properties: { action_link: 'https://proyecto.supabase.co/verify?token=no-compartir' },
+        user: { id: otherUserId }
+      },
+      error: null
+    });
+    (fake.client as unknown as { auth: { admin: unknown; signInWithOtp?: unknown } }).auth = {
+      admin: { generateLink },
+      signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null })
+    };
+
+    await expect(
+      createTeamService(fake.client).inviteMember('Bearer valid.jwt', tenantId, {
+        email: 'persona@example.com',
+        role: 'agent'
+      })
+    ).rejects.toThrow('No fue posible generar la invitación.');
+
+    expect(generateLink).toHaveBeenCalledTimes(1);
   });
 
   it('never changes the role of someone who is already a member', async () => {
@@ -112,7 +154,10 @@ describe('TenantAccessService invitations', () => {
     });
     const generateLink = vi.fn().mockResolvedValue({
       data: {
-        properties: { action_link: 'https://proyecto.supabase.co/verify?token=abc' },
+        properties: {
+          action_link: 'https://proyecto.supabase.co/verify?token=action-link-no-compartir',
+          hashed_token: 'hash-invitacion'
+        },
         user: { id: otherUserId }
       },
       error: null
@@ -132,7 +177,7 @@ describe('TenantAccessService invitations', () => {
     ).resolves.toEqual({
       item: {
         email: 'ya.existe@example.com',
-        inviteLink: 'https://proyecto.supabase.co/verify?token=abc',
+        inviteLink: 'https://chat.example.test/auth/invite#token_hash=hash-invitacion&type=invite',
         requiresPassword: true,
         role: 'agent'
       }
@@ -153,7 +198,10 @@ describe('TenantAccessService invitations', () => {
       .mockResolvedValueOnce({ data: null, error: { message: 'already registered' } })
       .mockResolvedValueOnce({
         data: {
-          properties: { action_link: 'https://proyecto.supabase.co/verify?token=login' },
+          properties: {
+            action_link: 'https://proyecto.supabase.co/verify?token=action-link-no-compartir',
+            hashed_token: 'hash-acceso'
+          },
           user: { id: otherUserId }
         },
         error: null
@@ -173,7 +221,7 @@ describe('TenantAccessService invitations', () => {
     ).resolves.toEqual({
       item: {
         email: 'cuenta.existente@example.com',
-        inviteLink: 'https://proyecto.supabase.co/verify?token=login',
+        inviteLink: 'https://chat.example.test/auth/invite#token_hash=hash-acceso&type=magiclink',
         requiresPassword: false,
         role: 'agent'
       }
