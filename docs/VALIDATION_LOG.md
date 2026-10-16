@@ -6,6 +6,14 @@
 
 ## Resultado
 
+## Fase 21 - El aviso al bot no anuncia adjuntos vacíos
+
+- El aviso `message.inbound` anunciaba toda fila de `message_attachments`, incluidas las que no son un archivo. `kind` lo declara el proveedor y la plataforma escribe `file` cuando no declara nada; además, la copia propia solo existe si hubo una URL de origen que descargar. Una fila sin copia, sin `content_type`, sin URL de origen y con ese `file` de relleno llegaba al bot como un adjunto sin enlace, y el flujo que lo recibió lo interpretó como un comprobante que no había llegado: acuse de recibo falso al cliente y aviso al equipo por un archivo inexistente (ADR-061).
+- La regla vive en el constructor del aviso: `isEmptyAttachment` decide por fila y `readAttachments` la aplica. La fila guardada, la conversación y la galería no cambian. Un adjunto con copia, con `content_type`, con URL de origen o con un tipo declarado distinto de `file` —imagen, audio, vídeo o publicación compartida— se sigue anunciando, con `url` nulo mientras la copia no exista.
+- Controles: 940 pruebas aprobadas (235 de dominio, 506 de API, 137 de worker, 29 de media y 33 de web), typecheck de los seis paquetes, lint, formato y compilación de producción, incluida la web. La prueba del recorrido entrega el aviso del caso real y exige que solo viaje la imagen que sí es un archivo.
+- Producción (2026-10-16): commit `bbb5da1` en `main` = `origin/main`; `bash deploy.sh` en `/opt/wepflash` construyó `wepflash-api:20261016-1230` y Swarm reemplazó la tarea del trabajador —la anterior, `20261016-1032`, quedó en `Shutdown`—; `https://apichat.insidespa.com.mx/health` responde `{"status":"ok","service":"api","supabase":"configured"}`.
+- Pendiente manual: comprobar dentro de la imagen desplegada que viaja el código nuevo (`docker run --rm --entrypoint sh wepflash-api:20261016-1230 -c "grep -c isEmptyAttachment /app/apps/worker/dist/bot-notifier.js"`) y confirmar en n8n que un aviso real ya no trae el adjunto vacío.
+
 ## Fase 20 - Entrega de accesos por correo y contraseña guiada
 
 - La invitación y la recuperación las envía Auth por el SMTP configurado en el proyecto. La API deja de devolver un enlace manual: invita con `inviteUserByEmail` cuando la cuenta no existe, solicita el acceso con `signInWithOtp` cuando ya existe y el contrato responde `emailSent`. La clave privada permanece en el servidor y nunca se entrega `action_link`.
