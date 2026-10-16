@@ -89,6 +89,10 @@ Nuestra API entrega al webhook de n8n un evento `message.inbound` con esta forma
   `null` mientras esa copia todavia no se haya hecho, de modo que un adjunto puede llegar anunciado antes
   de estar disponible. Por eso los flujos que necesitan la imagen leen tambien esa lista, y no solo las
   URLs que publica ManyChat.
+- Un adjunto **vacío** no se anuncia: si no tiene copia propia, ni `contentType`, ni URL de origen, y su
+  `kind` es `file` —el valor que la plataforma escribe cuando el proveedor no declara tipo—, se omite del
+  aviso porque no hay archivo que recuperar en ninguna parte. Los demás conservan su orden y su `url` nulo
+  mientras la copia no exista. `title` viaja siempre `null` por ahora.
 - `subscriber_id` no viene en el aviso: lo rellena el traductor de entrada con el identificador de la
   conversacion, como puente, porque los flujos se escribieron para ManyChat y lo usan como clave en
   muchos sitios. No es el identificador real de ManyChat y no puede serlo: ese dato no lo tenemos.

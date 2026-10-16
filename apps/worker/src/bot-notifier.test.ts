@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildInboundNotification,
   claimDelivery,
+  isEmptyAttachment,
   reclaimAbandonedBotDeliveries,
   sendPendingBotDeliveries,
   shouldRetryBotDelivery
@@ -129,6 +130,50 @@ describe('aviso al bot', () => {
     expect(shouldRetryBotDelivery(0)).toBe(true);
     expect(shouldRetryBotDelivery(4)).toBe(true);
     expect(shouldRetryBotDelivery(5)).toBe(false);
+  });
+});
+
+/**
+ * Un adjunto que no aporta nada no se anuncia.
+ *
+ * `kind` lo elige el proveedor y la plataforma escribe `file` cuando no declaro tipo; la copia propia
+ * solo existe si hubo un `source_url` que descargar. El caso real del 2026-10-16 en Instagram llego
+ * con `{ kind: "file", contentType: null, title: null, url: null }`: el flujo de n8n lo tomo por un
+ * comprobante que no habia llegado, intento recuperarlo (404, no existe en ninguna parte) y le
+ * respondio al cliente que su comprobante quedaba en validacion. Se anuncia lo que si es un archivo
+ * —con copia, con `content_type`, con URL de origen o con un tipo declarado— y nada mas.
+ */
+describe('adjuntos que se anuncian', () => {
+  it('un adjunto sin copia, sin tipo declarado y sin URL de origen esta vacio', () => {
+    expect(
+      isEmptyAttachment({
+        content_type: null,
+        kind: 'file',
+        source_url: null,
+        storage_object_path: null
+      })
+    ).toBe(true);
+  });
+
+  it('un `kind` de relleno no basta, y los valores en blanco tampoco', () => {
+    expect(isEmptyAttachment({ kind: 'file' })).toBe(true);
+    expect(isEmptyAttachment({ content_type: '   ', kind: 'file', source_url: ' ' })).toBe(true);
+    expect(isEmptyAttachment({})).toBe(true);
+  });
+
+  it('conserva el adjunto cuando declara tipo, contenido, origen o copia', () => {
+    // La imagen del proveedor todavia sin copiar: es el caso que el bot recupera por el deposito.
+    expect(isEmptyAttachment({ kind: 'image', storage_object_path: null })).toBe(false);
+    // El documento copiado, y el que solo tiene su URL de origen (el bot puede recuperarlo por ella).
+    expect(
+      isEmptyAttachment({ kind: 'file', storage_object_path: 'tenant/conv/msg/doc.pdf' })
+    ).toBe(false);
+    expect(
+      isEmptyAttachment({ kind: 'file', source_url: 'https://cdn.example.test/doc.pdf' })
+    ).toBe(false);
+    expect(isEmptyAttachment({ content_type: 'application/pdf', kind: 'file' })).toBe(false);
+    // Una publicacion compartida se conserva: su texto es contexto para el equipo.
+    expect(isEmptyAttachment({ kind: 'share' })).toBe(false);
   });
 });
 
@@ -321,5 +366,47 @@ describe('entrega del aviso al bot', () => {
       messageId: 'msg-1',
       tenantId: 'tenant-1'
     });
+  });
+
+  it('no entrega el adjunto vacio y conserva el que si es un archivo', async () => {
+    // El recorrido completo del caso real: la fila vacia no sale en el aviso, y la imagen que si
+    // llego conserva su lugar con `url: null` (su copia todavia no existe, pero tiene origen).
+    const previo = respuestas.message_attachments;
+    respuestas.message_attachments = {
+      data: [
+        {
+          content_type: null,
+          id: 'adj-vacio',
+          kind: 'file',
+          source_url: null,
+          storage_object_path: null
+        },
+        {
+          content_type: 'image/jpeg',
+          id: 'adj-foto',
+          kind: 'image',
+          source_url: 'https://cdn.example.test/foto.jpg',
+          storage_object_path: null
+        }
+      ],
+      error: null
+    };
+    const entregas: Array<Record<string, unknown>> = [];
+
+    try {
+      await sendPendingBotDeliveries({
+        deliver: async (_url, body) => {
+          entregas.push(body as unknown as Record<string, unknown>);
+        },
+        supabase: stubSupabase()
+      });
+    } finally {
+      respuestas.message_attachments = previo;
+    }
+
+    const mensaje = entregas[0]?.message as { attachments?: unknown[] } | undefined;
+    expect(mensaje?.attachments).toEqual([
+      { contentType: 'image/jpeg', id: 'adj-foto', kind: 'image', title: null, url: null }
+    ]);
   });
 });

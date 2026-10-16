@@ -354,6 +354,43 @@ export async function sendPendingBotDeliveries(input: {
 }
 
 /**
+ * Los campos de un adjunto guardado que deciden si se anuncia.
+ *
+ * Llegan sin tipar porque son columnas de `message_attachments`: se leen como texto solo cuando lo
+ * son, y cualquier otra forma cuenta como ausente.
+ */
+export type StoredAttachmentFields = {
+  content_type?: unknown;
+  kind?: unknown;
+  source_url?: unknown;
+  storage_object_path?: unknown;
+};
+
+/**
+ * Si un adjunto guardado esta vacio y por lo tanto no debe anunciarse.
+ *
+ * `kind` es lo que declaro el proveedor, y la plataforma escribe `file` cuando no declaro tipo
+ * (`attachmentKindFromProvider`); ademas, la copia propia solo existe si hubo un `source_url` que
+ * descargar. Un adjunto sin copia, sin `content_type`, sin URL de origen y con ese `file` de relleno
+ * no es un archivo: es una entrada vacia de la lista del proveedor. Anunciarlo hace que quien lo
+ * recibe persiga un archivo que no existe en ninguna parte; el caso real del 2026-10-16 fue un aviso
+ * de Instagram con `kind: "file"` y `contentType`, `title` y `url` en nulo, que termino en un acuse
+ * de comprobante que el cliente nunca mando.
+ *
+ * Un adjunto con copia, con `content_type`, con URL de origen o con un tipo declarado distinto de
+ * `file` (imagen, audio, video o publicacion compartida) si se anuncia: el enlace va nulo mientras
+ * la copia no exista, y quien lo recibe puede recuperar el archivo por la URL de origen.
+ */
+export function isEmptyAttachment(fields: StoredAttachmentFields): boolean {
+  const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+  if (text(fields.storage_object_path) !== '') return false;
+  if (text(fields.source_url) !== '') return false;
+  if (text(fields.content_type) !== '') return false;
+  const kind = text(fields.kind);
+  return kind === '' || kind === 'file';
+}
+
+/**
  * Los adjuntos del mensaje, con su enlace firmado.
  *
  * Reglas:
@@ -362,6 +399,8 @@ export async function sendPendingBotDeliveries(input: {
  *   2. El orden es el del mensaje (`ordinal`): una misma imagen partida en dos capturas se lee en
  *      el orden en que el cliente la mando.
  *   3. Solo se firma lo que ya esta copiado: un adjunto sin archivo propio no tiene enlace.
+ *   4. Un adjunto vacio (`isEmptyAttachment`) no viaja: no aporta nada y hace perseguir un archivo
+ *      que no existe. Los demas conservan su lugar y su orden.
  */
 async function readAttachments(
   supabase: SupabaseServerClient,
@@ -369,13 +408,13 @@ async function readAttachments(
 ): Promise<InboundBotAttachment[]> {
   const { data, error } = await supabase
     .from('message_attachments')
-    .select('id, kind, content_type, storage_object_path')
+    .select('id, kind, content_type, source_url, storage_object_path')
     .eq('message_id', messageId)
     .order('ordinal', { ascending: true });
 
   if (error || !Array.isArray(data)) return [];
 
-  const filas = data as Array<Record<string, unknown>>;
+  const filas = (data as Array<Record<string, unknown>>).filter((fila) => !isEmptyAttachment(fila));
   const rutas = filas
     .map((fila) => (typeof fila.storage_object_path === 'string' ? fila.storage_object_path : ''))
     .filter((ruta) => ruta.trim().length > 0);

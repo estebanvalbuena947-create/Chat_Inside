@@ -4,6 +4,18 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-061 - Un adjunto vacío no se anuncia al bot (2026-10-16)
+
+- **Fecha:** 2026-10-16
+- **Estado:** aceptada
+- **Contexto:** El aviso `message.inbound` anunciaba **todas** las filas de `message_attachments`, incluidas las que no son un archivo. Se descubrió con un caso real en Instagram: el aviso llegó con `{ kind: "file", contentType: null, title: null, url: null }` y el cuerpo del mensaje vacío. La causa es de la propia plataforma: `attachmentKindFromProvider` escribe `file` como relleno cuando el proveedor no declara tipo, y la ingesta crea la fila aunque no haya nada que descargar (`if (!attachment.sourceUrl) continue`: ni copia, ni `content_type`, ni marca de fallo). El flujo de n8n que lo recibió interpretó «adjunto sin enlace = comprobante que no llegó», intentó recuperarlo —404: no existe en ninguna parte— y le respondió al cliente que su comprobante quedaba en validación, además de avisar al equipo por un archivo inexistente.
+- **Decisión:** Solo se anuncian los adjuntos que aportan algo. Un adjunto sin copia propia, sin `content_type`, sin URL de origen y con `kind` `file` se omite del aviso; los demás conservan su lugar y su orden, con `url` nulo mientras la copia no exista. La regla vive en el constructor del aviso (`isEmptyAttachment`, `apps/worker/src/bot-notifier.ts`) y no toca la fila guardada: la conversación y la galería siguen mostrando lo que llegó.
+- **Alternativas consideradas:** No crear la fila cuando el proveedor no declara nada, cambiando el normalizador de ingesta: se descartó porque la fila es el registro fiel de lo que el proveedor mandó y el problema está en lo que se **anuncia**, no en lo que se guarda. Descartar todo adjunto sin enlace: se descartó porque una imagen real cuya copia aún no existe debe seguir anunciándose (su enlace llega nulo y el consumidor puede recuperarla por la URL de origen). Filtrar en n8n: se descartó porque cada consumidor del contrato tendría que repetir la misma regla.
+- **Consecuencias:** Cambio aditivo y local en el contrato hacia n8n: ningún consumidor que hoy recibe adjuntos con contenido deja de recibirlos, y ninguno recibe ya una entrada vacía. El campo `title` sigue viajando `null` —la plataforma guarda `source_title` pero no lo reenvía—: queda pendiente si algún consumidor lo necesita. La fila vacía continúa en `message_attachments` y la pasada de reparación le acaba poniendo `download_failed_at`, que la bandeja muestra como «sin copia disponible»: queda pendiente distinguir ese caso en la interfaz.
+- **Cómo se verifica:** Pruebas unitarias de `isEmptyAttachment` (el caso real y los cuatro que sí se anuncian) y una prueba de recorrido sobre `sendPendingBotDeliveries` con la fila real y una imagen sin copia, que exige que el cuerpo entregado lleve solo la imagen. Controles del repositorio: `typecheck`, `lint`, `format:check` y `test`. La comprobación manual es una ejecución real en n8n en la que el aviso ya no trae el adjunto vacío.
+
+---
+
 ## ADR-060 - El aviso al bot identifica la cuenta de Zernio (2026-10-16)
 
 - **Fecha:** 2026-10-16

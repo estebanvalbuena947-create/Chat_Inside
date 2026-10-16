@@ -24,6 +24,7 @@ El proveedor entrega la multimedia como un **enlace firmado del CDN de Instagram
 6. El bucket es privado y su ruta interna nunca se entrega: la API firma enlaces temporales.
 7. Una publicación compartida **sí trae su medio** (la imagen o el vídeo de la publicación) y el texto que la acompañaba. Se copia como cualquier otro adjunto y su texto se guarda para mostrar el contexto.
 8. La galería y las imágenes dentro de la conversación las ve cualquier integrante del tenant, porque ya ve esas conversaciones.
+9. **Un adjunto vacío no se anuncia.** `kind` es lo que declaró el proveedor y la plataforma escribe `file` cuando no declaró tipo; la copia propia, además, solo existe si hubo una URL de origen que descargar. Un adjunto sin copia, sin `content_type`, sin URL de origen y con ese `file` de relleno no es un archivo: no viaja en el aviso al bot, y la fila se conserva en la conversación. Un adjunto con copia, con `content_type`, con URL de origen o con un tipo declarado —imagen, audio, vídeo o publicación compartida— sí se anuncia, con `url` nulo mientras la copia no exista.
 
 ## Contrato
 
