@@ -47,9 +47,17 @@ export type InboundBotAttachment = {
   url: string | null;
 };
 
-/** El aviso que recibe n8n. Esta es su forma, y es un contrato. */
+/**
+ * El aviso que recibe n8n. Esta es su forma, y es un contrato.
+ *
+ * `conversation.accountId` es el identificador de la cuenta en Zernio (`account.accountId` de su
+ * webhook, guardado como `channel_accounts.provider_account_id`). Viaja porque n8n decide por canal:
+ * `platform` y `channelName` no distinguen dos cuentas de la misma plataforma, y sin este dato el
+ * flujo tendria que adivinar cual de ellas atiende el mensaje.
+ */
 export type InboundBotNotification = {
   conversation: {
+    accountId: string | null;
     channelName: string | null;
     contactName: string | null;
     contactUsername: string | null;
@@ -76,6 +84,7 @@ export type InboundBotNotification = {
 /** Construye el aviso. Funcion pura: se prueba sin base de datos ni red. */
 export function buildInboundNotification(input: {
   conversation: {
+    accountId?: string | null;
     channelName?: string | null;
     contactName?: string | null;
     contactUsername?: string | null;
@@ -99,6 +108,7 @@ export function buildInboundNotification(input: {
 }): InboundBotNotification {
   return {
     conversation: {
+      accountId: input.conversation.accountId ?? null,
       channelName: input.conversation.channelName ?? null,
       contactName: input.conversation.contactName ?? null,
       contactUsername: input.conversation.contactUsername ?? null,
@@ -256,7 +266,7 @@ export async function sendPendingBotDeliveries(input: {
     const { data: conversacion } = await input.supabase
       .from('conversations')
       .select(
-        'id, status, has_dm, has_comment, contact:contacts(display_name, external_username), channel_account:channel_accounts(platform, display_name)'
+        'id, status, has_dm, has_comment, contact:contacts(display_name, external_username), channel_account:channel_accounts(platform, display_name, provider_account_id)'
       )
       .eq('id', fila.conversation_id)
       .maybeSingle();
@@ -289,6 +299,7 @@ export async function sendPendingBotDeliveries(input: {
 
     const aviso = buildInboundNotification({
       conversation: {
+        accountId: canal ? (canal.provider_account_id as string | null) : null,
         channelName: canal ? (canal.display_name as string | null) : null,
         contactName: contacto ? (contacto.display_name as string | null) : null,
         contactUsername: contacto ? (contacto.external_username as string | null) : null,

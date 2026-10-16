@@ -69,15 +69,19 @@ columna «Puerta o campos declarados» de 7.1 recoge el `workflowInputs.value` q
 
 El flujo `Sara` es el unico que recibe mensajes de personas, a traves de su nodo Webhook.
 Los demas son sub-flujos que Sara llama, o relojes internos. Por eso **la traduccion de la identidad
-va en la puerta de Sara**, una sola vez, en el nodo `Traducir aviso de WEPLASH1`.
+va en la puerta de Sara**, una sola vez, en el nodo `Traducir aviso de WEPLASH`.
 
 ## El aviso de entrada y sus adjuntos
 
 Nuestra API entrega al webhook de n8n un evento `message.inbound` con esta forma:
 
 - Arriba, la identidad y el contexto: `conversationId`, `messageId` y `tenantId`, mas el objeto
-  `conversation` con `platform`, `status`, `channelName`, `contactName`, `contactUsername`, `hasDm` y
-  `hasComment`.
+  `conversation` con `accountId`, `platform`, `status`, `channelName`, `contactName`, `contactUsername`,
+  `hasDm` y `hasComment`.
+- `conversation.accountId` es la cuenta de Zernio que origino el mensaje: el `account.accountId` de su
+  webhook, guardado en `channel_accounts.provider_account_id`. Es el unico campo que distingue dos
+  cuentas de la misma plataforma, porque `platform` y `channelName` pueden coincidir; sin el, un flujo
+  con varias cuentas tendria que adivinar cual atiende el mensaje.
 - Dentro de `message`: `body`, `direction`, `senderType`, `sentAt`, `source`, `commentState` y
   `attachments`.
 - `message.attachments` es una lista de `{ contentType, id, kind, title, url }`. `kind` dice de que tipo
@@ -88,3 +92,11 @@ Nuestra API entrega al webhook de n8n un evento `message.inbound` con esta forma
 - `subscriber_id` no viene en el aviso: lo rellena el traductor de entrada con el identificador de la
   conversacion, como puente, porque los flujos se escribieron para ManyChat y lo usan como clave en
   muchos sitios. No es el identificador real de ManyChat y no puede serlo: ese dato no lo tenemos.
+- El traductor publica ademas los campos `weplash_*` con lo que antes solo estaba dentro del aviso:
+  `weplash_conversation_id`, `weplash_tenant_id`, `weplash_message_id`, `weplash_contact_name`,
+  `weplash_contact_username`, `weplash_channel`, `weplash_channel_account_id`,
+  `weplash_channel_name`, `weplash_status`, `weplash_has_dm`, `weplash_has_comment` y
+  `weplash_source`. En un nodo se leen planos (`{{ $json.weplash_channel_account_id }}`) y no por la
+  ruta del aviso; `weplash_channel_account_id` es el mismo dato que `conversation.accountId` y es el
+  que distingue dos cuentas de la misma plataforma. El aviso completo sigue disponible en
+  `weplash_evento` para lo que no tenga campo propio.

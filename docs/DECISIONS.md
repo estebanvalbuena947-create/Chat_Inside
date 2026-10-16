@@ -4,6 +4,19 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-060 - El aviso al bot identifica la cuenta de Zernio (2026-10-16)
+
+- **Fecha:** 2026-10-16
+- **Estado:** aceptada
+- **Contexto:** n8n decide por canal, y el aviso `message.inbound` solo llevaba `conversation.platform` y `conversation.channelName`. Con una sola cuenta por plataforma bastaba; en cuanto hay dos —dos Instagram, o Instagram y Messenger— ninguna de las dos cosas las distingue, y el flujo tendría que adivinar cuál atiende el mensaje o deducirlo del nombre visible, que el equipo puede cambiar desde la bandeja.
+- **Decisión:** El aviso incorpora `conversation.accountId`, el identificador de la cuenta en Zernio. El valor sale de `channel_accounts.provider_account_id`, la columna que ya resolvió el tenant de cada evento entrante y que se llenó al conectar la cuenta desde `account.accountId` del webhook `account.connected`; no se copia ni se deduce de nuevo al entregar el aviso. Si la conversación no tuviera cuenta, el campo viaja `null` y el aviso se entrega igual: perder el turno del bot por un dato de contexto sería peor que entregarlo sin él.
+- **Evidencia del contrato del proveedor (2026-10-16):** en un `message.received` real, `account` trae `id` **y** `accountId` con el mismo valor, además de `platform`, `username`, `displayName` y `profileId`. Nuestra ingesta ya leía `account.id` para resolver la cuenta, así que el valor publicado hacia n8n es el mismo que el proveedor escribe en ambos campos. Es la primera evidencia del payload de mensajes registrada en el repositorio; hasta ahora el campo solo estaba documentado como `account.id`.
+- **Alternativas consideradas:** Exponer el identificador local del canal (`channel_accounts.id`), que obligaría a una traducción extra en cada flujo de n8n porque el agente trabaja contra el proveedor —envía, responde comentarios y publica reseñas con el identificador de Zernio—; y dejar que el flujo dedujera la cuenta del nombre visible, que es editable y puede repetirse entre dos canales del mismo espacio.
+- **Consecuencias:** Cambio aditivo en un contrato público: n8n ignora los campos que no lee y retirarlo es quitar la clave. Ninguna tabla, migración ni permiso cambia. `channel_accounts.provider_account_id` pasa a ser dato de contrato externo, así que su valor no debe editarse a mano en la base.
+- **Cómo se verifica:** Pruebas unitarias de `buildInboundNotification` (el aviso lleva la cuenta y la deja `null` cuando no hay canal, sin inventarla) y una prueba de recorrido sobre `sendPendingBotDeliveries` que exige el identificador en el cuerpo que sale hacia el webhook. `docs/contratos-de-entrada.md` describe el campo. La comprobación manual es una ejecución real en n8n que lea `conversation.accountId`.
+
+---
+
 ## ADR-059 - Las redirecciones del servidor usan el dominio público, no el host del proxy (2026-10-15)
 
 - **Fecha:** 2026-10-15

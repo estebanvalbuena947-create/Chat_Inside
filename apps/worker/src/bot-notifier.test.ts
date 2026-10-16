@@ -3,11 +3,13 @@ import {
   buildInboundNotification,
   claimDelivery,
   reclaimAbandonedBotDeliveries,
+  sendPendingBotDeliveries,
   shouldRetryBotDelivery
 } from './bot-notifier';
 
 const base = {
   conversation: {
+    accountId: 'cuenta-zernio-1',
     channelName: 'Inside Spa',
     contactName: 'Ana',
     contactUsername: 'ana.ig',
@@ -38,6 +40,22 @@ describe('aviso al bot', () => {
     expect(aviso.message.body).toBe('Hola, quiero una cita');
   });
 
+  /**
+   * El canal por el que entro el mensaje.
+   *
+   * n8n decide por cuenta: dos cuentas de la misma plataforma se distinguen por este identificador y
+   * no por `platform` ni por `channelName`, que pueden repetirse. El valor es el de Zernio
+   * (`account.accountId` de su webhook, guardado como `channel_accounts.provider_account_id`), no el
+   * identificador local del canal ni el de la conversacion: por eso la prueba comprueba los tres y
+   * exige que sean distintos entre si.
+   */
+  it('identifica la cuenta de Zernio que origino el mensaje', () => {
+    const aviso = buildInboundNotification(base);
+    expect(aviso.conversation.accountId).toBe('cuenta-zernio-1');
+    expect(aviso.conversation.accountId).not.toBe(aviso.conversationId);
+    expect(aviso.conversation.accountId).not.toBe(aviso.messageId);
+  });
+
   it('incluye el contexto de la conversacion, que es lo que el bot necesita para decidir', () => {
     const aviso = buildInboundNotification(base);
     expect(aviso.conversation.contactName).toBe('Ana');
@@ -52,6 +70,7 @@ describe('aviso al bot', () => {
       message: { body: 'Hola', direction: 'inbound', id: 'msg-2', senderType: 'contact' },
       tenantId: 'tenant-1'
     });
+    expect(aviso.conversation.accountId).toBeNull();
     expect(aviso.conversation.contactName).toBeNull();
     expect(aviso.conversation.platform).toBeNull();
     expect(aviso.message.sentAt).toBeNull();
@@ -183,5 +202,124 @@ describe('reclamo del aviso', () => {
     >[0];
 
     expect(await reclaimAbandonedBotDeliveries(supabase)).toBe(2);
+  });
+});
+
+/**
+ * El recorrido completo del aviso.
+ *
+ * El constructor del aviso puede estar bien y el dato perderse antes, al leer la conversacion: la
+ * cuenta vive en `channel_accounts`, no en `conversations`, asi que una consulta que no la pida deja
+ * el aviso sin canal sin que nada falle. Esta prueba recorre `sendPendingBotDeliveries` y comprueba
+ * lo que de verdad sale hacia n8n.
+ */
+describe('entrega del aviso al bot', () => {
+  /**
+   * Un doble de Supabase con la forma justa para este recorrido.
+   *
+   * `bot_deliveries` responde dos cosas distintas: la lista de pendientes (al esperar la consulta) y
+   * el reclamo de una fila (en `maybeSingle`). Las demas tablas devuelven su fila en `maybeSingle` y
+   * una lista en la espera, que es como las usa el notificador.
+   */
+  function stubSupabase() {
+    const cadenas: Record<string, Record<string, unknown>> = {};
+    for (const tabla of ['bot_integrations', 'conversations', 'message_attachments', 'messages']) {
+      cadenas[tabla] = {
+        eq: () => cadenas[tabla],
+        is: () => cadenas[tabla],
+        limit: () => cadenas[tabla],
+        lt: () => cadenas[tabla],
+        maybeSingle: async () => respuestas[tabla] ?? { data: null, error: null },
+        order: () => cadenas[tabla],
+        select: () => cadenas[tabla],
+        then: (resolver: (valor: unknown) => unknown) =>
+          Promise.resolve(respuestas[tabla] ?? { data: null, error: null }).then(resolver),
+        update: () => cadenas[tabla]
+      };
+    }
+
+    const pendientes = [
+      {
+        attempts: 0,
+        conversation_id: 'conv-1',
+        id: 'delivery-1',
+        message_id: 'msg-1',
+        tenant_id: 'tenant-1'
+      }
+    ];
+
+    cadenas.bot_deliveries = {
+      eq: () => cadenas.bot_deliveries,
+      is: () => cadenas.bot_deliveries,
+      limit: () => cadenas.bot_deliveries,
+      lt: () => cadenas.bot_deliveries,
+      maybeSingle: async () => ({ data: { id: 'delivery-1' }, error: null }),
+      order: () => cadenas.bot_deliveries,
+      select: () => cadenas.bot_deliveries,
+      then: (resolver: (valor: unknown) => unknown) =>
+        Promise.resolve({ data: pendientes, error: null }).then(resolver),
+      update: () => cadenas.bot_deliveries
+    };
+
+    return {
+      from: (tabla: string) => cadenas[tabla]
+    } as unknown as Parameters<typeof sendPendingBotDeliveries>[0]['supabase'];
+  }
+
+  const respuestas: Record<string, unknown> = {
+    bot_integrations: {
+      data: { enabled: true, webhook_url: 'https://n8n.example.test/webhook/inbox' },
+      error: null
+    },
+    conversations: {
+      data: {
+        channel_account: {
+          display_name: 'Inside Spa',
+          platform: 'instagram',
+          provider_account_id: '6a6cfdc3df17280d93506a96'
+        },
+        contact: { display_name: 'Ana', external_username: 'ana.ig' },
+        has_comment: false,
+        has_dm: true,
+        id: 'conv-1',
+        status: 'open'
+      },
+      error: null
+    },
+    message_attachments: { data: [], error: null },
+    messages: {
+      data: {
+        body: 'Hola, quiero una cita',
+        comment_state: null,
+        direction: 'inbound',
+        id: 'msg-1',
+        sender_type: 'contact',
+        sent_at: '2026-10-16T14:51:59.149Z',
+        source: 'dm'
+      },
+      error: null
+    }
+  };
+
+  it('entrega el aviso con la cuenta de Zernio que lo origino', async () => {
+    const entregas: Array<{ url: string; body: Record<string, unknown> }> = [];
+
+    const resultados = await sendPendingBotDeliveries({
+      deliver: async (url, body) => {
+        entregas.push({ body: body as unknown as Record<string, unknown>, url });
+      },
+      supabase: stubSupabase()
+    });
+
+    expect(resultados).toEqual([{ kind: 'sent', messageId: 'msg-1' }]);
+    expect(entregas).toHaveLength(1);
+    expect(entregas[0]?.url).toBe('https://n8n.example.test/webhook/inbox');
+    expect(entregas[0]?.body).toMatchObject({
+      conversation: { accountId: '6a6cfdc3df17280d93506a96', platform: 'instagram' },
+      conversationId: 'conv-1',
+      event: 'message.inbound',
+      messageId: 'msg-1',
+      tenantId: 'tenant-1'
+    });
   });
 });
