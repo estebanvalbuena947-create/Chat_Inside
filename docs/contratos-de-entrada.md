@@ -84,11 +84,15 @@ Nuestra API entrega al webhook de n8n un evento `message.inbound` con esta forma
   con varias cuentas tendria que adivinar cual atiende el mensaje.
 - Dentro de `message`: `body`, `direction`, `senderType`, `sentAt`, `source`, `commentState` y
   `attachments`.
-- `message.attachments` es una lista de `{ contentType, id, kind, title, url }`. `kind` dice de que tipo
-  de archivo se trata y `url` es un enlace firmado de diez minutos a la copia propia del archivo; vale
-  `null` mientras esa copia todavia no se haya hecho, de modo que un adjunto puede llegar anunciado antes
-  de estar disponible. Por eso los flujos que necesitan la imagen leen tambien esa lista, y no solo las
-  URLs que publica ManyChat.
+- `message.attachments` es una lista de `{ contentType, id, kind, reviewUrl, title, url }`. `kind` dice de
+  que tipo de archivo se trata y `url` es un enlace firmado de diez minutos a la copia propia del archivo;
+  vale `null` mientras esa copia todavia no se haya hecho, de modo que un adjunto puede llegar anunciado
+  antes de estar disponible. Por eso los flujos que necesitan la imagen leen tambien esa lista, y no solo
+  las URLs que publica ManyChat.
+- `reviewUrl` es **el mismo archivo firmado por días**, para lo que una persona abre horas después: el
+  correo interno al equipo. El enlace corto no sirve para eso —el botón «Ver comprobante» respondía
+  `InvalidJWT: "exp" claim timestamp check failed`—, así que el correo usa `reviewUrl` y solo cae a `url`
+  si no viniera. Viaja `null` en las mismas condiciones que `url`: sin copia propia no hay nada que firmar.
 - Un adjunto **vacío** no se anuncia: si no tiene copia propia, ni `contentType`, ni URL de origen, y su
   `kind` es `file` —el valor que la plataforma escribe cuando el proveedor no declara tipo—, se omite del
   aviso porque no hay archivo que recuperar en ninguna parte. Los demás conservan su orden y su `url` nulo

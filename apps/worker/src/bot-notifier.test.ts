@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  BOT_ATTACHMENT_URL_TTL_SECONDS,
+  BOT_REVIEW_URL_TTL_SECONDS,
   buildInboundNotification,
   claimDelivery,
   isEmptyAttachment,
@@ -91,6 +93,7 @@ describe('aviso al bot', () => {
             contentType: 'image/jpeg',
             id: 'adj-1',
             kind: 'image',
+            reviewUrl: 'https://almacen/revision/comprobante-1.jpg',
             title: null,
             url: 'https://almacen/comprobante-1.jpg'
           },
@@ -98,6 +101,7 @@ describe('aviso al bot', () => {
             contentType: 'application/pdf',
             id: 'adj-2',
             kind: 'file',
+            reviewUrl: null,
             title: null,
             url: 'https://almacen/comprobante-2.pdf'
           }
@@ -111,6 +115,11 @@ describe('aviso al bot', () => {
       contentType: 'application/pdf',
       kind: 'file'
     });
+    // El enlace de revision es un dato mas del adjunto: viaja tal cual, sin inventarlo.
+    expect(aviso.message.attachments[0]?.reviewUrl).toBe(
+      'https://almacen/revision/comprobante-1.jpg'
+    );
+    expect(aviso.message.attachments[1]?.reviewUrl).toBeNull();
   });
 
   it('un adjunto que todavia no esta copiado viaja con enlace nulo, sin perder el aviso', () => {
@@ -118,11 +127,14 @@ describe('aviso al bot', () => {
       ...base,
       message: {
         ...base.message,
-        attachments: [{ contentType: null, id: 'adj-3', kind: 'file', title: null, url: null }]
+        attachments: [
+          { contentType: null, id: 'adj-3', kind: 'file', reviewUrl: null, title: null, url: null }
+        ]
       }
     });
 
     expect(aviso.message.attachments[0]?.url).toBeNull();
+    expect(aviso.message.attachments[0]?.reviewUrl).toBeNull();
     expect(aviso.message.body).toBe('Hola, quiero una cita');
   });
 
@@ -260,6 +272,20 @@ describe('reclamo del aviso', () => {
  */
 describe('entrega del aviso al bot', () => {
   /**
+   * El firmante del almacen.
+   *
+   * Devuelve una direccion que lleva la vigencia dentro, para poder distinguir el enlace del bot del
+   * enlace de revision, y guarda con que vigencia se pidio cada firma.
+   */
+  const firmas = vi.fn(async (paths: string[], expiresIn: number) => ({
+    data: paths.map((path) => ({
+      path,
+      signedUrl: `https://almacen/${String(expiresIn)}/${path}`
+    })),
+    error: null
+  }));
+
+  /**
    * Un doble de Supabase con la forma justa para este recorrido.
    *
    * `bot_deliveries` responde dos cosas distintas: la lista de pendientes (al esperar la consulta) y
@@ -307,7 +333,8 @@ describe('entrega del aviso al bot', () => {
     };
 
     return {
-      from: (tabla: string) => cadenas[tabla]
+      from: (tabla: string) => cadenas[tabla],
+      storage: { from: () => ({ createSignedUrls: firmas }) }
     } as unknown as Parameters<typeof sendPendingBotDeliveries>[0]['supabase'];
   }
 
@@ -406,7 +433,63 @@ describe('entrega del aviso al bot', () => {
 
     const mensaje = entregas[0]?.message as { attachments?: unknown[] } | undefined;
     expect(mensaje?.attachments).toEqual([
-      { contentType: 'image/jpeg', id: 'adj-foto', kind: 'image', title: null, url: null }
+      {
+        contentType: 'image/jpeg',
+        id: 'adj-foto',
+        kind: 'image',
+        reviewUrl: null,
+        title: null,
+        url: null
+      }
     ]);
+  });
+
+  it('un archivo copiado viaja con el enlace del bot y el de revision', async () => {
+    // El correo interno se abre horas despues: con un solo enlace de diez minutos llegaba muerto
+    // (`InvalidJWT: "exp" claim timestamp check failed`). Cada archivo copiado viaja firmado dos
+    // veces, con la vigencia corta para que el bot lo baje y la larga para que una persona lo abra.
+    const previo = respuestas.message_attachments;
+    respuestas.message_attachments = {
+      data: [
+        {
+          content_type: 'image/jpeg',
+          id: 'adj-foto',
+          kind: 'image',
+          source_url: null,
+          storage_object_path: 'tenant/conv/msg/0.jpg'
+        }
+      ],
+      error: null
+    };
+    const entregas: Array<Record<string, unknown>> = [];
+    const desde = firmas.mock.calls.length;
+
+    try {
+      await sendPendingBotDeliveries({
+        deliver: async (_url, body) => {
+          entregas.push(body as unknown as Record<string, unknown>);
+        },
+        supabase: stubSupabase()
+      });
+    } finally {
+      respuestas.message_attachments = previo;
+    }
+
+    const mensaje = entregas[0]?.message as { attachments?: unknown[] } | undefined;
+    expect(mensaje?.attachments).toEqual([
+      {
+        contentType: 'image/jpeg',
+        id: 'adj-foto',
+        kind: 'image',
+        reviewUrl: `https://almacen/${String(BOT_REVIEW_URL_TTL_SECONDS)}/tenant/conv/msg/0.jpg`,
+        title: null,
+        url: `https://almacen/${String(BOT_ATTACHMENT_URL_TTL_SECONDS)}/tenant/conv/msg/0.jpg`
+      }
+    ]);
+    // Y la vigencia de revision es de dias, no de minutos: es lo que hace que el correo sirva.
+    expect(BOT_REVIEW_URL_TTL_SECONDS).toBeGreaterThan(BOT_ATTACHMENT_URL_TTL_SECONDS * 24);
+    const vigencias = firmas.mock.calls.slice(desde).map(([, expiresIn]) => expiresIn);
+    expect(vigencias).toContain(BOT_ATTACHMENT_URL_TTL_SECONDS);
+    expect(vigencias).toContain(BOT_REVIEW_URL_TTL_SECONDS);
   });
 });

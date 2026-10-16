@@ -4,6 +4,18 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-062 - El aviso entrega un enlace de revisión de días para el correo interno (2026-10-16)
+
+- **Fecha:** 2026-10-16
+- **Estado:** aceptada
+- **Contexto:** El correo interno que pide revisar un comprobante llevaba el botón «Ver comprobante» con el enlace firmado del aviso, que dura **600 segundos** porque se pensó para que el bot bajara el archivo en el acto. El equipo lo abre horas después y el almacén responde `InvalidJWT: "exp" claim timestamp check failed`: el comprobante queda a la vista solo en la bandeja, y la revisión que el correo pide —ligar el pago antes de que la pre-reserva se libere— se queda sin su enlace. La plataforma no tiene una dirección durable que ofrecer: la bandeja firma al abrir y no hay enlaces profundos por conversación o archivo.
+- **Decisión:** Cada adjunto copiado viaja en el aviso con **dos** enlaces firmados: `url`, de diez minutos, para el procesamiento inmediato, y `reviewUrl`, de siete días (`BOT_REVIEW_URL_TTL_SECONDS`), para lo que una persona abre después. Los dos nacen de la misma fila de `message_attachments` y los dos son nulos mientras no haya copia propia. El correo interno usa `reviewUrl` y solo cae a `url` si no viniera.
+- **Alternativas consideradas:** Alargar el enlace único a siete días: se descartó porque el enlace de procesamiento no necesita esa vida y el aviso viaja por más sitios que el correo. Firmar el enlace largo desde n8n: se descartó porque duplicaría la política de firmas fuera de su dueño y obligaría al flujo a consultar el depósito. Adjuntar el archivo al correo: se descartó porque el binario ya no está garantizado al final del recorrido y engorda cada aviso. No hacer nada y revisar siempre en la bandeja: se descartó porque deja un enlace muerto dentro del propio correo que pide la revisión.
+- **Consecuencias:** Campo **aditivo** en un contrato público: los consumidores actuales siguen leyendo `url` y no cambian; retirarlo es quitar la clave. Cada aviso con adjuntos copiados hace una firma de lote más (mismo archivo, otra vigencia), y un fallo al firmar no pierde el aviso: los dos enlaces viajan nulos. El enlace largo solo alcanza al objeto copiado de ese mensaje, no al resto del bucket. Queda pendiente que el correo del bot use `reviewUrl` —cambio en n8n— y que el enlace muerto de los correos ya enviados se resuelva abriendo la conversación en la bandeja.
+- **Cómo se verifica:** Pruebas del notificador: el aviso lleva los dos enlaces, con las dos vigencias pedidas al almacén, y la de revisión es de días; el adjunto sin copia sigue viajando con los dos nulos. La comprobación manual es la del caso real: abrir el botón del correo horas después y que la imagen cargue.
+
+---
+
 ## ADR-061 - Un adjunto vacío no se anuncia al bot (2026-10-16)
 
 - **Fecha:** 2026-10-16

@@ -26,6 +26,15 @@ export const BOT_DELIVERIES_PER_RUN = 25;
 export const CONVERSATION_MEDIA_BUCKET = 'conversation-media';
 /** Lo que dura el enlace firmado que viaja en el aviso. */
 export const BOT_ATTACHMENT_URL_TTL_SECONDS = 600;
+/**
+ * Lo que dura el enlace de revision que viaja ademas en el aviso.
+ *
+ * El de arriba sirve para que el bot baje el archivo en el acto; este otro termina en correos
+ * internos que una persona abre horas despues, y un enlace de diez minutos llega muerto: el boton
+ * «Ver comprobante» del aviso al equipo respondia `InvalidJWT: "exp" claim timestamp check failed`
+ * (caso real del 2026-10-16). Es el mismo archivo firmado dos veces, con vigencias distintas.
+ */
+export const BOT_REVIEW_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /** Si al aviso le quedan intentos. */
 export function shouldRetryBotDelivery(attempts: number): boolean {
@@ -35,14 +44,17 @@ export function shouldRetryBotDelivery(attempts: number): boolean {
 /**
  * Un adjunto del mensaje del cliente.
  *
- * `url` es un enlace firmado de corto plazo a NUESTRA copia; es `null` cuando el archivo todavia no
- * se ha podido copiar al almacen (el aviso llega igual: el texto puede bastar, y perder el aviso
- * entero por un archivo que aun no esta seria peor).
+ * `url` es un enlace firmado de corto plazo a NUESTRA copia, para que el bot baje el archivo en el
+ * acto; `reviewUrl` es el mismo archivo firmado por dias, para el correo interno que una persona abre
+ * despues. Los dos son `null` cuando el archivo todavia no se ha podido copiar al almacen (el aviso
+ * llega igual: el texto puede bastar, y perder el aviso entero por un archivo que aun no esta seria
+ * peor).
  */
 export type InboundBotAttachment = {
   contentType: string | null;
   id: string;
   kind: string;
+  reviewUrl: string | null;
   title: string | null;
   url: string | null;
 };
@@ -401,6 +413,8 @@ export function isEmptyAttachment(fields: StoredAttachmentFields): boolean {
  *   3. Solo se firma lo que ya esta copiado: un adjunto sin archivo propio no tiene enlace.
  *   4. Un adjunto vacio (`isEmptyAttachment`) no viaja: no aporta nada y hace perseguir un archivo
  *      que no existe. Los demas conservan su lugar y su orden.
+ *   5. Cada archivo copiado viaja con DOS enlaces: `url` para el procesamiento inmediato y
+ *      `reviewUrl`, de dias, para el correo interno que se abre mucho despues.
  */
 async function readAttachments(
   supabase: SupabaseServerClient,
@@ -419,17 +433,22 @@ async function readAttachments(
     .map((fila) => (typeof fila.storage_object_path === 'string' ? fila.storage_object_path : ''))
     .filter((ruta) => ruta.trim().length > 0);
 
-  let firmadas = new Map<string, string>();
-  try {
-    firmadas = await signMediaPaths({
-      bucket: CONVERSATION_MEDIA_BUCKET,
-      paths: rutas,
-      signer: supabase,
-      ttlSeconds: BOT_ATTACHMENT_URL_TTL_SECONDS
-    });
-  } catch {
-    firmadas = new Map();
-  }
+  // Dos vigencias para el mismo archivo: la corta para que el bot lo baje en el acto y la larga para
+  // el correo interno. Un fallo al firmar NO pierde el aviso: los adjuntos viajan con enlace nulo.
+  const firmar = async (ttlSeconds: number): Promise<Map<string, string>> => {
+    try {
+      return await signMediaPaths({
+        bucket: CONVERSATION_MEDIA_BUCKET,
+        paths: rutas,
+        signer: supabase,
+        ttlSeconds
+      });
+    } catch {
+      return new Map();
+    }
+  };
+  const firmadas = await firmar(BOT_ATTACHMENT_URL_TTL_SECONDS);
+  const revision = await firmar(BOT_REVIEW_URL_TTL_SECONDS);
 
   return filas.map((fila) => {
     const ruta = typeof fila.storage_object_path === 'string' ? fila.storage_object_path : '';
@@ -437,6 +456,7 @@ async function readAttachments(
       contentType: typeof fila.content_type === 'string' ? fila.content_type : null,
       id: String(fila.id),
       kind: String(fila.kind ?? 'file'),
+      reviewUrl: ruta ? (revision.get(ruta) ?? null) : null,
       title: null,
       url: ruta ? (firmadas.get(ruta) ?? null) : null
     };
