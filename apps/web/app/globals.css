@@ -763,6 +763,71 @@ h1 {
   font-size: 16px;
   margin-right: 9px;
 }
+/*
+  El clip y la ficha del archivo elegido. Un adjunto es una decision, no un detalle: se ve antes de
+  enviar, con su nombre y su tamano, y se puede quitar sin perder lo escrito.
+*/
+.composer-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.composer-attach,
+.composer-send {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.attach-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.attach-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.composer-file-input {
+  display: none;
+}
+.composer-actions .composer-attachment-state {
+  color: var(--brand-tinta-suave, #8b8577);
+  font-size: 12px;
+}
+.composer-actions .composer-attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--ui-border, #dfe5ee);
+  border-radius: 999px;
+  background: var(--ui-surface-muted, #f4f6f1);
+  font-size: 12px;
+}
+.composer-actions .composer-attachment-chip strong {
+  overflow: hidden;
+  max-width: 22ch;
+  color: var(--brand-tinta, #333c4d);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-actions .composer-attachment-chip em {
+  color: var(--brand-tinta-suave, #8b8577);
+  font-size: 11px;
+  font-style: normal;
+  white-space: nowrap;
+}
+.composer-actions .composer-attachment-chip button {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+}
 .send-button {
   padding: 6px 10px;
   border-radius: 6px;
@@ -1937,10 +2002,16 @@ h2 {
   color: #77826a;
   font-size: 11px;
 }
+/*
+  Vista previa de un archivo en grande.
+  La capa va por encima de la navegacion movil (50) y del modal de reservas (60) para que la imagen
+  no quede tapada justo donde estan los botones de ampliar y cerrar; el menu de seleccion (70) se
+  cierra al abrirla.
+*/
 .media-preview {
   position: fixed;
   inset: 0;
-  z-index: 22;
+  z-index: 65;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -1958,6 +2029,30 @@ h2 {
   max-width: 100%;
   max-height: 62vh;
   border-radius: 10px;
+  cursor: zoom-in;
+}
+/*
+  Sin estas reglas la clase `is-zoomed` no cambiaba nada y «Ampliar imagen» mentia: la imagen se
+  quedaba encogida a la ventana en las dos posturas. Ampliada se muestra a su tamano completo y el
+  desplazamiento vive dentro de la tarjeta, para que la rueda o el arrastre no cierren la vista.
+*/
+.media-preview.is-zoomed figure {
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+}
+.media-preview.is-zoomed img {
+  max-width: none;
+  max-height: none;
+  cursor: zoom-out;
+}
+/* Con una imagen mas alta que la ventana, los botones de ajustar y cerrar tienen que seguir a mano:
+   quedan pegados al borde inferior de la tarjeta mientras se recorre la imagen. */
+.media-preview.is-zoomed figcaption {
+  position: sticky;
+  bottom: 0;
+  background: #fffefa;
 }
 .media-preview figcaption {
   display: flex;

@@ -3,12 +3,27 @@
 import Image from 'next/image';
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import {
+  closedPreview,
+  mediaKindLabel,
+  openedPreview,
+  toggledPreviewZoom,
+  type MediaPreviewState
+} from '../lib/media-preview';
+import {
+  attachmentAccept,
+  attachmentSizeError,
+  attachmentSizeLabel,
+  canSendConversationMessage,
+  type OutboundAttachment
+} from '../lib/outbound-attachment';
+import {
   formatOperationalDate,
   formatOperationalDayLabel,
   formatOperationalShortDate,
   formatOperationalTime,
   operationalDayKey
 } from '../lib/operational-time';
+import MediaPreviewOverlay from './media-preview-overlay';
 import GoogleReviewsPanel from './resenas/page';
 import ReservationsPanel from './reservas/page';
 
@@ -383,13 +398,25 @@ export default function HomePage(): React.ReactNode {
   const [mediaNextCursor, setMediaNextCursor] = useState<string | null>(null);
   const [isMediaLoading, setIsMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
-  const [mediaPreview, setMediaPreview] = useState<MediaPreview | null>(null);
+  // La vista previa es una sola para toda la aplicación: la conversación y la galería de
+  // comprobantes la comparten, así que el clic en una imagen no se queda sin respuesta en ninguna.
+  const [mediaPreview, setMediaPreview] = useState<MediaPreviewState<MediaPreview>>(() =>
+    closedPreview<MediaPreview>()
+  );
   const [mediaSearchInput, setMediaSearchInput] = useState('');
   const [mediaSearch, setMediaSearch] = useState('');
   const [history, setHistory] = useState<HistoryState>({ kind: 'idle' });
   const [historyReloadVersion, setHistoryReloadVersion] = useState(0);
   const [inboxReloadVersion, setInboxReloadVersion] = useState(0);
   const [draft, setDraft] = useState('');
+  // El archivo que se va a enviar con el próximo mensaje. Ya está subido y validado por la API: aquí
+  // solo se guarda su referencia para que el envío la adjunte.
+  const [attachment, setAttachment] = useState<OutboundAttachment | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  /** La conversación para la que se está subiendo: si cambia, lo que llegue ya no sirve aquí. */
+  const uploadConversationRef = useRef<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -1453,10 +1480,13 @@ export default function HomePage(): React.ReactNode {
   }, [selectedConversationId]);
 
   // Al cambiar de conversación se cierra el panel y se descarta la confirmación a medias: una
-  // plantilla confirmada para un contacto no puede acabar enviándose a otro.
+  // plantilla confirmada para un contacto no puede acabar enviándose a otro. El archivo elegido cae
+  // por la misma razón: se subió contra esa conversación y no puede viajar a otra.
   useEffect(() => {
     setIsWhatsappTemplatesOpen(false);
     setPendingWhatsappTemplate(null);
+    uploadConversationRef.current = null;
+    clearAttachment();
   }, [selectedConversationId]);
 
   useEffect(() => {
@@ -1472,6 +1502,7 @@ export default function HomePage(): React.ReactNode {
   }, [history, selectedConversationId]);
 
   useEffect(() => {
+    const isMediaPreviewOpen = mediaPreview.file !== null;
     const hasOpenOverlay =
       isAssignmentOpen ||
       isCannedResponseManagerOpen ||
@@ -1481,11 +1512,17 @@ export default function HomePage(): React.ReactNode {
       isDetailsOpen ||
       isInternalLabelManagerOpen ||
       isBranchMediaOpen ||
-      isLabelFilterOpen;
+      isLabelFilterOpen ||
+      isMediaPreviewOpen;
     if (!hasOpenOverlay) return;
 
     function closeTopOverlay(event: KeyboardEvent): void {
       if (event.key !== 'Escape') return;
+      // La vista previa es la capa de arriba: se cierra antes que el panel que la abrió.
+      if (isMediaPreviewOpen) {
+        setMediaPreview(closedPreview<MediaPreview>());
+        return;
+      }
       if (isBranchMediaOpen) {
         setIsBranchMediaOpen(false);
         return;
@@ -1534,7 +1571,8 @@ export default function HomePage(): React.ReactNode {
     isConversationLabelsOpen,
     isDetailsOpen,
     isInternalLabelManagerOpen,
-    isLabelFilterOpen
+    isLabelFilterOpen,
+    mediaPreview
   ]);
 
   useEffect(() => {
@@ -1577,15 +1615,92 @@ export default function HomePage(): React.ReactNode {
     };
   }, [tenantId]);
 
+  /**
+   * Sube el archivo elegido y guarda su referencia.
+   *
+   * Se sube al elegirlo y no al enviar: cuando la asesora pulsa enviar, el archivo ya está validado por
+   * la API y el mensaje sale en el acto. El tipo lo reconocen los bytes en la API; aquí solo se evita
+   * el viaje inútil de un archivo que va a ser rechazado.
+   */
+  async function attachFile(file: File): Promise<void> {
+    const conversationId = selectedConversationId;
+    if (!conversationId || isUploadingAttachment) return;
+    const tooBig = attachmentSizeError(file.size);
+    if (tooBig) {
+      setAttachment(null);
+      setAttachmentError(tooBig);
+      return;
+    }
+    uploadConversationRef.current = conversationId;
+    setIsUploadingAttachment(true);
+    setAttachmentError(null);
+    try {
+      const form = new FormData();
+      form.set('file', file, file.name);
+      const response = await fetch(`/api/inbox/${conversationId}/media`, {
+        body: form,
+        method: 'POST'
+      });
+      const payload = response.headers.get('content-type')?.includes('application/json')
+        ? await response.json()
+        : {};
+      if (response.status === 401) {
+        window.location.assign('/login');
+        return;
+      }
+      if (!response.ok || !payload.uploadId) {
+        throw new Error(payload.error ?? 'No fue posible subir el archivo.');
+      }
+      // Se cambió de conversación mientras subía: el archivo se queda sin dueño y no se ofrece en la
+      // que ahora está abierta, que no es para la que se subió.
+      if (uploadConversationRef.current !== conversationId) return;
+      setAttachment({
+        byteSize: typeof payload.byteSize === 'number' ? payload.byteSize : file.size,
+        contentType: String(payload.contentType ?? file.type),
+        extension: String(payload.extension ?? ''),
+        kind: payload.kind === 'image' || payload.kind === 'video' ? payload.kind : 'file',
+        name: file.name,
+        uploadId: String(payload.uploadId)
+      });
+    } catch (error) {
+      if (uploadConversationRef.current !== conversationId) return;
+      setAttachment(null);
+      setAttachmentError(
+        error instanceof Error ? error.message : 'No fue posible subir el archivo.'
+      );
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  }
+
+  /** Quita el archivo elegido; el input se limpia para que el mismo archivo vuelva a disparar el cambio. */
+  function clearAttachment(): void {
+    setAttachment(null);
+    setAttachmentError(null);
+    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+  }
+
   async function sendMessage(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const body = draft.trim();
-    if (!selectedConversationId || !body || isSending) return;
+    if (!selectedConversationId || isSending || isUploadingAttachment) return;
+    if (!canSendConversationMessage(body, attachment !== null)) return;
     setIsSending(true);
     setSendError(null);
     try {
       const response = await fetch(`/api/inbox/${selectedConversationId}/messages`, {
-        body: JSON.stringify({ body, idempotencyKey: crypto.randomUUID() }),
+        // Con archivo, el pie es opcional: lo que identifica el envío es la referencia subida.
+        body: JSON.stringify(
+          attachment
+            ? {
+                body,
+                extension: attachment.extension,
+                idempotencyKey: crypto.randomUUID(),
+                kind: 'media',
+                uploadId: attachment.uploadId
+              }
+            : { body, idempotencyKey: crypto.randomUUID() }
+        ),
         headers: { 'Content-Type': 'application/json' },
         method: 'POST'
       });
@@ -1605,6 +1720,7 @@ export default function HomePage(): React.ReactNode {
           : current
       );
       setDraft('');
+      clearAttachment();
     } catch (error) {
       setSendError(error instanceof Error ? error.message : 'No fue posible preparar el envío.');
     } finally {
@@ -2173,14 +2289,6 @@ export default function HomePage(): React.ReactNode {
     return formatOperationalShortDate(value);
   }
 
-  function attachmentLabel(kind: MessageAttachment['kind']): string {
-    if (kind === 'image') return 'Imagen';
-    if (kind === 'video') return 'Vídeo';
-    if (kind === 'audio') return 'Audio';
-    if (kind === 'share') return 'Publicación compartida';
-    return 'Archivo';
-  }
-
   /** Fecha y hora juntas: con solo la hora no se distingue un mensaje de ayer. */
   function formatConversationStamp(value: string | null): string {
     if (!value) return '—';
@@ -2228,6 +2336,14 @@ export default function HomePage(): React.ReactNode {
     };
   }
 
+  function openMediaPreview(media: MediaPreview): void {
+    setMediaPreview(openedPreview(media));
+  }
+
+  function closeMediaPreview(): void {
+    setMediaPreview(closedPreview<MediaPreview>());
+  }
+
   /**
    * Cierra toda capa superpuesta antes de abrir otra. Sin esto, una vista abierta detras de un
    * modal sigue oculta y la interfaz parece bloqueada: el clic no cambia nada visible.
@@ -2240,7 +2356,7 @@ export default function HomePage(): React.ReactNode {
     setIsProfileOpen(false);
     setIsInternalLabelManagerOpen(false);
     setIsCannedResponseManagerOpen(false);
-    setMediaPreview(null);
+    closeMediaPreview();
   }
   async function loadMedia(reset: boolean): Promise<void> {
     if (isMediaLoading) return;
@@ -3275,7 +3391,9 @@ export default function HomePage(): React.ReactNode {
                               <button
                                 className="bubble-media"
                                 key={attachment.id}
-                                onClick={() => setMediaPreview(mediaPreviewFromMessage(attachment))}
+                                onClick={() =>
+                                  openMediaPreview(mediaPreviewFromMessage(attachment))
+                                }
                                 type="button"
                               >
                                 <img alt="Imagen enviada por el contacto" src={attachment.url} />
@@ -3284,14 +3402,16 @@ export default function HomePage(): React.ReactNode {
                               <button
                                 className="bubble-attachment"
                                 key={attachment.id}
-                                onClick={() => setMediaPreview(mediaPreviewFromMessage(attachment))}
+                                onClick={() =>
+                                  openMediaPreview(mediaPreviewFromMessage(attachment))
+                                }
                                 type="button"
                               >
-                                {attachmentLabel(attachment.kind)} · Ver
+                                {mediaKindLabel(attachment.kind)} · Ver
                               </button>
                             ) : (
                               <span className="bubble-attachment" key={attachment.id}>
-                                {attachmentLabel(attachment.kind)} · sin copia disponible
+                                {mediaKindLabel(attachment.kind)} · sin copia disponible
                               </span>
                             )
                           )}
@@ -3488,17 +3608,80 @@ export default function HomePage(): React.ReactNode {
                   {sendError}
                 </p>
               )}
+              {attachmentError && (
+                <p className="composer-error" role="alert">
+                  {attachmentError}
+                </p>
+              )}
               <div className="composer-actions">
-                <span>Selecciona una respuesta o escribe un mensaje</span>
-                <button
-                  aria-label={isSending ? 'Enviando' : 'Enviar'}
-                  className="send-button"
-                  disabled={!draft.trim() || isSending}
-                  title="Enviar"
-                  type="submit"
-                >
-                  <span aria-hidden="true">{isSending ? '…' : '➤'}</span>
-                </button>
+                <div className="composer-attach">
+                  <button
+                    aria-label="Adjuntar un archivo"
+                    className="attach-button"
+                    disabled={isSending || isUploadingAttachment}
+                    onClick={() => attachmentInputRef.current?.click()}
+                    title="Adjuntar un archivo"
+                    type="button"
+                  >
+                    <SidebarIcon
+                      paths={[
+                        'M20.5 11.5 12 20a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 18a2 2 0 0 1-3-3l7.5-7.5'
+                      ]}
+                    />
+                  </button>
+                  {/*
+                    El tipo real lo reconocen los bytes en la API; esta lista solo evita elegir lo que
+                    el canal de esta conversación no admite.
+                  */}
+                  <input
+                    accept={attachmentAccept(selectedConversation?.channelPlatform)}
+                    aria-label="Archivo para adjuntar"
+                    className="composer-file-input"
+                    hidden
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void attachFile(file);
+                    }}
+                    ref={attachmentInputRef}
+                    type="file"
+                  />
+                  {isUploadingAttachment && (
+                    <span className="composer-attachment-state">Subiendo…</span>
+                  )}
+                  {attachment && !isUploadingAttachment && (
+                    <span className="composer-attachment-chip">
+                      <strong>{attachment.name}</strong>
+                      <em>
+                        {mediaKindLabel(attachment.kind)} ·{' '}
+                        {attachmentSizeLabel(attachment.byteSize)}
+                      </em>
+                      <button
+                        aria-label={`Quitar ${attachment.name}`}
+                        onClick={clearAttachment}
+                        title="Quitar el archivo"
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                </div>
+                <div className="composer-send">
+                  <span>Selecciona una respuesta o escribe un mensaje</span>
+                  <button
+                    aria-label={isSending ? 'Enviando' : 'Enviar'}
+                    className="send-button"
+                    disabled={
+                      !canSendConversationMessage(draft, attachment !== null) ||
+                      isSending ||
+                      isUploadingAttachment
+                    }
+                    title="Enviar"
+                    type="submit"
+                  >
+                    <span aria-hidden="true">{isSending ? '…' : '➤'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </>
@@ -4272,9 +4455,9 @@ export default function HomePage(): React.ReactNode {
             {mediaItems.map((item) => (
               <li className="media-row" key={item.id}>
                 <button
-                  aria-label={`Ver ${attachmentLabel(item.kind)} de ${item.contactName}`}
+                  aria-label={`Ver ${mediaKindLabel(item.kind)} de ${item.contactName}`}
                   className="media-thumb"
-                  onClick={() => setMediaPreview(item)}
+                  onClick={() => openMediaPreview(item)}
                   type="button"
                 >
                   {item.url && item.kind === 'image' ? (
@@ -4291,13 +4474,13 @@ export default function HomePage(): React.ReactNode {
                 <div className="media-row-main">
                   <strong>{item.contactName}</strong>
                   <span className="media-row-meta">
-                    {attachmentLabel(item.kind)} · {formatMediaDate(item.createdAt)}
+                    {mediaKindLabel(item.kind)} · {formatMediaDate(item.createdAt)}
                     {item.url ? '' : ' · sin copia disponible'}
                   </span>
                   {item.title && <span className="media-row-caption">{item.title}</span>}
                 </div>
                 <div className="media-row-actions">
-                  <button onClick={() => setMediaPreview(item)} type="button">
+                  <button onClick={() => openMediaPreview(item)} type="button">
                     Ver
                   </button>
                   <button
@@ -4323,57 +4506,20 @@ export default function HomePage(): React.ReactNode {
               {isMediaLoading ? 'Cargando…' : 'Cargar más'}
             </button>
           )}
-          {mediaPreview && (
-            <div
-              className="media-preview"
-              onClick={() => setMediaPreview(null)}
-              role="presentation"
-            >
-              <figure onClick={(event) => event.stopPropagation()}>
-                {mediaPreview.url && mediaPreview.kind === 'image' ? (
-                  <img alt="" src={mediaPreview.url} />
-                ) : mediaPreview.url && mediaPreview.kind === 'audio' ? (
-                  <audio controls src={mediaPreview.url} />
-                ) : mediaPreview.url && mediaPreview.kind === 'video' ? (
-                  <video controls src={mediaPreview.url} />
-                ) : (
-                  <p>
-                    {mediaPreview.url
-                      ? `${attachmentLabel(mediaPreview.kind)} recibido. Ábrelo para verlo.`
-                      : 'La copia de este archivo no está disponible.'}
-                  </p>
-                )}
-                {mediaPreview.title && (
-                  <p className="media-preview-caption">{mediaPreview.title}</p>
-                )}
-                <figcaption>
-                  <strong>{mediaPreview.contactName}</strong>
-                  {mediaPreview.url && mediaPreview.kind !== 'image' && (
-                    <a href={mediaPreview.url} rel="noreferrer" target="_blank">
-                      Abrir archivo
-                    </a>
-                  )}
-                  {mediaPreview.conversationId && (
-                    <button
-                      onClick={() => {
-                        setSelectedConversationId(mediaPreview.conversationId);
-                        setMediaPreview(null);
-                        setActiveView('inbox');
-                      }}
-                      type="button"
-                    >
-                      Ir a la conversación
-                    </button>
-                  )}
-                  <button onClick={() => setMediaPreview(null)} type="button">
-                    Cerrar
-                  </button>
-                </figcaption>
-              </figure>
-            </div>
-          )}
         </section>
       )}
+      <MediaPreviewOverlay
+        caption={mediaPreview.file?.contactName ?? null}
+        conversationId={mediaPreview.file?.conversationId ?? null}
+        onClose={closeMediaPreview}
+        onOpenConversation={(conversationId) => {
+          setSelectedConversationId(conversationId);
+          closeMediaPreview();
+          setActiveView('inbox');
+        }}
+        onToggleZoom={() => setMediaPreview(toggledPreviewZoom)}
+        state={mediaPreview}
+      />
       {isSettingsOpen && (
         <section className="media-view" aria-label="Configuracion">
           <header className="media-view-header">
