@@ -12,13 +12,25 @@ import type { ToolTokenService } from './tool-token.service';
  * herramienta resuelve la multimedia antes de encolar precisamente para eso -- si encolara primero
  * y fallara despues, el cliente recibiria el texto sin la foto y nadie lo notaria.
  *
- * El doble usa una cola de respuestas porque el servicio consulta tres tablas distintas en un orden
- * concreto (interruptor, multimedia, adjuntos). Con un unico resultado, la prueba del orden pasaria
- * sin comprobar el orden.
+ * El adjunto ya no se escribe aqui: viaja con el encolado, que lo deja escrito ANTES de que exista
+ * el evento de envio. Por eso lo que se comprueba es el adjunto que recibe `enqueueOutbound` -- una
+ * fila por adjunto, con su bucket y su procedencia -- y no una escritura suelta del servicio.
+ *
+ * El doble usa una cola de respuestas porque el servicio consulta varias tablas distintas en un
+ * orden concreto (interruptor, multimedia, sede). Con un unico resultado, la prueba del orden
+ * pasaria sin comprobar el orden.
  */
 
 const UUID = '6b1f4c2e-9d3a-4f58-8b7c-1e2d3f4a5b6c';
 const MEDIA = { id: 'media-1', kind: 'image', storage_object_path: 'b8b/valle/foto.jpg' };
+
+type Adjunto = {
+  bucket: string;
+  contentType: string | null;
+  kind: string;
+  path: string;
+  sourceKind: string;
+};
 
 function crearServicio(
   opciones: {
@@ -30,12 +42,11 @@ function crearServicio(
   } = {}
 ) {
   const enqueueOutbound = vi.fn().mockResolvedValue({ item: { id: 'msg-1' } });
-  const insert = vi.fn();
   const patronesDeTitulo: string[] = [];
 
   // El doble responde POR TABLA y no por orden: el servicio consulta el interruptor, la
-  // conversacion, la multimedia y la tabla de adjuntos, y el orden puede cambiar sin que la prueba
-  // deje de comprobar lo que dice comprobar.
+  // conversacion y la multimedia, y el orden puede cambiar sin que la prueba deje de comprobar lo
+  // que dice comprobar.
   const respuestas: Record<string, unknown> = {
     bot_integrations: { data: { sending_enabled: true }, error: null },
     branch_media: {
@@ -50,8 +61,7 @@ function crearServicio(
     conversations: {
       data: opciones.sede === null ? { branch_id: null } : { branch_id: opciones.sede ?? 'sede-1' },
       error: null
-    },
-    message_attachments: { data: null, error: null }
+    }
   };
 
   const cadena = (tabla: string): Record<string, unknown> => {
@@ -62,10 +72,6 @@ function crearServicio(
         return encadenable;
       },
       in: () => encadenable,
-      insert: (...args: unknown[]) => {
-        insert(...args);
-        return Promise.resolve(respuestas.message_attachments);
-      },
       limit: () => Promise.resolve(respuestaDe(tabla)),
       maybeSingle: () => Promise.resolve(respuestaDe(tabla)),
       order: () => encadenable,
@@ -101,7 +107,12 @@ function crearServicio(
     { create: () => supabase } as unknown as SupabaseServerClientFactory
   );
 
-  return { enqueueOutbound, insert, patronesDeTitulo, servicio };
+  /** Los adjuntos que el servicio puso en la primera llamada al encolado. */
+  const adjuntosEncolados = (llamada = 0): Adjunto[] =>
+    ((enqueueOutbound.mock.calls[llamada]?.[0] as { attachments?: Adjunto[] } | undefined)
+      ?.attachments ?? []) as Adjunto[];
+
+  return { adjuntosEncolados, enqueueOutbound, patronesDeTitulo, servicio };
 }
 
 /**
@@ -113,7 +124,7 @@ function crearServicio(
  */
 describe('envio solo con archivo, sin texto', () => {
   it('encola el mensaje con el cuerpo vacio cuando lleva archivo', async () => {
-    const { enqueueOutbound, insert, servicio } = crearServicio();
+    const { adjuntosEncolados, enqueueOutbound, servicio } = crearServicio();
 
     await servicio.send('Bearer token', {
       conversationId: 'conv-1',
@@ -124,18 +135,17 @@ describe('envio solo con archivo, sin texto', () => {
     expect(enqueueOutbound).toHaveBeenCalledTimes(1);
     const command = (enqueueOutbound.mock.calls[0]?.[0] as { command: { body: string } }).command;
     expect(command.body).toBe('');
-    expect(insert).toHaveBeenCalledTimes(1);
+    expect(adjuntosEncolados()).toHaveLength(1);
   });
 
   it('sin texto y sin archivo no encola nada', async () => {
-    const { enqueueOutbound, insert, servicio } = crearServicio();
+    const { enqueueOutbound, servicio } = crearServicio();
 
     await expect(
       servicio.send('Bearer token', { conversationId: 'conv-1', idempotencyKey: UUID })
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     expect(enqueueOutbound).not.toHaveBeenCalled();
-    expect(insert).not.toHaveBeenCalled();
   });
 
   it('el archivo no sustituye a la clave de idempotencia', async () => {
@@ -154,8 +164,8 @@ describe('envio solo con archivo, sin texto', () => {
 });
 
 describe('envio con multimedia de sede', () => {
-  it('encola el mensaje y escribe el adjunto con su ruta y su origen', async () => {
-    const { enqueueOutbound, insert, servicio } = crearServicio();
+  it('entrega el adjunto al encolado con su bucket y su procedencia', async () => {
+    const { adjuntosEncolados, enqueueOutbound, servicio } = crearServicio();
 
     await servicio.send('Bearer token', {
       conversationId: 'conv-1',
@@ -165,23 +175,20 @@ describe('envio con multimedia de sede', () => {
     });
 
     expect(enqueueOutbound).toHaveBeenCalledTimes(1);
-    expect(insert).toHaveBeenCalledTimes(1);
-    const filas = (insert.mock.calls[0] as unknown[] | undefined)?.[0] as Array<
-      Record<string, unknown>
-    >;
-    expect(filas[0]).toMatchObject({
-      conversation_id: 'conv-1',
-      kind: 'image',
-      message_id: 'msg-1',
-      ordinal: 0,
-      source_kind: 'branch_media',
-      storage_object_path: 'b8b/valle/foto.jpg',
-      tenant_id: 'tenant-1'
-    });
+    // Una fila por adjunto, con la ruta del catalogo, el bucket donde vive y quien lo puso ahi.
+    expect(adjuntosEncolados()).toEqual([
+      {
+        bucket: 'branch-media',
+        contentType: null,
+        kind: 'image',
+        path: 'b8b/valle/foto.jpg',
+        sourceKind: 'branch_media'
+      }
+    ]);
   });
 
-  it('sin media no escribe ninguna fila de adjunto', async () => {
-    const { enqueueOutbound, insert, servicio } = crearServicio();
+  it('sin media no entrega ningun adjunto', async () => {
+    const { adjuntosEncolados, enqueueOutbound, servicio } = crearServicio();
 
     await servicio.send('Bearer token', {
       conversationId: 'conv-1',
@@ -190,11 +197,11 @@ describe('envio con multimedia de sede', () => {
     });
 
     expect(enqueueOutbound).toHaveBeenCalledTimes(1);
-    expect(insert).not.toHaveBeenCalled();
+    expect(adjuntosEncolados()).toHaveLength(0);
   });
 
   it('una imagen que no existe rechaza el envio Y NO encola nada', async () => {
-    const { enqueueOutbound, insert, servicio } = crearServicio({ mediaIds: 0 });
+    const { enqueueOutbound, servicio } = crearServicio({ mediaIds: 0 });
 
     await expect(
       servicio.send('Bearer token', {
@@ -206,7 +213,6 @@ describe('envio con multimedia de sede', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     expect(enqueueOutbound).not.toHaveBeenCalled();
-    expect(insert).not.toHaveBeenCalled();
   });
 
   it('rechaza mas de una imagen, que Meta no admite', async () => {
@@ -258,7 +264,7 @@ describe('envio con multimedia de sede', () => {
  */
 describe('multimedia pedida por titulo', () => {
   it('resuelve la imagen de la sede de la conversacion y la envia', async () => {
-    const { enqueueOutbound, insert, servicio } = crearServicio();
+    const { adjuntosEncolados, enqueueOutbound, servicio } = crearServicio();
 
     await servicio.send('Bearer token', {
       conversationId: 'conv-1',
@@ -268,11 +274,11 @@ describe('multimedia pedida por titulo', () => {
     });
 
     expect(enqueueOutbound).toHaveBeenCalledTimes(1);
-    expect(insert).toHaveBeenCalledTimes(1);
+    expect(adjuntosEncolados()).toHaveLength(1);
   });
 
   it('si la sede no tiene esa imagen, rechaza el envio y NO encola nada', async () => {
-    const { enqueueOutbound, insert, servicio } = crearServicio({ mediaPorTitulo: [] });
+    const { enqueueOutbound, servicio } = crearServicio({ mediaPorTitulo: [] });
 
     await expect(
       servicio.send('Bearer token', {
@@ -284,7 +290,6 @@ describe('multimedia pedida por titulo', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     expect(enqueueOutbound).not.toHaveBeenCalled();
-    expect(insert).not.toHaveBeenCalled();
   });
 
   it('la tarjeta global de accesorios no exige una sede en la conversacion', async () => {

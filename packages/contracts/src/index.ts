@@ -232,10 +232,67 @@ export const createOutboundWhatsappTemplateMessageSchema = z.object({
   whatsappTemplate: whatsappTemplateReferenceSchema
 });
 
+/**
+ * Las extensiones que puede llevar un archivo saliente.
+ *
+ * No las elige el cliente: las devuelve el reconocimiento por bytes de la subida y el envio repite
+ * la misma para componer la misma ruta. Se enumeran aqui para que un valor inventado se rechace en
+ * el limite del sistema y no tres capas mas adentro; la lista coincide con los tipos que el bucket
+ * privado de la conversacion admite.
+ */
+export const outboundMediaExtensions = [
+  'gif',
+  'jpg',
+  'mov',
+  'mp4',
+  'pdf',
+  'png',
+  'webm',
+  'webp'
+] as const;
+
+export const outboundMediaExtensionSchema = z.enum(outboundMediaExtensions);
+
+/** Identificador opaco de una carga: el sha256 hexadecimal de sus bytes. */
+export const outboundUploadIdSchema = z.string().regex(/^[0-9a-f]{32,64}$/);
+
+/** Lo que la fila de adjunto guarda como clase. Es un subconjunto de `attachmentKindSchema`. */
+export const outboundMediaKindSchema = z.enum(['file', 'image', 'video']);
+
+/**
+ * Un mensaje saliente con archivo.
+ *
+ * El archivo ya esta subido: esto solo lo declara. `body` es el pie y es opcional -- un archivo sin
+ * texto es un envio legitimo --, pero la clave de idempotencia no se relaja: sin ella un reintento
+ * mandaria el archivo dos veces.
+ */
+export const createOutboundMediaMessageSchema = z.object({
+  body: z.string().trim().max(8000).default(''),
+  extension: outboundMediaExtensionSchema,
+  idempotencyKey: outboundIdempotencyKeySchema,
+  kind: z.literal('media'),
+  uploadId: outboundUploadIdSchema
+});
+
 export const createOutboundMessageSchema = z.union([
   createOutboundWhatsappTemplateMessageSchema,
-  createOutboundTextMessageSchema
+  createOutboundTextMessageSchema,
+  createOutboundMediaMessageSchema
 ]);
+
+/**
+ * Respuesta de la subida.
+ *
+ * `uploadId` es opaco y no revela ninguna ruta del almacen; el resto es lo que la interfaz necesita
+ * para mostrar la ficha del archivo antes de enviarlo.
+ */
+export const conversationMediaUploadResponseSchema = z.object({
+  byteSize: z.number().int().min(1).max(26214400),
+  contentType: z.string().min(1).max(128),
+  extension: outboundMediaExtensionSchema,
+  kind: outboundMediaKindSchema,
+  uploadId: outboundUploadIdSchema
+});
 
 export const createOutboundMessageResponseSchema = z.object({
   item: conversationMessageSchema
@@ -479,6 +536,10 @@ export type ConversationMessageListQuery = z.infer<typeof conversationMessageLis
 export type ConversationMessageListResponse = z.infer<typeof conversationMessageListResponseSchema>;
 export type CreateOutboundMessage = z.infer<typeof createOutboundMessageSchema>;
 export type CreateOutboundMessageResponse = z.infer<typeof createOutboundMessageResponseSchema>;
+export type CreateOutboundMediaMessage = z.infer<typeof createOutboundMediaMessageSchema>;
+export type ConversationMediaUploadResponse = z.infer<typeof conversationMediaUploadResponseSchema>;
+export type OutboundMediaExtension = z.infer<typeof outboundMediaExtensionSchema>;
+export type OutboundMediaKind = z.infer<typeof outboundMediaKindSchema>;
 export type UpdateConversationStatus = z.infer<typeof updateConversationStatusSchema>;
 export type UpdateConversationStatusResponse = z.infer<
   typeof updateConversationStatusResponseSchema

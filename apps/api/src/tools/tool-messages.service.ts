@@ -11,13 +11,20 @@ import {
   type CreateOutboundMessage
 } from '@chat-zernio/contracts';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
-import { TenantMessageService } from '../conversations/tenant-message.service';
+import { BRANCH_MEDIA_BUCKET } from '../branches/branch-media.service';
+import {
+  TenantMessageService,
+  type OutboundAttachment
+} from '../conversations/tenant-message.service';
 import { claveIdempotencia } from './idempotency-key';
 import { partIdempotencyKey, splitOutboundText } from './outbound-text-splitter';
 import { ToolTokenService } from './tool-token.service';
 import { readPlaceholders } from './tool-templates.service';
 
 const ACCESSORIES_TITLE = 'accesorios';
+
+/** La procedencia que se guarda cuando el archivo sale del catalogo administrado de una sede. */
+const BRANCH_MEDIA_SOURCE = 'branch_media';
 
 function isAccessoriesTitle(title: string): boolean {
   return title.trim().toLocaleLowerCase('es') === ACCESSORIES_TITLE;
@@ -180,10 +187,15 @@ export class ToolMessagesService {
       cuerpo.media
     );
 
-    // Las dos partes se encolan seguidas, y la multimedia viaja con la primera.
+    // Las dos partes se encolan seguidas, y la multimedia viaja con la primera. El adjunto no se
+    // escribe despues: entra por el mismo camino que el de la bandeja, que lo deja escrito ANTES de
+    // que exista el evento de envio. Escribirlo aparte dejaba al trabajador poder enviar el mensaje
+    // sin su archivo, en silencio.
     let item: Awaited<ReturnType<TenantMessageService['enqueueOutbound']>> | null = null;
-    for (const comando of comandos) {
+    for (const [indice, comando] of comandos.entries()) {
       const encolado = await this.tenantMessageService.enqueueOutbound({
+        // Sin adjunto la llamada es exactamente la de siempre; con el, viaja solo en la primera parte.
+        ...(indice === 0 && adjuntos.length > 0 ? { attachments: adjuntos } : {}),
         command: comando,
         conversationId,
         senderType: 'automation',
@@ -194,23 +206,6 @@ export class ToolMessagesService {
     }
     if (!item) {
       throw new UnprocessableEntityException('El mensaje no tenia contenido que enviar.');
-    }
-
-    if (adjuntos.length > 0) {
-      const { error: adjuntoError } = await supabase.from('message_attachments').insert(
-        adjuntos.map((adjunto, orden) => ({
-          conversation_id: conversationId,
-          kind: adjunto.kind,
-          message_id: item.item.id,
-          ordinal: orden,
-          source_kind: 'branch_media',
-          storage_object_path: adjunto.path,
-          tenant_id: identity.tenantId
-        }))
-      );
-      if (adjuntoError) {
-        throw new InternalServerErrorException('El mensaje se encolo, pero no su multimedia.');
-      }
     }
 
     return { ...item, tenantId: identity.tenantId };
@@ -278,14 +273,15 @@ export class ToolMessagesService {
    *      mano solo funciona en el espacio donde se copio: el titulo lo elige quien carga el material.
    *   3. Si no existe en este espacio, se rechaza el envio entero en lugar de mandarlo sin la imagen:
    *      un mensaje mudo es peor que un error visible.
-   *   4. La ruta tiene que estar en el deposito de sedes, que es donde el trabajador la busca.
+   *   4. La ruta tiene que estar en el deposito de sedes, que es donde el trabajador la busca: el
+   *      bucket viaja con el adjunto, porque con dos procedencias ya no se puede escribir a mano.
    */
   private async resolveAttachments(
     supabase: ReturnType<SupabaseServerClientFactory['create']>,
     tenantId: string,
     conversationId: string,
     valor: unknown
-  ): Promise<Array<{ kind: string; path: string }>> {
+  ): Promise<OutboundAttachment[]> {
     if (valor === undefined || valor === null) return [];
     if (!Array.isArray(valor) || valor.length === 0) {
       throw new UnprocessableEntityException('media debe ser una lista con al menos un elemento.');
@@ -368,7 +364,15 @@ export class ToolMessagesService {
           'Alguna de las imagenes no tiene archivo en el deposito de sedes.'
         );
       }
-      return { kind: typeof fila.kind === 'string' ? fila.kind : 'image', path };
+      return {
+        bucket: BRANCH_MEDIA_BUCKET,
+        // El catalogo de una sede no guarda el tipo de contenido del archivo: la fila del adjunto
+        // sale sin el, como salia hasta hoy.
+        contentType: null,
+        kind: typeof fila.kind === 'string' ? fila.kind : 'image',
+        path,
+        sourceKind: BRANCH_MEDIA_SOURCE
+      };
     });
   }
 

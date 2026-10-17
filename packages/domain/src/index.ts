@@ -8,6 +8,7 @@ export * from './media';
 export * from './messages';
 export * from './meta-user-identifiers';
 export * from './n8n-notification';
+export * from './outbound-media';
 export * from './reservation-board';
 export * from './reservation-normalizers';
 export * from './reservation-values';

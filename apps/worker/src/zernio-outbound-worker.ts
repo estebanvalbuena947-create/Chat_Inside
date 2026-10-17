@@ -39,13 +39,14 @@ type DispatchResult = {
 };
 
 /**
- * Deposito y caducidad de las direcciones firmadas de multimedia de sede.
+ * Caducidad de las direcciones firmadas de los adjuntos.
  *
  * Diez minutos, como fija docs/TOOLS_CONTRACT.md: la direccion se firma en el momento de enviar y
- * solo tiene que servir para ese envio.
+ * solo tiene que servir para ese envio. El bucket NO se escribe aqui: cada fila declara donde vive su
+ * archivo, porque hay dos procedencias -- el catalogo de una sede y la carga de la conversacion -- y
+ * firmarlas todas contra uno dejaba sin enlace lo que vivia en el otro.
  */
-const BRANCH_MEDIA_BUCKET = 'branch-media';
-const BRANCH_MEDIA_URL_TTL_SECONDS = 600;
+const ATTACHMENT_URL_TTL_SECONDS = 600;
 
 const sendResponseSchema = z.object({
   data: z.object({
@@ -330,7 +331,12 @@ export class ZernioOutboundWorker {
    * Se firma AQUI, en el momento de enviar, y no al encolar: la direccion firmada caduca, y un
    * reintento tardio mandaria un enlace muerto. El cliente no veria la imagen y nada lo delataria.
    *
-   * Meta admite una multimedia por mensaje, asi que se toma la primera por su orden.
+   * El bucket lo declara la fila: hay dos procedencias -- el catalogo de una sede y la carga de la
+   * conversacion -- y adivinar donde vive el archivo es justo lo que dejaba sin copia lo que el bot
+   * manda. Meta admite una multimedia por mensaje, asi que se toma la primera por su orden.
+   *
+   * Una fila con archivo del que NO se puede obtener la direccion no se ignora: eso mandaria el
+   * mensaje sin su foto y lo marcaria como enviado. Falla de forma visible y reintentable.
    */
   private async readSignedAttachment(
     supabase: SupabaseServerClient,
@@ -339,30 +345,37 @@ export class ZernioOutboundWorker {
   ): Promise<{ kind: string; url: string } | undefined> {
     const { data: filas } = await supabase
       .from('message_attachments')
-      .select('kind, storage_object_path')
+      .select('bucket, kind, storage_object_path')
       .eq('tenant_id', tenantId)
       .eq('message_id', messageId)
       .order('ordinal', { ascending: true })
       .limit(1);
 
     const fila = (Array.isArray(filas) ? filas[0] : null) as
-      | { kind?: unknown; storage_object_path?: unknown }
+      | { bucket?: unknown; kind?: unknown; storage_object_path?: unknown }
       | null
       | undefined;
     const ruta = typeof fila?.storage_object_path === 'string' ? fila.storage_object_path : null;
+    // Sin copia propia no hay nada que adjuntar: el mensaje es de solo texto y sale como siempre.
     if (!ruta) return undefined;
 
-    // Se firma en el momento de enviar, no al listar: la direccion solo tiene que servir para este
-    // envio. Si el almacen falla, esto lanza a proposito -- antes se enviaba el mensaje sin la foto
-    // y nadie se enteraba; asi el despachador lo reintenta y el adjunto llega.
-    const firmadas = await signMediaPaths({
-      bucket: BRANCH_MEDIA_BUCKET,
-      paths: [ruta],
-      signer: supabase,
-      ttlSeconds: BRANCH_MEDIA_URL_TTL_SECONDS
-    });
+    const bucket = typeof fila?.bucket === 'string' ? fila.bucket : null;
+    if (!bucket) throw new ZernioDispatchError(true, 'outbox_attachment_bucket_missing');
+
+    let firmadas: Map<string, string>;
+    try {
+      firmadas = await signMediaPaths({
+        bucket,
+        paths: [ruta],
+        signer: supabase,
+        ttlSeconds: ATTACHMENT_URL_TTL_SECONDS
+      });
+    } catch {
+      // El almacen no respondio: no se puede afirmar que el archivo no este, asi que se reintenta.
+      throw new ZernioDispatchError(true, 'outbox_attachment_sign_failed');
+    }
     const url = firmadas.get(ruta) ?? null;
-    if (!url) return undefined;
+    if (!url) throw new ZernioDispatchError(true, 'outbox_attachment_unavailable');
 
     return { kind: typeof fila?.kind === 'string' ? fila.kind : 'image', url };
   }

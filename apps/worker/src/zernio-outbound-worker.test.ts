@@ -352,6 +352,213 @@ describe('ZernioOutboundWorker envio con plantilla', () => {
   });
 });
 
+/**
+ * El adjunto saliente del trabajador.
+ *
+ * Dos reglas y las dos se ven aqui:
+ *   1. El bucket lo declara la fila. Antes estaba escrito a mano (`branch-media`), y con la carga de
+ *      una conversacion viviendo en otro bucket eso dejaba sin enlace la mitad de los adjuntos.
+ *   2. Un adjunto que no se puede firmar NO se ignora: el evento falla de forma reintentable y el
+ *      mensaje vuelve a la cola, en vez de salir sin el archivo y marcarse como enviado.
+ */
+describe('ZernioOutboundWorker envio con adjunto', () => {
+  function createAttachmentClientFake(options: {
+    attachment?: Record<string, unknown>;
+    signError?: unknown;
+    signed?: boolean;
+  }) {
+    const bucketsFirmados: string[] = [];
+    const calls: Array<{ args: unknown[]; metodo: string; tabla: string }> = [];
+    const seen: Record<string, number> = {};
+    const respuestas: Record<string, FakeResponse[]> = {
+      channel_accounts: [
+        { data: { provider: 'zernio', provider_account_id: 'cuenta-1' }, error: null }
+      ],
+      conversations: [
+        {
+          data: {
+            channel_account_id: 'canal-1',
+            external_reference: 'zernio:cuenta-1:conversation:proveedor-1'
+          },
+          error: null
+        }
+      ],
+      messages: [
+        {
+          data: {
+            body: 'Aqui tienes la foto',
+            channel_account_id: 'canal-1',
+            conversation_id: 'conversacion-1',
+            id: 'mensaje-1',
+            idempotency_key: 'clave-1',
+            status: 'queued',
+            whatsapp_template_language: null,
+            whatsapp_template_name: null
+          },
+          error: null
+        },
+        { data: null, error: null },
+        { data: null, error: null }
+      ],
+      message_attachments: [{ data: options.attachment ? [options.attachment] : [], error: null }],
+      outbox_events: [
+        { data: [], error: null },
+        {
+          data: [
+            { attempts: 0, id: 'outbox-1', payload: { messageId: 'mensaje-1' }, tenant_id: 't-1' }
+          ],
+          error: null
+        },
+        { data: { id: 'outbox-1' }, error: null },
+        { data: null, error: null }
+      ]
+    };
+    const siguiente = (tabla: string): FakeResponse => {
+      const index = seen[tabla] ?? 0;
+      seen[tabla] = index + 1;
+      return respuestas[tabla]?.[index] ?? { data: null, error: null };
+    };
+
+    const client = {
+      from: (tabla: string) => {
+        const builder: Record<string, unknown> = {};
+        for (const method of ['eq', 'is', 'limit', 'lt', 'lte', 'order', 'select']) {
+          builder[method] = (...args: unknown[]) => {
+            calls.push({ args, metodo: method, tabla });
+            return builder;
+          };
+        }
+        builder.update = (...args: unknown[]) => {
+          calls.push({ args, metodo: 'update', tabla });
+          return builder;
+        };
+        builder.then = (resolve: (value: FakeResponse) => unknown) =>
+          Promise.resolve(siguiente(tabla)).then(resolve);
+        builder.maybeSingle = () => Promise.resolve(siguiente(tabla));
+        return builder;
+      },
+      storage: {
+        from: (bucket: string) => ({
+          createSignedUrls: async (paths: string[]) => {
+            bucketsFirmados.push(bucket);
+            if (options.signError) return { data: null, error: options.signError };
+            return {
+              data:
+                options.signed === false
+                  ? []
+                  : paths.map((path) => ({
+                      path,
+                      signedUrl: `https://storage.test/${bucket}/${path}`
+                    })),
+              error: null
+            };
+          }
+        })
+      }
+    };
+    return { bucketsFirmados, calls, client };
+  }
+
+  function actualizacionDeMensaje(
+    calls: Array<{ args: unknown[]; metodo: string; tabla: string }>,
+    estado: string
+  ): unknown {
+    return calls.find(
+      (call) =>
+        call.tabla === 'messages' &&
+        call.metodo === 'update' &&
+        (call.args[0] as { status?: string } | undefined)?.status === estado
+    )?.args[0];
+  }
+
+  /** El bucket que la fila declara es el que se firma, sea cual sea. */
+  for (const bucket of ['branch-media', 'conversation-media']) {
+    it(`firma el adjunto contra el bucket que declara su fila (${bucket})`, async () => {
+      const { bucketsFirmados, client } = createAttachmentClientFake({
+        attachment: { bucket, kind: 'image', storage_object_path: 'carpeta/foto.jpg' }
+      });
+      const dispatcher = { send: vi.fn(async () => ({ providerMessageId: 'p-1', sentAt: null })) };
+      const logInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+      try {
+        await new ZernioOutboundWorker(() => client as never, dispatcher as never).drain();
+
+        expect(bucketsFirmados).toEqual([bucket]);
+        expect(dispatcher.send).toHaveBeenCalledWith(
+          expect.objectContaining({
+            attachment: {
+              kind: 'image',
+              url: `https://storage.test/${bucket}/carpeta/foto.jpg`
+            }
+          })
+        );
+      } finally {
+        logInfo.mockRestore();
+      }
+    });
+  }
+
+  it('un mensaje de solo texto se envia sin adjunto, como siempre', async () => {
+    const { client } = createAttachmentClientFake({});
+    const dispatcher = { send: vi.fn(async () => ({ providerMessageId: 'p-1', sentAt: null })) };
+    const logInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    try {
+      await new ZernioOutboundWorker(() => client as never, dispatcher as never).drain();
+
+      const [input] = dispatcher.send.mock.calls[0] as unknown as [Record<string, unknown>];
+      expect(input.attachment).toBeUndefined();
+    } finally {
+      logInfo.mockRestore();
+    }
+  });
+
+  /**
+   * El caso que antes era silencioso: hay fila con archivo y la direccion no se puede obtener. El
+   * mensaje NO sale sin el archivo; el evento queda reintentable y el mensaje vuelve a la cola.
+   */
+  for (const [escenario, opciones, codigo] of [
+    [
+      'el almacen devuelve un enlace que no corresponde',
+      { signed: false },
+      'outbox_attachment_unavailable'
+    ],
+    ['el almacen no responde', { signError: { message: 'caido' } }, 'outbox_attachment_sign_failed']
+  ] as Array<[string, { signError?: unknown; signed?: boolean }, string]>) {
+    it(`no envia el mensaje sin su archivo cuando ${escenario}`, async () => {
+      const { calls, client } = createAttachmentClientFake({
+        attachment: {
+          bucket: 'conversation-media',
+          kind: 'image',
+          storage_object_path: 'foto.jpg'
+        },
+        ...opciones
+      });
+      const dispatcher = { send: vi.fn(async () => ({ providerMessageId: 'p-1', sentAt: null })) };
+      const logInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      try {
+        await new ZernioOutboundWorker(() => client as never, dispatcher as never).drain();
+
+        expect(dispatcher.send).not.toHaveBeenCalled();
+        const cierre = calls.find(
+          (call) =>
+            call.tabla === 'outbox_events' &&
+            call.metodo === 'update' &&
+            (call.args[0] as { failure_code?: string } | undefined)?.failure_code === codigo
+        );
+        // Reintentable: el evento vuelve a la cola y el mensaje tambien.
+        expect(cierre?.args[0]).toMatchObject({ failure_code: codigo, state: 'pending' });
+        expect(actualizacionDeMensaje(calls, 'queued')).toEqual({ status: 'queued' });
+      } finally {
+        logInfo.mockRestore();
+        logError.mockRestore();
+      }
+    });
+  }
+});
+
 describe('ZernioOutboundWorker abandoned dispatch recovery', () => {
   it('returns an abandoned dispatch to the queue instead of losing the reply', async () => {
     const now = Date.parse('2026-09-28T21:00:00.000Z');
