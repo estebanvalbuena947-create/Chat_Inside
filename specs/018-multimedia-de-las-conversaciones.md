@@ -26,6 +26,7 @@ El proveedor entrega la multimedia como un **enlace firmado del CDN de Instagram
 8. La galería y las imágenes dentro de la conversación las ve cualquier integrante del tenant, porque ya ve esas conversaciones.
 9. **Un adjunto vacío no se anuncia.** `kind` es lo que declaró el proveedor y la plataforma escribe `file` cuando no declaró tipo; la copia propia, además, solo existe si hubo una URL de origen que descargar. Un adjunto sin copia, sin `content_type`, sin URL de origen y con ese `file` de relleno no es un archivo: no viaja en el aviso al bot, y la fila se conserva en la conversación. Un adjunto con copia, con `content_type`, con URL de origen o con un tipo declarado —imagen, audio, vídeo o publicación compartida— sí se anuncia, con `url` nulo mientras la copia no exista.
 10. **Un correo no puede llevar un enlace de diez minutos.** El aviso entrega cada archivo copiado con dos enlaces firmados: `url`, corto, para que el bot lo baje en el acto, y `reviewUrl`, de días, para el correo interno que una persona abre horas después. Los dos son nulos mientras no haya copia propia.
+11. **La multimedia entrante de WhatsApp se descarga autenticada.** Zernio la expone por un endpoint privado que exige la clave de servidor y el identificador de cuenta. Se construye la solicitud desde `mediaId` y `accountId` validados; nunca se envía la clave a la URL recibida en el webhook. Las copias que fallaron por la implementación anterior se reintentan de forma acotada tras la migración.
 
 ## Contrato
 
@@ -37,7 +38,7 @@ El proveedor entrega la multimedia como un **enlace firmado del CDN de Instagram
 
 ## Datos y rollback
 
-- Tabla `message_attachments` con claves compuestas por tenant, unicidad `(tenant_id, message_id, ordinal)`, RLS y permisos retirados a los roles públicos, igual que el resto.
+- Tabla `message_attachments` con claves compuestas por tenant, unicidad `(tenant_id, message_id, ordinal)`, RLS y permisos retirados a los roles públicos, igual que el resto. Para WhatsApp conserva `source_account_id` y `source_media_id`, nunca una clave del proveedor.
 - Bucket privado `conversation-media` con límite de tamaño y tipos permitidos.
 - Rollback: dejar de exponer la galería y el campo `attachments`. Los mensajes y las copias permanecen; el bucket puede vaciarse aparte.
 - La pasada periódica que reintenta las copias marcadas como fallidas ya existe: `apps/worker/src/media-repair.ts`, que usa el índice parcial para encontrarlas.

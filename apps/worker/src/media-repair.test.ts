@@ -144,6 +144,28 @@ describe('media repair pass', () => {
     expect(update).not.toHaveProperty('storage_object_path');
   });
 
+  it('retries stored WhatsApp provider IDs with authenticated download details', async () => {
+    storeConversationMedia.mockReset();
+    storeConversationMedia.mockResolvedValue(null);
+    const { client } = createClient({
+      rows: [
+        {
+          ...pendingRow,
+          source_account_id: 'whatsapp-account-1',
+          source_media_id: 'media-1'
+        }
+      ]
+    });
+
+    await repairPendingMedia(client as never);
+
+    expect(storeConversationMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        zernioWhatsapp: { accountId: 'whatsapp-account-1', mediaId: 'media-1' }
+      })
+    );
+  });
+
   it('waits before insisting on an attachment that just failed', async () => {
     storeConversationMedia.mockReset();
     const now = new Date('2026-09-29T20:00:00.000Z').getTime();

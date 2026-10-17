@@ -179,6 +179,61 @@ describe('storeMessageAttachments', () => {
     });
   });
 
+  it('downloads WhatsApp attachment through its provider media and account identifiers', async () => {
+    storeConversationMedia.mockReset();
+    storeConversationMedia.mockResolvedValue(null);
+    const { calls, client } = createClient({ existing: null, inserted: { id: 'adjunto-3' } });
+
+    await storeMessageAttachments(client as never, 'tenant-1', 'conversation-1', 'message-1', {
+      ...(incoming as Record<string, unknown>),
+      accountId: 'whatsapp-account-1',
+      platform: 'whatsapp',
+      attachments: [
+        {
+          kind: 'audio',
+          mediaId: 'media-1',
+          ordinal: 0,
+          sourceUrl: 'https://zernio.com/api/v1/whatsapp/media/media-1'
+        }
+      ]
+    } as never);
+
+    expect(storeConversationMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        zernioWhatsapp: { accountId: 'whatsapp-account-1', mediaId: 'media-1' }
+      })
+    );
+    expect(calls).toContainEqual({
+      args: [
+        expect.objectContaining({
+          source_account_id: 'whatsapp-account-1',
+          source_media_id: 'media-1'
+        })
+      ],
+      method: 'insert'
+    });
+  });
+
+  it('downloads a WhatsApp attachment even if the webhook omits its protected URL', async () => {
+    storeConversationMedia.mockReset();
+    storeConversationMedia.mockResolvedValue(null);
+    const { client } = createClient({ existing: null, inserted: { id: 'adjunto-4' } });
+
+    await storeMessageAttachments(client as never, 'tenant-1', 'conversation-1', 'message-1', {
+      ...(incoming as Record<string, unknown>),
+      accountId: 'whatsapp-account-1',
+      platform: 'whatsapp',
+      attachments: [{ kind: 'image', mediaId: 'media-2', ordinal: 0, sourceUrl: null }]
+    } as never);
+
+    expect(storeConversationMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUrl: 'https://zernio.com/api/v1/whatsapp/media/media-2',
+        zernioWhatsapp: { accountId: 'whatsapp-account-1', mediaId: 'media-2' }
+      })
+    );
+  });
+
   it('never fails the message because the attachment could not be recorded', async () => {
     storeConversationMedia.mockReset();
     const { client } = createClient({ existing: null, insertError: { code: '42501' } });

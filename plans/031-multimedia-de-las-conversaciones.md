@@ -20,3 +20,15 @@
 - El consumo de almacenamiento crece con el uso; conviene definir una retención antes de que el volumen sea grande.
 - Los adjuntos del histórico ya no se pueden recuperar: sus enlaces caducaron, así que la galería empieza vacía y se llena desde ahora.
 - La descarga ocurre en el trabajador, no en la petición del webhook, así que no afecta al acuse de recibo del proveedor.
+
+## Corrección 2026-10-16 — Multimedia entrante de WhatsApp
+
+- Hallazgo: Zernio entrega la URL de WhatsApp como un endpoint privado. El descargador de URLs públicas
+  fallaba y agotaba sus cinco intentos, por lo que la bandeja mostraba «sin copia disponible».
+- Corte: la ingesta guarda el identificador de medio y de cuenta; el worker construye el endpoint fijo de
+  Zernio y lo consulta con la clave solo del servidor. El resto de plataformas conserva su descarga
+  pública con protección SSRF.
+- Migración: rellena esos identificadores desde los adjuntos pendientes, reinicia exclusivamente sus
+  reintentos acotados y permite que la pasada periódica recupere los medios aún vigentes.
+- Rollback: detener el worker anterior a la migración; las columnas son aditivas y las copias ya hechas
+  permanecen intactas.

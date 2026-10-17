@@ -76,6 +76,7 @@ export type NormalizedInboundMessage = {
   accountName: string | null;
   attachments: Array<{
     kind: AttachmentKind;
+    mediaId: string | null;
     ordinal: number;
     sourceKind: string | null;
     sourceUrl: string | null;
@@ -190,12 +191,16 @@ export function normalizeInboundMessage(payload: unknown): NormalizedInboundMess
         };
         const payload =
           entry.payload && typeof entry.payload === 'object'
-            ? (entry.payload as { title?: unknown; url?: unknown })
+            ? (entry.payload as { id?: unknown; title?: unknown; url?: unknown })
             : null;
 
         return [
           {
             kind: attachmentKindFromProvider(entry.type),
+            mediaId:
+              typeof payload?.id === 'string' && payload.id.trim()
+                ? payload.id.trim().slice(0, 300)
+                : null,
             ordinal,
             sourceKind:
               typeof entry.originalType === 'string' ? entry.originalType.slice(0, 64) : null,
@@ -230,6 +235,7 @@ export function normalizeInboundMessage(payload: unknown): NormalizedInboundMess
           : [
               {
                 kind: 'share' as const,
+                mediaId: null,
                 ordinal: message.attachments.length,
                 sourceKind: 'post',
                 sourceUrl: normalizeAvatarSourceUrl(post.imageUrl ?? null),

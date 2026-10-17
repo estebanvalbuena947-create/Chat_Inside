@@ -1512,3 +1512,9 @@ que alguien pedía fotos. No representa la sede ni es parte de su recorrido visu
 acompaña plantillas de pago. Se conserva una sola fila titulada exactamente `Accesorios`; el envío de
 una galería la excluye y los nodos de plantilla la buscan en todo el tenant, incluso sin sede en la
 conversación. El resto de archivos se titula por sede y posición (`Valle (1)`, `Lomas (1)`, etc.).
+
+## ADR-062 — Descargar multimedia entrante de WhatsApp con autorización de Zernio
+
+- **Contexto:** Los adjuntos entrantes de WhatsApp llegan como `https://zernio.com/api/v1/whatsapp/media/{mediaId}`. Ese endpoint exige `Authorization: Bearer` y `accountId`; el descargador común solo admite URLs públicas. Cada copia fallaba y la bandeja mostraba «sin copia disponible», mientras Instagram funcionaba con sus URLs firmadas públicas.
+- **Decisión:** La ingesta conserva el `mediaId` y la cuenta de Zernio en columnas propias de `message_attachments`. Para WhatsApp, el worker construye el endpoint fijo de Zernio y le añade la autorización exclusivamente en el servidor. Las demás plataformas siguen con el descargador público y sus controles SSRF. La migración rellena y rearma los adjuntos pendientes afectados.
+- **Consecuencias:** La clave de Zernio no se persiste ni viaja a una URL externa arbitraria. Imágenes, vídeos, audios y documentos de WhatsApp se validan por bytes, se copian al bucket privado y se muestran como las de Instagram. Los medios que ya hayan vencido en Meta seguirán sin poder recuperarse; el reintento queda limitado.

@@ -158,14 +158,16 @@ describe('normalizeInboundMessage multimedia', () => {
     expect(normalized.attachments).toEqual([
       {
         kind: 'image',
+        mediaId: null,
         ordinal: 0,
         sourceKind: null,
         sourceUrl: 'https://cdn.example.test/foto.jpg',
         title: null
       },
-      { kind: 'share', ordinal: 1, sourceKind: null, sourceUrl: null, title: null },
+      { kind: 'share', mediaId: null, ordinal: 1, sourceKind: null, sourceUrl: null, title: null },
       {
         kind: 'file',
+        mediaId: null,
         ordinal: 2,
         sourceKind: null,
         sourceUrl: 'https://cdn.example.test/raro.webp',
@@ -188,6 +190,7 @@ describe('normalizeInboundMessage multimedia', () => {
     expect(normalized.attachments).toEqual([
       {
         kind: 'share',
+        mediaId: null,
         ordinal: 0,
         sourceKind: null,
         sourceUrl: 'https://cdn.example.test/publicacion.jpg',
@@ -203,7 +206,30 @@ describe('normalizeInboundMessage multimedia', () => {
     });
 
     expect(normalized.attachments).toEqual([
-      { kind: 'file', ordinal: 0, sourceKind: null, sourceUrl: null, title: null }
+      { kind: 'file', mediaId: null, ordinal: 0, sourceKind: null, sourceUrl: null, title: null }
     ]);
+  });
+
+  it('keeps the WhatsApp media ID separately from its protected download path', () => {
+    const normalized = normalizeInboundMessage({
+      ...base,
+      message: {
+        ...base.message,
+        platform: 'whatsapp',
+        attachments: [
+          {
+            payload: { id: 'media-123' },
+            type: 'audio',
+            url: 'https://zernio.com/api/v1/whatsapp/media/media-123'
+          }
+        ]
+      }
+    });
+
+    expect(normalized.attachments[0]).toMatchObject({
+      kind: 'audio',
+      mediaId: 'media-123',
+      sourceUrl: 'https://zernio.com/api/v1/whatsapp/media/media-123'
+    });
   });
 });

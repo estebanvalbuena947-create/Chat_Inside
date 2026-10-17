@@ -125,6 +125,9 @@ export async function storeMessageAttachments(
         .insert({
           conversation_id: conversationId,
           kind: attachment.kind,
+          source_account_id:
+            incoming.platform === 'whatsapp' && attachment.mediaId ? incoming.accountId : null,
+          source_media_id: attachment.mediaId,
           source_kind: attachment.sourceKind,
           message_id: messageId,
           ordinal: attachment.ordinal,
@@ -148,15 +151,22 @@ export async function storeMessageAttachments(
       if (!attachmentId) continue;
     }
 
-    if (!attachment.sourceUrl) continue;
+    const zernioWhatsapp =
+      incoming.platform === 'whatsapp' && attachment.mediaId
+        ? { accountId: incoming.accountId, mediaId: attachment.mediaId }
+        : undefined;
+    if (!attachment.sourceUrl && !zernioWhatsapp) continue;
 
     const stored = await storeConversationMedia({
       conversationId,
       messageId,
       ordinal: attachment.ordinal,
-      sourceUrl: attachment.sourceUrl,
+      sourceUrl:
+        attachment.sourceUrl ??
+        `https://zernio.com/api/v1/whatsapp/media/${encodeURIComponent(attachment.mediaId ?? '')}`,
       supabase,
-      tenantId
+      tenantId,
+      zernioWhatsapp
     });
 
     const { error: updateError } = await supabase

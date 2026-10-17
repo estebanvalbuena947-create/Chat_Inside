@@ -23,6 +23,8 @@ type PendingAttachment = {
   message_id: string;
   ordinal: number;
   source_title: string | null;
+  source_account_id: string | null;
+  source_media_id: string | null;
   source_url: string | null;
   tenant_id: string;
 };
@@ -96,7 +98,7 @@ export async function repairPendingMedia(
     const { data, error } = await supabase
       .from('message_attachments')
       .select(
-        'id, tenant_id, conversation_id, message_id, ordinal, kind, source_url, source_title, download_attempts, download_failed_at'
+        'id, tenant_id, conversation_id, message_id, ordinal, kind, source_url, source_title, source_account_id, source_media_id, download_attempts, download_failed_at'
       )
       .is('storage_object_path', null)
       .lt('download_attempts', MEDIA_MAX_ATTEMPTS)
@@ -131,7 +133,11 @@ export async function repairPendingMedia(
             ordinal: row.ordinal,
             sourceUrl: row.source_url,
             supabase,
-            tenantId: row.tenant_id
+            tenantId: row.tenant_id,
+            zernioWhatsapp:
+              row.source_account_id && row.source_media_id
+                ? { accountId: row.source_account_id, mediaId: row.source_media_id }
+                : undefined
           })
         : null;
 
