@@ -2,6 +2,13 @@
 
 import Image from 'next/image';
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
+import {
+  formatOperationalDate,
+  formatOperationalDayLabel,
+  formatOperationalShortDate,
+  formatOperationalTime,
+  operationalDayKey
+} from '../lib/operational-time';
 import GoogleReviewsPanel from './resenas/page';
 import ReservationsPanel from './reservas/page';
 
@@ -151,35 +158,16 @@ function initials(name: string): string {
 }
 function formatConversationTime(value: string | null): string {
   if (!value) return 'Sin mensajes';
-  return new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit' }).format(
-    new Date(value)
-  );
+  return formatOperationalTime(value);
 }
 function formatMessageTime(value: string): string {
-  return new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit' }).format(
-    new Date(value)
-  );
+  return formatOperationalTime(value);
 }
 function messageDayKey(value: string): string {
-  const date = new Date(value);
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  return operationalDayKey(value) ?? '';
 }
 function messageDayLabel(value: string): string {
-  const date = new Date(value);
-  const today = new Date();
-  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-  const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
-  const yesterdayKey = `${yesterday.getFullYear()}-${yesterday.getMonth()}-${yesterday.getDate()}`;
-  const dayKey = messageDayKey(value);
-
-  if (dayKey === todayKey) return 'Hoy';
-  if (dayKey === yesterdayKey) return 'Ayer';
-
-  return new Intl.DateTimeFormat('es-CO', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  }).format(date);
+  return formatOperationalDayLabel(value);
 }
 function messageStatusLabel(status: Message['status']): string {
   const labels: Record<Message['status'], string> = {
@@ -2182,9 +2170,7 @@ export default function HomePage(): React.ReactNode {
   }
 
   function formatMediaDate(value: string): string {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+    return formatOperationalShortDate(value);
   }
 
   function attachmentLabel(kind: MessageAttachment['kind']): string {
@@ -3943,12 +3929,7 @@ export default function HomePage(): React.ReactNode {
                           {channelPlatformLabel(channel.platform)}
                         </span>
                         <h4>{channel.displayName ?? 'Cuenta sin nombre'}</h4>
-                        <p>
-                          Conectada desde{' '}
-                          {new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(
-                            new Date(channel.createdAt)
-                          )}
-                        </p>
+                        <p>Conectada desde {formatOperationalDate(channel.createdAt)}</p>
                       </div>
                       <span className="channel-account-status">Activa</span>
                     </div>

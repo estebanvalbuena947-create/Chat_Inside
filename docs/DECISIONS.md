@@ -1518,3 +1518,15 @@ conversación. El resto de archivos se titula por sede y posición (`Valle (1)`,
 - **Contexto:** Los adjuntos entrantes de WhatsApp llegan como `https://zernio.com/api/v1/whatsapp/media/{mediaId}`. Ese endpoint exige `Authorization: Bearer` y `accountId`; el descargador común solo admite URLs públicas. Cada copia fallaba y la bandeja mostraba «sin copia disponible», mientras Instagram funcionaba con sus URLs firmadas públicas.
 - **Decisión:** La ingesta conserva el `mediaId` y la cuenta de Zernio en columnas propias de `message_attachments`. Para WhatsApp, el worker construye el endpoint fijo de Zernio y le añade la autorización exclusivamente en el servidor. Las demás plataformas siguen con el descargador público y sus controles SSRF. La migración rellena y rearma los adjuntos pendientes afectados.
 - **Consecuencias:** La clave de Zernio no se persiste ni viaja a una URL externa arbitraria. Imágenes, vídeos, audios y documentos de WhatsApp se validan por bytes, se copian al bucket privado y se muestran como las de Instagram. Los medios que ya hayan vencido en Meta seguirán sin poder recuperarse; el reintento queda limitado.
+
+## ADR-063 — La presentación usa la zona horaria operativa de Ciudad de México
+
+- **Contexto:** `Intl.DateTimeFormat` sin `timeZone` toma la zona del navegador. Agentes en Colombia,
+  México u otra ubicación podían ver horas y días distintos para el mismo instante, especialmente al
+  cruzar medianoche.
+- **Decisión:** La web centraliza el formateo en una utilidad que fija `America/Mexico_City` y
+  `es-MX`. Los instantes continúan persistidos en UTC y cada pantalla obtiene de esa utilidad su
+  hora, fecha, fecha-hora o llave de día.
+- **Consecuencias:** La vista es consistente para todos los agentes sin ajustar equipos o servidor.
+  La zona IANA conserva correctamente las reglas históricas de Ciudad de México. Cualquier nueva
+  superficie operativa debe usar la misma utilidad en vez de `Date` o `Intl` sin zona explícita.

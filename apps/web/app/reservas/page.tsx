@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { formatOperationalDateTime } from '../../lib/operational-time';
 
 type Draft = {
   creadaEn: string | null;
@@ -75,12 +76,7 @@ const money = (value: number) =>
     currency: 'MXN',
     maximumFractionDigits: 0
   }).format(value);
-const date = (value: string | null) =>
-  value
-    ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(
-        new Date(value)
-      )
-    : '—';
+const date = (value: string | null) => (value ? formatOperationalDateTime(value) : '—');
 const creationTime = (value: string | null): number | null => {
   if (!value) return null;
   const timestamp = Date.parse(value);

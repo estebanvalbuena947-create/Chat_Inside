@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatOperationalDateTime } from '../../lib/operational-time';
 
 /**
  * Reseñas de Google: el apartado donde una persona responde las que el bot no contesta solo.
@@ -28,10 +29,7 @@ type Review = {
 
 const stars = (rating: number): string => '★'.repeat(rating) + '☆'.repeat(5 - rating);
 
-const fecha = (valor: string): string =>
-  new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(valor)
-  );
+const fecha = (valor: string): string => formatOperationalDateTime(valor);
 
 export default function GoogleReviewsPanel(): React.ReactNode {
   const [reviews, setReviews] = useState<Review[]>([]);
