@@ -33,6 +33,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     const tenantsResponse = await fetch(`${apiUrl}/v1/tenants`, {
       cache: 'no-store',
+      signal: request.signal,
       headers: { Authorization: headers.Authorization }
     });
     if (!tenantsResponse.ok) {
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     const response = await fetch(`${apiUrl}/v1/tenants/${tenantsPayload.items[0].id}/events`, {
       cache: 'no-store',
+      signal: request.signal,
       headers
     });
     if (!response.ok || !response.body) {

@@ -4,6 +4,10 @@
 - **Fecha:** 2026-08-14
 - **Autorización:** el administrador autorizó la fase de tiempo real.
 
+> Actualización 2026-10-19: el diseño de sondeo de este plan es histórico. El plan
+> 050 y ADR-067 lo sustituyen por Broadcast privado hacia la API y SSE al navegador,
+> sin consultas periódicas de detección de cambios. Despliegue manual pendiente.
+
 ## Regla
 
 Una sesión autorizada recibe una señal de cambio únicamente para un tenant del que es miembro. La señal no contiene mensajes, contactos ni secretos: la interfaz vuelve a leer los recursos mediante las rutas BFF protegidas que ya validan la sesión.

@@ -57,7 +57,26 @@ PostgreSQL/Supabase, las colas en tablas propias, el almacen privado, SSE, Zerni
 
 ## Tiempo real
 
-SSE es la opción inicial para UI: eventos por tenant autenticado, `Last-Event-ID`, reconexión y recarga REST cuando el cursor haya expirado. Supabase Realtime se comparará en un spike de seguridad, coste y escalabilidad antes de adoptarse. La Data API de Supabase no será un atajo para la UI: las tablas operativas no se expondrán al navegador.
+La UI recibe SSE por tenant autenticado a través del BFF. La API mantiene una
+suscripción privada de Supabase Broadcast por tenant y proceso; los cambios
+confirmados de mensajes, conversaciones, adjuntos, lecturas, contactos, cuentas
+y etiquetas publican invalidaciones mínimas mediante triggers `SECURITY INVOKER`.
+No hay sondeo periódico de tablas para producir el cursor. Cada conexión nueva
+recibe `inbox.resync`, incluso si presenta `Last-Event-ID` de otra versión: el
+cursor es una señal opaca, no un registro de eventos reproducible. Los fallos de
+Broadcast cierran el stream y la web muestra reconexión. Los keepalives solo
+mantienen el transporte; el pulso de presencia conserva su función independiente.
+
+El spike validó canal privado de servidor, rechazo de una suscripción anónima,
+entrega tras commit y ausencia de entrega tras rollback. Una prueba de la función
+de trigger con tabla temporal validó inserciones, actualizaciones y borrados bajo
+`service_role`, sin cambios persistentes a recursos operativos. No añade
+dependencias ni políticas de acceso para usuarios. Broadcast es best effort: se
+resincroniza por REST al conectar, reconectar o retomar una pestaña; no se garantiza
+replay ni detección de una invalidación perdida sin desconexión. El fallo interno
+de `realtime.send` deja un aviso en PostgreSQL, según su implementación instalada.
+Medir cuotas y latencia real después del despliegue (ADR-067, plan 050).
+La Data API y las tablas operativas no se exponen al navegador.
 
 ## Despliegue y rollback
 

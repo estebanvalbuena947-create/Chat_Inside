@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import {
   closedPreview,
@@ -24,8 +25,14 @@ import {
   operationalDayKey
 } from '../lib/operational-time';
 import MediaPreviewOverlay from './media-preview-overlay';
-import GoogleReviewsPanel from './resenas/page';
-import ReservationsPanel from './reservas/page';
+import { createInboxEventRefresh } from '../lib/inbox-event-refresh';
+
+const GoogleReviewsPanel = dynamic(() => import('./resenas/page'), {
+  loading: () => <p role="status">Cargando reseñas…</p>
+});
+const ReservationsPanel = dynamic(() => import('./reservas/page'), {
+  loading: () => <p role="status">Cargando reservas…</p>
+});
 
 type Conversation = {
   assignmentVersion: number;
@@ -408,6 +415,9 @@ export default function HomePage(): React.ReactNode {
   const [history, setHistory] = useState<HistoryState>({ kind: 'idle' });
   const [historyReloadVersion, setHistoryReloadVersion] = useState(0);
   const [inboxReloadVersion, setInboxReloadVersion] = useState(0);
+  const inboxReadRef = useRef<Promise<unknown> | null>(null);
+  const historyReadRef = useRef<Promise<unknown> | null>(null);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [draft, setDraft] = useState('');
   // El archivo que se va a enviar con el próximo mensaje. Ya está subido y validado por la API: aquí
   // solo se guarda su referencia para que el envío la adjunte.
@@ -1034,7 +1044,10 @@ export default function HomePage(): React.ReactNode {
         queryParams.set('kind', conversationKind);
         if (platformFilter) queryParams.set('platform', platformFilter);
         const query = queryParams.size > 0 ? `?${queryParams.toString()}` : '';
-        const response = await fetch(`/api/inbox${query}`, { cache: 'no-store' });
+        const response = await fetch(`/api/inbox${query}`, {
+          cache: 'no-store',
+          signal: controller.signal
+        });
         const payload = response.headers.get('content-type')?.includes('application/json')
           ? await response.json()
           : {};
@@ -1097,9 +1110,11 @@ export default function HomePage(): React.ReactNode {
         if (active) setInbox({ kind: 'error', message: 'La bandeja no está disponible.' });
       }
     }
-    void loadInbox();
+    const controller = new AbortController();
+    inboxReadRef.current = loadInbox();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
     assignmentScope,
@@ -1238,6 +1253,7 @@ export default function HomePage(): React.ReactNode {
       setCannedResponses([]);
       return;
     }
+    if (!isCannedResponsesOpen && !isCannedResponseManagerOpen) return;
     let active = true;
     setIsCannedResponsesLoading(true);
     void (async () => {
@@ -1266,7 +1282,7 @@ export default function HomePage(): React.ReactNode {
     return () => {
       active = false;
     };
-  }, [tenantId]);
+  }, [tenantId, isCannedResponsesOpen, isCannedResponseManagerOpen]);
 
   useEffect(() => {
     if (!tenantId) {
@@ -1357,10 +1373,12 @@ export default function HomePage(): React.ReactNode {
     if (!isRefreshOfOpenConversation) {
       setHistory({ kind: 'loading' });
     }
-    void (async () => {
+    const controller = new AbortController();
+    historyReadRef.current = (async () => {
       try {
         const response = await fetch(`/api/inbox/${selectedConversationId}/messages`, {
-          cache: 'no-store'
+          cache: 'no-store',
+          signal: controller.signal
         });
         const payload = response.headers.get('content-type')?.includes('application/json')
           ? await response.json()
@@ -1397,6 +1415,7 @@ export default function HomePage(): React.ReactNode {
     })();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [historyReloadVersion, selectedConversationId, selectedConversationLastMessageAt]);
 
@@ -1577,40 +1596,36 @@ export default function HomePage(): React.ReactNode {
 
   useEffect(() => {
     if (!tenantId) return;
-
-    const degradedPollIntervalMs = 4_000;
-    const safetyPollIntervalMs = 30_000;
+    setRealtimeConnected(false);
     const source = new EventSource('/api/events');
-    let isActive = true;
-    let degradedPollTimer: number | null = null;
-
-    const refresh = () => {
-      setInboxReloadVersion((current) => current + 1);
-      setHistoryReloadVersion((current) => current + 1);
+    const scheduler = createInboxEventRefresh({
+      refresh: () => {
+        setInboxReloadVersion((current) => current + 1);
+        setHistoryReloadVersion((current) => current + 1);
+      },
+      pendingReads: () =>
+        [inboxReadRef.current, historyReadRef.current].filter(
+          (read): read is Promise<unknown> => read !== null
+        ),
+      isVisible: () => document.visibilityState === 'visible'
+    });
+    const ready = () => {
+      setRealtimeConnected(true);
+      scheduler.request();
     };
-    const stopDegradedPoll = () => {
-      if (degradedPollTimer === null) return;
-      window.clearInterval(degradedPollTimer);
-      degradedPollTimer = null;
+    const offline = () => setRealtimeConnected(false);
+    const visible = () => {
+      if (document.visibilityState === 'visible') scheduler.resume();
     };
-    const startDegradedPoll = () => {
-      if (!isActive || degradedPollTimer !== null) return;
-      degradedPollTimer = window.setInterval(refresh, degradedPollIntervalMs);
-    };
-
-    // Mientras el stream no esté abierto, el sondeo rápido sostiene la bandeja. Con el
-    // stream abierto solo queda la comprobación lenta, que cubre una señal perdida.
-    startDegradedPoll();
-    const safetyPollTimer = window.setInterval(refresh, safetyPollIntervalMs);
-    source.addEventListener('open', stopDegradedPoll);
-    source.addEventListener('error', startDegradedPoll);
-    source.addEventListener('inbox.changed', refresh);
-    source.addEventListener('inbox.resync', refresh);
-
+    source.addEventListener('error', offline);
+    source.addEventListener('inbox.offline', offline);
+    source.addEventListener('inbox.changed', scheduler.request);
+    source.addEventListener('inbox.ready', ready);
+    source.addEventListener('inbox.resync', ready);
+    document.addEventListener('visibilitychange', visible);
     return () => {
-      isActive = false;
-      stopDegradedPoll();
-      window.clearInterval(safetyPollTimer);
+      scheduler.dispose();
+      document.removeEventListener('visibilitychange', visible);
       source.close();
     };
   }, [tenantId]);
@@ -2925,6 +2940,7 @@ export default function HomePage(): React.ReactNode {
             <h1>
               Bandeja de entrada <ArrowDown />
             </h1>
+            {tenant && !realtimeConnected && <p role="status">Reconectando actualizaciones…</p>}
           </div>
         </header>
         <label className="search-box" htmlFor="conversation-search">

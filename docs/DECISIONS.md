@@ -4,6 +4,34 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-067 — Invalidaciones por Broadcast privado y SSE sin sondeo (2026-10-19)
+
+- **Estado:** aceptada por el usuario; código preparado para despliegue manual.
+- **Problema:** cada stream SSE ejecutaba cuatro consultas cada dos segundos y
+  cada navegador añadía recargas de respaldo. El coste crecía sin nuevas escrituras.
+- **Decisión:** triggers invoker generan señales privadas sin contenido operativo
+  al cambiar datos presentados en la bandeja. La API comparte un canal por tenant,
+  agrupa señales durante 200 ms y conserva SSE/BFF, Bearer y membresía por conexión.
+  La web agrupa refrescos, espera lecturas pendientes, cancela lecturas obsoletas y
+  recupera el estado al resuscribir o volver a la pestaña. No hay temporizadores
+  para consultar mensajes; el keepalive SSE no toca la base.
+- **Alternativas:** sondeo compartido era una reducción parcial y fue sustituido
+  a petición del usuario; conexión directa del navegador a Supabase descartada
+  por el contrato de acceso. No se agregan dependencias, grants ni políticas RLS
+  para habilitar suscripciones de usuarios.
+- **Compatibilidad:** `inbox.changed` y `inbox.resync` conservan formato opaco;
+  `inbox.offline` informa fallos. Todo nuevo stream resincroniza y acepta cursores
+  antiguos sin intentar reproducirlos. Rollback por imagen anterior; los triggers
+  aditivos pueden retirarse después con el procedimiento del despliegue.
+- **Evidencia:** prueba real de Broadcast privado, rechazo anónimo, commit versus
+  rollback y trigger en tabla temporal bajo rol de servidor. Pruebas de diez
+  suscriptores sin lecturas de tablas, aislamiento, ráfagas, cierre y reconexión.
+- **Límites:** cada escritura añade un mensaje a `realtime.messages` (retención del
+  proveedor); medir cuotas en operación. `realtime.send` instalado captura errores
+  como WARNING. No se promete entrega exactamente una vez ni recuperación de una
+  señal perdida sin reconexión. La puesta en producción y medición de CPU/apertura
+  corresponden al despliegue manual solicitado por el usuario.
+
 ## ADR-062 - El aviso entrega un enlace de revisión de días para el correo interno (2026-10-16)
 
 - **Fecha:** 2026-10-16

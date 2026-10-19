@@ -1,5 +1,42 @@
 # Registro de validación contractual
 
+## 2026-10-19 — Bandeja por eventos, plan 050
+
+- Integración solicitada en `main`: revalidada en checkout limpio sobre
+  `origin/main`, excluyendo cambios ajenos de adjuntos. Instalación con lockfile,
+  formato, lint, tipos, 1.026 pruebas y build pasan. Los avisos de build sobre CSS,
+  plugin de Next y raíz inferida del worktree son no bloqueantes y no se modifican
+  archivos ajenos para silenciarlos. La publicación Git no despliega Docker Swarm.
+- Autorización: el usuario pidió actualizaciones al guardar y aprobó con «hazlo»;
+  eligió ejecutar personalmente el despliegue de API/web al terminar.
+- Se retiraron las cuatro consultas del cursor cada 2 s y las recargas web cada
+  4/30 s. Persisten únicamente los keepalives de transporte y el pulso de presencia
+  independiente. El worker conserva el procesamiento de sus colas.
+- Migración `20261019145219_inbox_change_broadcast` aplicada en UI Chat Zernio:
+  siete triggers, función `SECURITY INVOKER`, ningún grant/policy nuevo para usuarios.
+  Se comprobó la definición y tablas afectadas en el catálogo remoto.
+- Prueba real: canal privado de servidor operativo y suscripción anónima rechazada.
+  Una escritura confirmada produjo aviso; una revertida no lo produjo. La función
+  se ejercitó con INSERT/UPDATE/DELETE en una tabla temporal bajo `service_role`,
+  primero con rollback y luego con commit; no se alteraron contactos ni mensajes
+  reales. Con diez suscriptores de API se recibieron diez resync y diez avisos
+  agrupados, usando un cliente cuya función `from()` lanzaba si se intentaba sondeo.
+- Pruebas nuevas de API/BFF/web: aislamiento de tenants, diez clientes, ráfagas,
+  cierre del último cliente, timeout inicial, error/recuperación, cliente lento,
+  propagación de abortos, cancelación del upstream, espera de lecturas pendientes,
+  pestaña oculta, retorno y desmontaje. Suite completa `corepack pnpm test`: pasa.
+- `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm format:check` y
+  `corepack pnpm build`: pasan. Build de home: First Load JS 133 kB; no hay una
+  medición anterior equivalente para afirmar un porcentaje de mejora. El build
+  mantiene el aviso previo sobre plugin ESLint de Next no detectado.
+- Docker local no está iniciado: no hubo base temporal local. La validación de
+  trigger se realizó con tabla temporal remota; no reemplaza una prueba completa
+  de migración sobre una base aislada.
+- Pendiente: despliegue manual, verificación visual/autenticada en producción y
+  medición de CPU/peticiones/latencia con carga comparable. No se declara reducido
+  el consumo actual del chat publicado antes de ese paso. Broadcast es best effort;
+  `realtime.send` instalado registra WARNING en fallos, no garantiza entrega.
+
 **Fecha:** 2026-08-13
 **Fase:** 0 — validación documental y de viabilidad; fase 1 — datos iniciales; fase 2 — Auth y API segura
 **Alcance:** validación documental, configuración MCP limitada, migraciones del proyecto de desarrollo y código de sesión/API. Sin secretos privados, datos de clientes, canales, webhooks ni integraciones Zernio/n8n.
