@@ -1,5 +1,15 @@
 # Registro de validación contractual
 
+## 2026-10-19 — Pausa del bot, ADR-068
+
+- Correccion autorizada del encolado, entrega de avisos a n8n y despacho a Zernio para aplicar la
+  pausa por conversacion. Incluye pruebas de reintentos, lectura fallida y concurrencia sin
+  retroceder acuses. Detalle en `docs/VALIDACION-PAUSA-BOT.md`.
+- La integracion se prepara desde `origin/main`, sin cambios ajenos. Los controles de GitHub de la
+  revision publican formato, lint, tipos, pruebas y build del corte exacto antes de fusionar.
+- No requiere migraciones. GitHub no actualiza por si solo los servicios del servidor; falta
+  desplegar API y trabajador y verificar operacion. Guia: `docs/DEPLOY-PAUSA-BOT.md`.
+
 ## 2026-10-19 — Bandeja por eventos, plan 050
 
 - Integración solicitada en `main`: revalidada en checkout limpio sobre

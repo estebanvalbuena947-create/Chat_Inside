@@ -4,7 +4,7 @@ import {
   type SupabaseServerClient
 } from '@chat-zernio/config';
 import { signMediaPaths } from '@chat-zernio/media';
-import { whatsappTemplateReferenceFrom } from '@chat-zernio/domain';
+import { getAgentInvocationEligibility, whatsappTemplateReferenceFrom } from '@chat-zernio/domain';
 import { isReclaimDue } from './abandoned-claims';
 import {
   claimEvent,
@@ -243,13 +243,21 @@ export class ZernioOutboundWorker {
       const { data: message, error: messageError } = await supabase
         .from('messages')
         .select(
-          'id, body, conversation_id, channel_account_id, idempotency_key, status, whatsapp_template_name, whatsapp_template_language'
+          'id, body, sender_type, conversation_id, channel_account_id, idempotency_key, status, whatsapp_template_name, whatsapp_template_language'
         )
         .eq('id', messageId)
         .eq('tenant_id', event.tenant_id)
         .maybeSingle();
       if (messageError || !message || !message.channel_account_id || !message.idempotency_key) {
         throw new ZernioDispatchError(false, 'outbox_message_unavailable');
+      }
+      // Si el envio ya quedo confirmado, recuperar el evento solo debe cerrar la cola.
+      // Una pausa posterior no convierte un mensaje enviado en fallido ni provoca otro envio.
+      if (['sent', 'delivered', 'read'].includes(message.status)) {
+        if (!(await completeEvent(supabase, event.id))) {
+          throw new ZernioDispatchError(true, 'outbox_completion_failed');
+        }
+        return;
       }
       const { data: conversation, error: conversationError } = await supabase
         .from('conversations')
@@ -290,12 +298,30 @@ export class ZernioOutboundWorker {
         message.whatsapp_template_name,
         message.whatsapp_template_language
       );
+      const attachment = whatsappTemplate
+        ? undefined
+        : await this.readSignedAttachment(supabase, event.tenant_id, message.id);
+      // La firma puede tardar: leer el modo DESPUES, sin reutilizar el estado del encolado.
+      if (message.sender_type === 'automation') {
+        const { data: automation, error: automationError } = await supabase
+          .from('conversations')
+          .select('automation_mode')
+          .eq('id', message.conversation_id)
+          .eq('tenant_id', event.tenant_id)
+          .maybeSingle();
+        if (automationError || !automation) {
+          throw new ZernioDispatchError(true, 'automation_state_unavailable');
+        }
+        if (!getAgentInvocationEligibility(automation.automation_mode).allowed) {
+          throw new ZernioDispatchError(false, 'automation_not_auto');
+        }
+      } else if (message.sender_type !== 'agent') {
+        throw new ZernioDispatchError(false, 'outbox_sender_invalid');
+      }
       const dispatch = await this.dispatcher.send({
         accountId: channel.provider_account_id,
         // Una plantilla trae su propio contenido: el adjunto solo acompana a un mensaje de texto.
-        attachment: whatsappTemplate
-          ? undefined
-          : await this.readSignedAttachment(supabase, event.tenant_id, message.id),
+        attachment,
         body: message.body,
         conversationId: providerConversationId,
         idempotencyKey: message.idempotency_key,
@@ -402,7 +428,8 @@ export class ZernioOutboundWorker {
         .from('messages')
         .update({ status: retried ? 'queued' : 'failed' })
         .eq('id', messageId)
-        .eq('tenant_id', event.tenant_id);
+        .eq('tenant_id', event.tenant_id)
+        .in('status', ['queued', 'sending']);
     }
     console.error(
       JSON.stringify({ event: 'worker.outbox_dispatch_failed', failureCode: providerError.code })

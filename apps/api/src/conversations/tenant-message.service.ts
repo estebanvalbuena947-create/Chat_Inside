@@ -22,6 +22,7 @@ import {
 import {
   channelAcceptsOutboundAttachment,
   findWhatsappTemplateByReference,
+  getAgentInvocationEligibility,
   outboundAttachmentKindsFor,
   outboundMediaTypeForExtension,
   whatsappServiceWindow,
@@ -417,7 +418,7 @@ export class TenantMessageService {
     const { data: conversation, error: conversationError } = await supabase
       .from('conversations')
       .select(
-        'id, channel_account_id, channel_account:channel_accounts(provider, platform, disconnected_at)'
+        'id, automation_mode, channel_account_id, channel_account:channel_accounts(provider, platform, disconnected_at)'
       )
       .eq('tenant_id', tenantId)
       .eq('id', conversationId)
@@ -460,6 +461,15 @@ export class TenantMessageService {
         existing,
         tenantId
       });
+    }
+
+    if (
+      senderType === 'automation' &&
+      !getAgentInvocationEligibility(conversation.automation_mode).allowed
+    ) {
+      throw new UnprocessableEntityException(
+        'El bot no esta en modo automatico en esta conversacion: no puede enviar mensajes.'
+      );
     }
 
     const adjuntos = await this.resolveOutboundAttachments({

@@ -2,7 +2,7 @@
 
 - **Estado:** implementado
 - **Fecha:** 2026-08-14
-- **Cierre:** implementado y validado; n8n/Zernio quedan fuera de este corte.
+- **Cierre:** interruptor implementado y validado; refuerzo del encolado y transporte preparado el 2026-10-19, pendiente de despliegue de API y trabajador.
 
 ## Diseno aprobado
 
@@ -12,6 +12,18 @@
 - No se integra n8n en este corte: su contrato y credenciales siguen pendientes de evidencia y aprobacion especifica.
 
 ## Cortes
+
+### Refuerzo del transporte aprobado por el usuario (2026-10-19)
+
+1. Reutilizar `getAgentInvocationEligibility` del dominio para valores persistidos no confiables.
+2. Rechazar nuevos mensajes automaticos en `TenantMessageService`, conservando la idempotencia.
+3. Consultar el modo vigente antes de los efectos de `ZernioOutboundWorker` y del notificador n8n.
+4. Probar modos, remitentes, formatos, fallos de lectura, pausa durante preparacion y reintentos.
+5. Registrar la decision y ejecutar tipos, lint, formato, pruebas y build antes de desplegar.
+
+Sin migracion ni dependencias. Los rechazos son visibles y terminales; los fallos de lectura se
+reintentan sin enviar. API y trabajador se despliegan juntos. El rollback revierte codigo, no
+reactiva envios descartados, y devuelve el riesgo de responder con el bot pausado.
 
 1. Migracion aditiva, contrato y verificacion remota de RLS/privilegios.
 2. Comando API/BFF y pruebas de autorizacion, repeticion y conflicto.

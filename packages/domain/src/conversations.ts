@@ -31,9 +31,7 @@ export type AgentInvocationEligibility =
   | { allowed: true }
   | { allowed: false; reason: 'automation_not_auto' };
 
-export function getAgentInvocationEligibility(
-  automationMode: AutomationMode
-): AgentInvocationEligibility {
+export function getAgentInvocationEligibility(automationMode: unknown): AgentInvocationEligibility {
   return automationMode === 'auto'
     ? { allowed: true }
     : { allowed: false, reason: 'automation_not_auto' };
