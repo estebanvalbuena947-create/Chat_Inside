@@ -15,7 +15,7 @@ function createClientFake(responses: FakeResponse[]) {
   let index = 0;
   const from = vi.fn(() => {
     const builder: Record<string, unknown> = {};
-    for (const method of ['eq', 'is', 'limit', 'lt', 'lte', 'order', 'select', 'update']) {
+    for (const method of ['eq', 'in', 'is', 'limit', 'lt', 'lte', 'order', 'select', 'update']) {
       builder[method] = (...args: unknown[]) => {
         calls.push({ args, method });
         return builder;
@@ -219,7 +219,17 @@ describe('ZernioOutboundWorker envio con plantilla', () => {
     const client = {
       from: (table: string) => {
         const builder: Record<string, unknown> = {};
-        for (const method of ['eq', 'is', 'limit', 'lt', 'lte', 'order', 'select', 'update']) {
+        for (const method of [
+          'eq',
+          'in',
+          'is',
+          'limit',
+          'lt',
+          'lte',
+          'order',
+          'select',
+          'update'
+        ]) {
           builder[method] = () => builder;
         }
         builder.then = (resolve: (value: FakeResponse) => unknown) =>
@@ -249,6 +259,7 @@ describe('ZernioOutboundWorker envio con plantilla', () => {
         {
           data: {
             body: 'Hola, confirmamos tu reservacion.',
+            sender_type: 'agent',
             channel_account_id: 'canal-1',
             conversation_id: 'conversacion-1',
             id: 'mensaje-1',
@@ -312,6 +323,7 @@ describe('ZernioOutboundWorker envio con plantilla', () => {
         {
           data: {
             body: 'Hola',
+            sender_type: 'agent',
             channel_account_id: 'canal-1',
             conversation_id: 'conversacion-1',
             id: 'mensaje-1',
@@ -364,10 +376,19 @@ describe('ZernioOutboundWorker envio con plantilla', () => {
 describe('ZernioOutboundWorker envio con adjunto', () => {
   function createAttachmentClientFake(options: {
     attachment?: Record<string, unknown>;
+    automationMode?: unknown;
+    automationError?: unknown;
+    missingConversation?: boolean;
+    messageStatus?: string;
+    attempts?: number;
+    pauseWhileSigning?: boolean;
+    senderType?: string;
+    template?: boolean;
     signError?: unknown;
     signed?: boolean;
   }) {
     const bucketsFirmados: string[] = [];
+    let persistedStatus = options.messageStatus ?? 'queued';
     const calls: Array<{ args: unknown[]; metodo: string; tabla: string }> = [];
     const seen: Record<string, number> = {};
     const respuestas: Record<string, FakeResponse[]> = {
@@ -381,19 +402,26 @@ describe('ZernioOutboundWorker envio con adjunto', () => {
             external_reference: 'zernio:cuenta-1:conversation:proveedor-1'
           },
           error: null
+        },
+        {
+          data: options.missingConversation
+            ? null
+            : { automation_mode: 'automationMode' in options ? options.automationMode : 'auto' },
+          error: options.automationError ?? null
         }
       ],
       messages: [
         {
           data: {
             body: 'Aqui tienes la foto',
+            sender_type: options.senderType ?? 'automation',
             channel_account_id: 'canal-1',
             conversation_id: 'conversacion-1',
             id: 'mensaje-1',
             idempotency_key: 'clave-1',
-            status: 'queued',
-            whatsapp_template_language: null,
-            whatsapp_template_name: null
+            status: options.messageStatus ?? 'queued',
+            whatsapp_template_language: options.template ? 'es_MX' : null,
+            whatsapp_template_name: options.template ? 'notificacion_48h' : null
           },
           error: null
         },
@@ -405,7 +433,12 @@ describe('ZernioOutboundWorker envio con adjunto', () => {
         { data: [], error: null },
         {
           data: [
-            { attempts: 0, id: 'outbox-1', payload: { messageId: 'mensaje-1' }, tenant_id: 't-1' }
+            {
+              attempts: options.attempts ?? 0,
+              id: 'outbox-1',
+              payload: { messageId: 'mensaje-1' },
+              tenant_id: 't-1'
+            }
           ],
           error: null
         },
@@ -422,18 +455,34 @@ describe('ZernioOutboundWorker envio con adjunto', () => {
     const client = {
       from: (tabla: string) => {
         const builder: Record<string, unknown> = {};
-        for (const method of ['eq', 'is', 'limit', 'lt', 'lte', 'order', 'select']) {
+        let statusFilter: unknown[] | undefined;
+        let statusPatch: string | undefined;
+        for (const method of ['eq', 'in', 'is', 'limit', 'lt', 'lte', 'order', 'select']) {
           builder[method] = (...args: unknown[]) => {
             calls.push({ args, metodo: method, tabla });
+            if (args[0] === 'status' && (method === 'eq' || method === 'in')) {
+              statusFilter = method === 'in' ? (args[1] as unknown[]) : [args[1]];
+            }
             return builder;
           };
         }
         builder.update = (...args: unknown[]) => {
           calls.push({ args, metodo: 'update', tabla });
+          statusPatch = (args[0] as { status?: string }).status;
           return builder;
         };
-        builder.then = (resolve: (value: FakeResponse) => unknown) =>
-          Promise.resolve(siguiente(tabla)).then(resolve);
+        builder.then = (resolve: (value: FakeResponse) => unknown) => {
+          const response = siguiente(tabla);
+          if (
+            tabla === 'messages' &&
+            !response.error &&
+            statusPatch &&
+            (!statusFilter || statusFilter.includes(persistedStatus))
+          ) {
+            persistedStatus = statusPatch;
+          }
+          return Promise.resolve(response).then(resolve);
+        };
         builder.maybeSingle = () => Promise.resolve(siguiente(tabla));
         return builder;
       },
@@ -441,6 +490,9 @@ describe('ZernioOutboundWorker envio con adjunto', () => {
         from: (bucket: string) => ({
           createSignedUrls: async (paths: string[]) => {
             bucketsFirmados.push(bucket);
+            if (options.pauseWhileSigning) {
+              respuestas.conversations![1] = { data: { automation_mode: 'paused' }, error: null };
+            }
             if (options.signError) return { data: null, error: options.signError };
             return {
               data:
@@ -456,7 +508,15 @@ describe('ZernioOutboundWorker envio con adjunto', () => {
         })
       }
     };
-    return { bucketsFirmados, calls, client };
+    return {
+      bucketsFirmados,
+      calls,
+      client,
+      currentStatus: () => persistedStatus,
+      markRead: () => {
+        persistedStatus = 'read';
+      }
+    };
   }
 
   function actualizacionDeMensaje(
@@ -470,6 +530,160 @@ describe('ZernioOutboundWorker envio con adjunto', () => {
         (call.args[0] as { status?: string } | undefined)?.status === estado
     )?.args[0];
   }
+
+  describe.each(['paused', 'suggest', null, undefined, 'desconocido'])(
+    'automatizacion con modo %s',
+    (automationMode) => {
+      it.each(['text', 'media', 'template'])(
+        'no despacha %s ya en cola, tampoco en un reintento',
+        async (kind) => {
+          const { calls, client } = createAttachmentClientFake({
+            attempts: 1,
+            attachment:
+              kind === 'media'
+                ? { bucket: 'branch-media', kind: 'image', storage_object_path: 'foto.jpg' }
+                : undefined,
+            automationMode,
+            template: kind === 'template'
+          });
+          const dispatcher = { send: vi.fn() };
+          await new ZernioOutboundWorker(() => client as never, dispatcher).drain();
+
+          expect(dispatcher.send).not.toHaveBeenCalled();
+          expect(actualizacionDeMensaje(calls, 'failed')).toEqual({ status: 'failed' });
+          expect(calls).toContainEqual({
+            args: [
+              expect.objectContaining({ failure_code: 'automation_not_auto', state: 'failed' })
+            ],
+            metodo: 'update',
+            tabla: 'outbox_events'
+          });
+          expect(calls).toContainEqual({
+            args: ['automation_mode'],
+            metodo: 'select',
+            tabla: 'conversations'
+          });
+          expect(
+            calls.filter(
+              (call) =>
+                call.tabla === 'conversations' &&
+                call.metodo === 'eq' &&
+                call.args[0] === 'tenant_id'
+            )
+          ).toHaveLength(2);
+        }
+      );
+    }
+  );
+
+  it('respeta una pausa mientras firma el adjunto', async () => {
+    const { bucketsFirmados, calls, client } = createAttachmentClientFake({
+      attachment: { bucket: 'branch-media', kind: 'image', storage_object_path: 'foto.jpg' },
+      pauseWhileSigning: true
+    });
+    const dispatcher = { send: vi.fn() };
+    await new ZernioOutboundWorker(() => client as never, dispatcher).drain();
+    expect(bucketsFirmados).toEqual(['branch-media']);
+    expect(dispatcher.send).not.toHaveBeenCalled();
+    expect(actualizacionDeMensaje(calls, 'failed')).toEqual({ status: 'failed' });
+  });
+
+  it.each([{ automationError: { code: 'unavailable' } }, { missingConversation: true }])(
+    'no envia si no puede comprobar el modo: %j',
+    async (options) => {
+      const { calls, client } = createAttachmentClientFake(options);
+      const dispatcher = { send: vi.fn() };
+      await new ZernioOutboundWorker(() => client as never, dispatcher).drain();
+      expect(dispatcher.send).not.toHaveBeenCalled();
+      expect(actualizacionDeMensaje(calls, 'queued')).toEqual({ status: 'queued' });
+      expect(calls).toContainEqual({
+        args: [
+          expect.objectContaining({
+            failure_code: 'automation_state_unavailable',
+            state: 'pending'
+          })
+        ],
+        metodo: 'update',
+        tabla: 'outbox_events'
+      });
+    }
+  );
+
+  it('un fallo de lectura agota el presupuesto sin enviar', async () => {
+    const { calls, client } = createAttachmentClientFake({
+      attempts: 2,
+      automationError: { code: 'unavailable' }
+    });
+    const dispatcher = { send: vi.fn() };
+    await new ZernioOutboundWorker(() => client as never, dispatcher).drain();
+    expect(dispatcher.send).not.toHaveBeenCalled();
+    expect(actualizacionDeMensaje(calls, 'failed')).toEqual({ status: 'failed' });
+  });
+
+  it.each([false, true])(
+    'envia el mensaje automatico con auto (plantilla: %s)',
+    async (template) => {
+      const { client } = createAttachmentClientFake({ template });
+      const dispatcher = { send: vi.fn(async () => ({ providerMessageId: 'p-1', sentAt: null })) };
+      await new ZernioOutboundWorker(() => client as never, dispatcher).drain();
+      expect(dispatcher.send).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('permite a una persona responder con el bot pausado', async () => {
+    const { client } = createAttachmentClientFake({
+      senderType: 'agent',
+      automationMode: 'paused'
+    });
+    const dispatcher = { send: vi.fn(async () => ({ providerMessageId: 'p-1', sentAt: null })) };
+    await new ZernioOutboundWorker(() => client as never, dispatcher).drain();
+    expect(dispatcher.send).toHaveBeenCalledOnce();
+  });
+
+  it('un remitente desconocido no puede evitar el bloqueo', async () => {
+    const { calls, client } = createAttachmentClientFake({
+      senderType: 'desconocido',
+      automationMode: 'paused'
+    });
+    const dispatcher = { send: vi.fn() };
+    await new ZernioOutboundWorker(() => client as never, dispatcher).drain();
+    expect(dispatcher.send).not.toHaveBeenCalled();
+    expect(actualizacionDeMensaje(calls, 'failed')).toEqual({ status: 'failed' });
+  });
+
+  it.each(['sent', 'delivered', 'read'])(
+    'reconcilia un mensaje %s sin reenviarlo ni cambiar su estado al pausar',
+    async (messageStatus) => {
+      const { calls, client } = createAttachmentClientFake({
+        messageStatus,
+        automationMode: 'paused'
+      });
+      const dispatcher = { send: vi.fn() };
+      await new ZernioOutboundWorker(() => client as never, dispatcher).drain();
+      expect(dispatcher.send).not.toHaveBeenCalled();
+      expect(calls.filter((call) => call.tabla === 'messages' && call.metodo === 'update')).toEqual(
+        []
+      );
+      expect(calls).toContainEqual({
+        args: [expect.objectContaining({ state: 'completed' })],
+        metodo: 'update',
+        tabla: 'outbox_events'
+      });
+    }
+  );
+
+  it('un acuse de lectura concurrente no retrocede cuando el envio devuelve error', async () => {
+    const { client, currentStatus, markRead } = createAttachmentClientFake({});
+    const dispatcher = {
+      send: vi.fn(async () => {
+        markRead();
+        throw new ZernioDispatchError(true, 'zernio_http_502');
+      })
+    };
+    await new ZernioOutboundWorker(() => client as never, dispatcher).drain();
+    expect(dispatcher.send).toHaveBeenCalledOnce();
+    expect(currentStatus()).toBe('read');
+  });
 
   /** El bucket que la fila declara es el que se firma, sea cual sea. */
   for (const bucket of ['branch-media', 'conversation-media']) {

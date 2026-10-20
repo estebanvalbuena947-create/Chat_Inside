@@ -1,5 +1,6 @@
 import { signMediaPaths } from '@chat-zernio/media';
 import type { SupabaseServerClient } from '@chat-zernio/config';
+import { getAgentInvocationEligibility } from '@chat-zernio/domain';
 
 /**
  * Aviso al bot.
@@ -335,6 +336,33 @@ export async function sendPendingBotDeliveries(input: {
     });
 
     try {
+      // Volver a leer tras preparar los adjuntos: una pausa mientras se firman tambien cuenta.
+      const { data: automation, error: automationError } = await input.supabase
+        .from('conversations')
+        .select('automation_mode')
+        .eq('id', fila.conversation_id)
+        .eq('tenant_id', fila.tenant_id)
+        .maybeSingle();
+      if (automationError || !automation) throw new Error('automation_state_unavailable');
+      if (!getAgentInvocationEligibility(automation.automation_mode).allowed) {
+        const { error: skipError } = await input.supabase
+          .from('bot_deliveries')
+          .update({
+            last_error: 'automation_not_auto',
+            processing_started_at: null,
+            status: 'skipped',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', fila.id)
+          .eq('tenant_id', fila.tenant_id);
+        if (skipError) throw new Error('automation_skip_failed');
+        resultados.push({
+          kind: 'skipped',
+          messageId: fila.message_id,
+          reason: 'automation_not_auto'
+        });
+        continue;
+      }
       await input.deliver(String(integracion.webhook_url), aviso);
       await input.supabase
         .from('bot_deliveries')

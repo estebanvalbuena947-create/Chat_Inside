@@ -5,12 +5,27 @@ import {
   attentionLevel,
   clampReadMark,
   conversationStatusPatch,
+  getAgentInvocationEligibility,
   handoffToHuman,
   needsAttention,
   nextReadMark
 } from './conversations';
 
 describe('conversation policies', () => {
+  it.each(['paused', 'suggest', undefined, null, '', 'AUTO', 'unknown'])(
+    'no autoriza automatizacion con modo %s',
+    (mode) => {
+      expect(getAgentInvocationEligibility(mode)).toEqual({
+        allowed: false,
+        reason: 'automation_not_auto'
+      });
+    }
+  );
+
+  it('autoriza automatizacion solo en auto', () => {
+    expect(getAgentInvocationEligibility('auto')).toEqual({ allowed: true });
+  });
+
   it.each(['open', 'pending'] as const)('keeps %s status on inbound message', (status) => {
     expect(applyInboundMessage(status)).toBe(status);
   });

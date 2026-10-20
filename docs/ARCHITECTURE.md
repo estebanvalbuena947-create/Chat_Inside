@@ -53,6 +53,10 @@ PostgreSQL/Supabase, las colas en tablas propias, el almacen privado, SSE, Zerni
 - El estado de un mensaje no retrocede: `read` prevalece sobre `delivered`, `sent` y `sending`.
 - Un medio no aprobado no puede incorporarse a un mensaje saliente.
 - Un handoff cambia la automatización a `paused`, excepto una política futura explícitamente aprobada.
+- Solo `auto` permite nuevos envios del bot. El encolado compartido lo exige y el trabajador relee
+  el modo por tenant antes de Zernio, tras preparar los adjuntos; un bloqueo queda fallido sin
+  reintento. El notificador de mensajes entrantes omite los avisos a n8n con el mismo criterio.
+  No afecta envios humanos ni cancela HTTP ya iniciado (ADR-068).
 - Un usuario no puede conocer ni operar recursos de otro tenant.
 
 ## Tiempo real

@@ -4,6 +4,33 @@ Las decisiones de esta fase son propuestas aprobadas para documentación. Una in
 
 ---
 
+## ADR-068 — La pausa se exige al encolar y antes del efecto externo (2026-10-19)
+
+- **Estado:** correccion autorizada por el usuario; pendiente de despliegue.
+- **Problema:** guardar `automation_mode = paused` no impedia que el notificador activara n8n ni
+  que la API y el trabajador enviaran respuestas automaticas. El interruptor global no reemplaza
+  la decision de cada conversacion.
+- **Decision:** reutilizar `getAgentInvocationEligibility` como unica regla: solo `auto` habilita
+  automatizacion, incluidos valores persistidos ausentes o desconocidos. El encolado compartido
+  rechaza nuevos mensajes del bot y conserva resultados idempotentes. El trabajador relee el modo
+  por tenant y conversacion despues de preparar los archivos, inmediatamente antes de Zernio.
+  El notificador de mensajes entrantes aplica la misma regla antes de entregar a n8n.
+- **Colas:** al observar un modo distinto de `auto`, el envio queda fallido con `automation_not_auto`
+  y sin reintento; el aviso se omite definitivamente. No se rearma lo descartado al reactivar. Si
+  falla la lectura, no hay efecto externo y rige el presupuesto de reintentos existente. Un evento
+  recuperado de un mensaje ya `sent`, `delivered` o `read` solo cierra la cola, sin reenviar ni
+  retroceder su estado. Los fallos solo actualizan mensajes `queued` o `sending`.
+- **Alternativas:** confiar la pausa a cada flujo n8n deja caminos sin proteger; comprobar solo al
+  encolar deja salir mensajes anteriores; esperar y reintentar al reactivar enviaria respuestas
+  obsoletas. Se conserva el estado `failed` existente, sin ampliar el contrato de estados.
+- **Compatibilidad:** sin migracion, dependencias ni cambios de permisos. Las respuestas humanas
+  continuan permitidas. Desplegar API y trabajador juntos. Revertir codigo restaura el defecto y
+  no recupera automaticamente mensajes o avisos descartados.
+- **Limites:** no se cancela HTTP ya iniciado; no hay transaccion entre la pausa y el proveedor.
+  Una pausa y reactivacion completas entre dos lecturas pueden pasar sin ser observadas. No se
+  cambian avisos operativos de botones de WhatsApp ni transportes externos que no usan esta API;
+  sus respuestas por `/v1/tools/messages` si quedan protegidas.
+
 ## ADR-067 — Invalidaciones por Broadcast privado y SSE sin sondeo (2026-10-19)
 
 - **Estado:** aceptada por el usuario; código preparado para despliegue manual.

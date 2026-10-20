@@ -292,7 +292,14 @@ describe('entrega del aviso al bot', () => {
    * el reclamo de una fila (en `maybeSingle`). Las demas tablas devuelven su fila en `maybeSingle` y
    * una lista en la espera, que es como las usa el notificador.
    */
-  function stubSupabase() {
+  function stubSupabase(
+    options: {
+      finalState?: { data: unknown; error: unknown };
+      updates?: unknown[];
+      attempts?: number;
+    } = {}
+  ) {
+    let conversationReads = 0;
     const cadenas: Record<string, Record<string, unknown>> = {};
     for (const tabla of ['bot_integrations', 'conversations', 'message_attachments', 'messages']) {
       cadenas[tabla] = {
@@ -300,7 +307,12 @@ describe('entrega del aviso al bot', () => {
         is: () => cadenas[tabla],
         limit: () => cadenas[tabla],
         lt: () => cadenas[tabla],
-        maybeSingle: async () => respuestas[tabla] ?? { data: null, error: null },
+        maybeSingle: async () => {
+          if (tabla === 'conversations' && ++conversationReads > 1 && options.finalState) {
+            return options.finalState;
+          }
+          return respuestas[tabla] ?? { data: null, error: null };
+        },
         order: () => cadenas[tabla],
         select: () => cadenas[tabla],
         then: (resolver: (valor: unknown) => unknown) =>
@@ -311,7 +323,7 @@ describe('entrega del aviso al bot', () => {
 
     const pendientes = [
       {
-        attempts: 0,
+        attempts: options.attempts ?? 0,
         conversation_id: 'conv-1',
         id: 'delivery-1',
         message_id: 'msg-1',
@@ -329,7 +341,10 @@ describe('entrega del aviso al bot', () => {
       select: () => cadenas.bot_deliveries,
       then: (resolver: (valor: unknown) => unknown) =>
         Promise.resolve({ data: pendientes, error: null }).then(resolver),
-      update: () => cadenas.bot_deliveries
+      update: (row: unknown) => {
+        options.updates?.push(row);
+        return cadenas.bot_deliveries;
+      }
     };
 
     return {
@@ -345,6 +360,7 @@ describe('entrega del aviso al bot', () => {
     },
     conversations: {
       data: {
+        automation_mode: 'auto',
         channel_account: {
           display_name: 'Inside Spa',
           platform: 'instagram',
@@ -372,6 +388,65 @@ describe('entrega del aviso al bot', () => {
       error: null
     }
   };
+
+  it.each(['paused', 'suggest', null, undefined, 'desconocido'])(
+    'omite definitivamente el aviso pendiente con modo %s',
+    async (automation_mode) => {
+      const deliver = vi.fn();
+      const updates: unknown[] = [];
+      const outcomes = await sendPendingBotDeliveries({
+        deliver,
+        supabase: stubSupabase({ finalState: { data: { automation_mode }, error: null }, updates })
+      });
+      expect(deliver).not.toHaveBeenCalled();
+      expect(outcomes).toEqual([
+        { kind: 'skipped', messageId: 'msg-1', reason: 'automation_not_auto' }
+      ]);
+      expect(updates).toContainEqual(
+        expect.objectContaining({
+          status: 'skipped',
+          processing_started_at: null,
+          last_error: 'automation_not_auto'
+        })
+      );
+    }
+  );
+
+  it.each([
+    { data: null, error: { code: 'unavailable' } },
+    { data: null, error: null }
+  ])('no entrega y reintenta si no puede leer el modo: %j', async (finalState) => {
+    const deliver = vi.fn();
+    const updates: unknown[] = [];
+    const outcomes = await sendPendingBotDeliveries({
+      deliver,
+      supabase: stubSupabase({ finalState, updates })
+    });
+    expect(deliver).not.toHaveBeenCalled();
+    expect(outcomes).toEqual([
+      { kind: 'failed', messageId: 'msg-1', reason: 'automation_state_unavailable' }
+    ]);
+    expect(updates).toContainEqual(
+      expect.objectContaining({ status: 'pending', processing_started_at: null })
+    );
+  });
+
+  it('agota el presupuesto de lectura sin entregar', async () => {
+    const deliver = vi.fn();
+    const updates: unknown[] = [];
+    await sendPendingBotDeliveries({
+      deliver,
+      supabase: stubSupabase({
+        attempts: 4,
+        finalState: { data: null, error: { code: 'unavailable' } },
+        updates
+      })
+    });
+    expect(deliver).not.toHaveBeenCalled();
+    expect(updates).toContainEqual(
+      expect.objectContaining({ status: 'failed', processing_started_at: null })
+    );
+  });
 
   it('entrega el aviso con la cuenta de Zernio que lo origino', async () => {
     const entregas: Array<{ url: string; body: Record<string, unknown> }> = [];

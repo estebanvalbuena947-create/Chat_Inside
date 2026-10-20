@@ -3,7 +3,7 @@
 - **Estado:** aprobada para implementacion
 - **Responsable:** conversaciones
 - **Fecha:** 2026-08-14
-- **Cierre:** implementada con migracion `20260814235912_add_conversation_automation_version`; pendiente solo la integracion futura del Agent Gateway.
+- **Cierre:** interruptor implementado con migracion `20260814235912_add_conversation_automation_version`; cumplimiento en encolado y transporte preparado el 2026-10-19, pendiente de despliegue.
 
 ## Problema y resultado
 
@@ -20,6 +20,23 @@ Cada conversacion comienza con `automation_mode = auto`. Cualquier integrante au
 5. Antes de que un futuro Agent Gateway cree un envio, debera comprobar que el modo sigue en `auto`; debera comprobarlo nuevamente antes del efecto externo.
 
 ## Contrato y seguridad
+
+### Cumplimiento de la pausa en el transporte (2026-10-19)
+
+- La regla del dominio solo habilita automatizacion cuando el modo es `auto`. `paused`, `suggest`
+  y cualquier valor ausente o desconocido no permiten nuevos mensajes automaticos.
+- El encolado compartido aplica la regla a `senderType = automation`, incluidos texto, multimedia,
+  galerias y plantillas. Un mensaje ya persistido con la misma clave sigue devolviendo su resultado
+  idempotente; la pausa no lo vuelve a enviar.
+- El trabajador comprueba de nuevo el modo vigente, por tenant y conversacion, despues de preparar
+  los adjuntos e inmediatamente antes del envio. Un envio bloqueado queda `failed`, con evento
+  terminal y codigo `automation_not_auto`, sin reintentos ni reactivacion automatica al encender el bot.
+- Los avisos pendientes a n8n tambien comprueban el modo al entregar y se omiten definitivamente si
+  no es `auto`. Un fallo de lectura no autoriza el efecto: se reintenta con el presupuesto existente.
+- Los mensajes humanos siguen permitidos. No se cancela una peticion que ya viaja al proveedor;
+  no se promete atomicidad entre una escritura de pausa y una llamada HTTP externa.
+- No cambia el esquema ni se agregan dependencias. Desplegar API y trabajador juntos; revertir el
+  codigo restaura el defecto y no rearma mensajes o avisos descartados.
 
 - `PATCH /v1/tenants/:tenantId/conversations/:conversationId/automation` recibe `{ automationMode, automationVersion }`.
 - Sin sesion: `401`; sin membresia: `403`; conversacion inexistente u horizontal: `404`; entrada invalida: `400`; conflicto concurrente: `409`.

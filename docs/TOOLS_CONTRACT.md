@@ -92,6 +92,15 @@ esa conversación · `422` falta la conversación o la clave, no hay ni texto ni
 del bot está apagado en el espacio, la ventana de 24 horas de WhatsApp está cerrada, o `whatsappTemplate`
 viene mezclado con texto, multimedia o `templateName`.
 
+La pausa por conversacion tambien se exige en servidor: un nuevo envio del bot responde `422`
+cuando `automationMode` no es `auto` (incluye `paused` y `suggest`). Se aplica a texto, archivos,
+galerias y plantillas. Repetir una clave ya guardada devuelve ese mismo mensaje, sin volver a encolarlo.
+Antes de llamar a Zernio, el trabajador consulta de nuevo el modo vigente; si ya no es `auto`, deja
+mensaje y evento fallidos con `automation_not_auto`, sin reintentos. Reactivar el bot no rearma esos
+envios. Un fallo de lectura se reintenta con el presupuesto existente y nunca autoriza a enviar.
+Los avisos de mensajes entrantes pendientes a n8n se omiten con el mismo criterio. La pausa no
+bloquea respuestas humanas ni puede retirar una peticion que ya viaja al proveedor.
+
 ### Un solo camino de respuesta
 
 **Una respuesta, un nodo.** El canal lo resuelve la API a partir de la conversación: no lo elige el

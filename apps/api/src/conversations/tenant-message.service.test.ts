@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TenantMessageService } from './tenant-message.service';
+import type { CreateOutboundMessage } from '@chat-zernio/contracts';
 
 const tenantId = '11111111-1111-4111-8111-111111111111';
 const userId = '22222222-2222-4222-8222-222222222222';
@@ -385,6 +386,7 @@ function catalogFake(templates: unknown[]) {
 
 function conversationRow(plataforma = 'whatsapp') {
   return {
+    automation_mode: 'auto',
     channel_account: { platform: plataforma, provider: 'zernio' },
     channel_account_id: channelAccountId,
     id: conversationId
@@ -439,6 +441,97 @@ function encoladaConAdjunto(bucket = 'conversation-media', path = uploadPath) {
     error: null
   };
 }
+
+describe('TenantMessageService pausa del bot', () => {
+  const commands: CreateOutboundMessage[] = [
+    { body: 'Hola', idempotencyKey, kind: 'text' },
+    { body: 'Foto', extension: 'jpg', idempotencyKey, kind: 'media', uploadId },
+    {
+      idempotencyKey,
+      kind: 'whatsapp_template',
+      whatsappTemplate: { language: 'es_MX', name: 'notificacion_48h' }
+    }
+  ];
+
+  describe.each(['paused', 'suggest', null, undefined, 'desconocido'])(
+    'con modo %s',
+    (automation_mode) => {
+      it.each(commands)(
+        'rechaza $kind del bot sin escrituras ni consultas al almacen',
+        async (command) => {
+          const catalog = catalogFake([plantillaAprobada]);
+          const { escrituras, service, uploadedObjectExists } = createService({
+            catalog,
+            conversation: { ...conversationRow('instagram'), automation_mode }
+          });
+
+          await expect(
+            service.enqueueOutbound({
+              command,
+              conversationId,
+              senderType: 'automation',
+              senderUserId: null,
+              tenantId
+            })
+          ).rejects.toMatchObject({ status: 422 });
+          expect(escrituras).toEqual([]);
+          expect(uploadedObjectExists).not.toHaveBeenCalled();
+          expect(catalog.readForChannelAccount).not.toHaveBeenCalled();
+        }
+      );
+    }
+  );
+
+  it.each([
+    ['automation', 'auto'],
+    ['agent', 'paused'],
+    ['agent', 'suggest']
+  ] as const)('permite %s cuando el modo es %s', async (senderType, automation_mode) => {
+    const { insertados, service } = createService({
+      catalog: catalogFake([]),
+      conversation: { ...conversationRow('instagram'), automation_mode },
+      inserted: () => ({
+        ...insertada(),
+        data: { ...insertada().data, sender_type: senderType }
+      })
+    });
+
+    await service.enqueueOutbound({
+      command: commands[0]!,
+      conversationId,
+      senderType,
+      senderUserId: senderType === 'agent' ? userId : null,
+      tenantId
+    });
+    expect(insertados).toHaveLength(1);
+    expect(insertados[0]?.sender_type).toBe(senderType);
+  });
+
+  it.each(['queued', 'sent', 'failed'])(
+    'repetir un mensaje %s tras pausar devuelve el original sin reenviarlo',
+    async (status) => {
+      const { escrituras, service } = createService({
+        catalog: catalogFake([]),
+        conversation: { ...conversationRow('instagram'), automation_mode: 'paused' },
+        existing: {
+          ...insertada(status).data,
+          conversation_id: conversationId,
+          sender_type: 'automation'
+        }
+      });
+      await expect(
+        service.enqueueOutbound({
+          command: commands[0]!,
+          conversationId,
+          senderType: 'automation',
+          senderUserId: null,
+          tenantId
+        })
+      ).resolves.toMatchObject({ item: { id: messageId, status } });
+      expect(escrituras).toEqual([]);
+    }
+  );
+});
 
 describe('TenantMessageService ventana de WhatsApp', () => {
   const hace = (horas: number) => new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
