@@ -10,7 +10,28 @@ La API y web publicadas todavía necesitan este código. El usuario eligió ejec
 el despliegue manual. No ejecutar `db push` para este paquete: la migración ya está
 registrada remotamente y existen otras migraciones locales pendientes ajenas.
 
-## Paquete
+## Despliegue desde main
+
+El usuario solicitó publicar el cambio en `main`. En el servidor, con el checkout
+operativo limpio:
+
+```bash
+cd /opt/wepflash
+git status --short
+git fetch origin
+git switch main
+git pull --ff-only origin main
+bash deploy.sh
+docker service ps wepflash_api --no-trunc
+docker service ps wepflash_web --no-trunc
+```
+
+Si `git status` muestra cambios propios del servidor o archivos extraídos del
+paquete anterior, conservarlos antes de actualizar. No usar `reset --hard`,
+`clean` ni `pull --force` para superar el aviso. Una publicación en GitHub no
+actualiza por sí sola los servicios de Swarm: hay que ejecutar `deploy.sh`.
+
+## Alternativa: paquete de fuentes
 
 `chat-events-20261019.tar.gz` contiene únicamente los archivos del cambio de
 eventos, pruebas, plan, especificación y esta guía. No contiene `.env`, secretos,
@@ -36,8 +57,8 @@ docker service ps wepflash_web --no-trunc
 ```
 
 El destino debe ser el checkout operativo actual. Comparar antes cualquier cambio
-hecho directamente en esos archivos del servidor. No ejecutar `git pull` esperando
-recibir este paquete: no se creó commit ni se hizo push.
+hecho directamente en esos archivos del servidor. Usar una sola vía: actualizar
+desde `main` o extraer el paquete; no mezclar ambas sobre archivos modificados.
 
 `deploy.sh` construye una imagen nueva y actualiza Docker Swarm. No usar Docker
 Compose para este servidor. El trabajador no cambia en esta tarea; sus escrituras
