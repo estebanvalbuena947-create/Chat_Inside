@@ -151,13 +151,13 @@ describe('traducir una pre-reserva de la base', () => {
     expect(normalizeDraft({}).evidencia).toBeNull();
   });
 
-  it('fecha la entrada por la marca de revision y el cierre por la confirmacion', () => {
+  it('conserva revisión y confirmación sin inventar una fecha de creación', () => {
     const borrador = normalizeDraft({
       comprobante_revision_at: '2026-09-21T14:30:00.000Z',
       pabau_confirmado_at: '2026-09-22T16:00:00.000Z'
     });
     expect(borrador.revisadaEn).toBe('2026-09-21T14:30:00.000Z');
-    expect(borrador.entroEn?.toISOString()).toBe('2026-09-21T14:30:00.000Z');
+    expect(borrador.entroEn).toBeNull();
     expect(borrador.confirmadaEn).toBe('2026-09-22T16:00:00.000Z');
     expect(borrador.cerradaEn?.toISOString()).toBe('2026-09-22T16:00:00.000Z');
   });

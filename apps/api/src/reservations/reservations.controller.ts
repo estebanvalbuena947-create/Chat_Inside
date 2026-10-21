@@ -45,7 +45,8 @@ export class ReservationsController {
       request.headers.authorization,
       parsedTenantId.data,
       new Date(),
-      parsedQuery.data.date
+      parsedQuery.data.date,
+      parsedQuery.data.draftScope
     );
   }
 

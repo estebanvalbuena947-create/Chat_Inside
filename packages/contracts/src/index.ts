@@ -80,6 +80,7 @@ export const messageDirectionSchema = z.enum(['inbound', 'outbound']);
 export const messageSenderTypeSchema = z.enum(['contact', 'agent', 'automation', 'system']);
 
 export const conversationListQuerySchema = z.object({
+  conversationId: z.string().uuid().optional(),
   assignmentScope: conversationAssignmentScopeSchema.default('all'),
   cursor: z.string().trim().max(400).optional(),
   kind: z.enum(['messages', 'comments']).optional(),
@@ -281,13 +282,26 @@ export const createOutboundMessageSchema = z.union([
 ]);
 
 /**
+ * El tamaño maximo de un archivo que se adjunta a un mensaje, en bytes.
+ *
+ * Una sola cifra por capa: de aqui la toman la validacion de la respuesta, el lector multipart y la
+ * comprobacion de la API. El bucket privado y la restriccion de la fila del adjunto no pueden leer
+ * TypeScript y llevan su copia en la migracion; la web tambien mantiene la suya porque no depende de
+ * este paquete (habla con la API por HTTP). Al mover esta cifra hay que mover esas tres.
+ */
+export const maxOutboundMediaBytes = 50 * 1024 * 1024;
+
+/** El mismo tope escrito como lo lee una persona, para no repetir la cifra en los mensajes. */
+export const maxOutboundMediaLabel = `${maxOutboundMediaBytes / (1024 * 1024)} MB`;
+
+/**
  * Respuesta de la subida.
  *
  * `uploadId` es opaco y no revela ninguna ruta del almacen; el resto es lo que la interfaz necesita
  * para mostrar la ficha del archivo antes de enviarlo.
  */
 export const conversationMediaUploadResponseSchema = z.object({
-  byteSize: z.number().int().min(1).max(26214400),
+  byteSize: z.number().int().min(1).max(maxOutboundMediaBytes),
   contentType: z.string().min(1).max(128),
   extension: outboundMediaExtensionSchema,
   kind: outboundMediaKindSchema,
@@ -813,12 +827,54 @@ export type CommentReplyResponse = z.infer<typeof commentReplyResponseSchema>;
    ------------------------------------------------------------------------------------------------ */
 
 export const metricsSummaryQuerySchema = z.object({
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
+  date: z.iso.date().optional(),
   days: z.coerce.number().int().min(1).max(90).default(30)
 });
+
+export const weeklyShiftSchema = z.object({
+  day: z.number().int().min(0).max(6),
+  start: z.number().int().min(0).max(1439),
+  end: z.number().int().min(0).max(1440)
+});
+export const saveWorkScheduleSchema = z.object({
+  expectedId: z.string().uuid().nullable(),
+  shifts: z.array(weeklyShiftSchema).max(28)
+});
+export const workScheduleSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  effectiveAt: z.string(),
+  shifts: z.array(weeklyShiftSchema)
+});
+export const workScheduleListSchema = z.object({
+  items: z.array(workScheduleSchema),
+  timeZone: z.literal('America/Mexico_City')
+});
+export type WorkSchedule = z.infer<typeof workScheduleSchema>;
+export type SaveWorkSchedule = z.infer<typeof saveWorkScheduleSchema>;
+export const responseDetailQuerySchema = metricsSummaryQuerySchema.extend({
+  asOf: z.iso.datetime().optional(),
+  bucket: z.enum(['under', 'between', 'over']),
+  page: z.coerce.number().int().min(1).max(10000).default(1)
+});
+export const responseDetailSchema = z.object({
+  contactName: z.string().nullable().default(null),
+  conversationId: z.string(),
+  inboundAt: z.string(),
+  respondedAt: z.string(),
+  elapsedSeconds: z.number().int().nonnegative(),
+  seconds: z.number().int().nonnegative(),
+  basis: z.enum(['working', 'elapsed']),
+  bucket: z.enum(['under', 'between', 'over'])
+});
+export const responseDetailListSchema = z.object({
+  items: z.array(responseDetailSchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  truncated: z.boolean()
+});
+export type ResponseDetailList = z.infer<typeof responseDetailListSchema>;
 
 export type MetricsSummaryQuery = z.infer<typeof metricsSummaryQuerySchema>;
 
@@ -864,6 +920,8 @@ export const metricsResponseThresholdsSchema = z.object({
 });
 
 export const metricsResponseTimeSchema = z.object({
+  workingConversations: z.number().int().default(0),
+  elapsedConversations: z.number().int().default(0),
   /** Nulo cuando ningun asesor respondio en el periodo: un cero mentiria. */
   averageSeconds: z.number().int().nullable(),
   betweenFiveAndTenMinutes: z.number().int(),
@@ -890,6 +948,9 @@ export const metricsParticipantSchema = z.object({
 export type MetricsParticipant = z.infer<typeof metricsParticipantSchema>;
 
 export const metricsSummarySchema = z.object({
+  operationalDate: z.string().optional(),
+  updatedAt: z.string().optional(),
+  timeZone: z.string().optional(),
   closedConversations: z.number().int(),
   closure: metricsClosureSchema,
   closureActions: metricsClosureActionsSchema,
@@ -1043,6 +1104,7 @@ export const reservationDraftSchema = z.object({
   entroEn: z.string().nullable(),
   estado: z.string(),
   estadoMostrado: reservationStatusSchema,
+  estadoEtiqueta: z.string().optional(),
   evidencia: reservationEvidenceSchema.nullable(),
   horarioPendiente: z.boolean(),
   horarioProgramado: z.string().nullable(),
@@ -1129,13 +1191,15 @@ export const reservationKpisSchema = z.object({
 
 /** Fecha operativa elegida en el tablero; se interpreta en la zona del negocio. */
 export const reservationBoardQuerySchema = z.object({
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
+  draftScope: z.enum(['day', 'all']).default('day'),
+  date: z.iso.date().optional()
 });
 
 export const reservationsBoardResponseSchema = z.object({
+  draftScope: z.enum(['day', 'all']).default('day'),
+  sinFechaCreacion: z.number().int().nonnegative().default(0),
+  porGestionar: z.array(reservationDraftSchema).default([]),
+  dailyDrafts: z.array(z.object({ date: z.string(), total: z.number().int() })).default([]),
   actualizadoEn: z.string(),
   operationalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   citasAgendadasFecha: z.array(reservationConfirmedSchema),

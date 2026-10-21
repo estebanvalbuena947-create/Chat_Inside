@@ -1004,3 +1004,30 @@ describe('TenantConversationService read mark', () => {
     expect(fake.from).not.toHaveBeenCalled();
   });
 });
+
+describe('abrir desde el detalle de una métrica', () => {
+  it('busca la conversación exacta dentro del tenant autorizado', async () => {
+    const { service, fake } = createService({
+      conversations: [{ data: [conversationRow()], error: null }]
+    });
+    const result = await service.list('Bearer valid.jwt', tenantId, {
+      assignmentScope: 'all',
+      limit: 50,
+      conversationId
+    });
+    expect(result.items[0].id).toBe(conversationId);
+    expect(fake.callsIn('conversations', 'eq')).toContainEqual(['id', conversationId]);
+    expect(fake.callsIn('conversations', 'eq')).toContainEqual(['tenant_id', tenantId]);
+  });
+  it('no revela una conversación por conocer su identificador sin pertenecer al tenant', async () => {
+    const { service, fake } = createService({}, { canAccess: false });
+    await expect(
+      service.list('Bearer invalid', tenantId, {
+        assignmentScope: 'all',
+        limit: 50,
+        conversationId
+      })
+    ).rejects.toThrow('forbidden');
+    expect(fake.from).not.toHaveBeenCalled();
+  });
+});

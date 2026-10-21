@@ -1,6 +1,9 @@
 'use client';
 
 import Image from 'next/image';
+import { useOperationalToday } from '../lib/use-operational-today';
+import WorkScheduleEditor from './work-schedule-editor';
+import ResponseWaitDetails from './response-wait-details';
 import dynamic from 'next/dynamic';
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import {
@@ -397,6 +400,7 @@ export default function HomePage(): React.ReactNode {
   >('inbox');
   const [metricsDays, setMetricsDays] = useState<number>(30);
   const [metricsDate, setMetricsDate] = useState<string | null>(null);
+  const operationalToday = useOperationalToday();
   const [metrics, setMetrics] = useState<MetricsState>({ kind: 'loading' });
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -1224,6 +1228,7 @@ export default function HomePage(): React.ReactNode {
           signal: controller.signal
         });
         const payload = (await response.json()) as MetricsPayload;
+        if (controller.signal.aborted) return;
         if (!response.ok || typeof payload.totalMessages !== 'number') {
           setMetrics({
             kind: 'error',
@@ -1231,7 +1236,7 @@ export default function HomePage(): React.ReactNode {
           });
           return;
         }
-        setMetrics({ kind: 'ready', data: payload });
+        if (!controller.signal.aborted) setMetrics({ kind: 'ready', data: payload });
       } catch (error) {
         if (controller.signal.aborted) return;
         setMetrics({
@@ -1241,7 +1246,7 @@ export default function HomePage(): React.ReactNode {
       }
     })();
     return () => controller.abort();
-  }, [activeView, metricsDate, metricsDays]);
+  }, [activeView, metricsDate, metricsDays, operationalToday]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => setMediaSearch(mediaSearchInput.trim()), 350);
@@ -4314,6 +4319,7 @@ export default function HomePage(): React.ReactNode {
                         </div>
                         <span className="team-member-access">Con acceso</span>
                       </div>
+                      <WorkScheduleEditor userId={member.userId} label={memberLabel(member)} />
                       <div className="team-member-actions">
                         <label>
                           <span>Rol</span>
@@ -4402,6 +4408,37 @@ export default function HomePage(): React.ReactNode {
             onChangeDays={(days) => {
               setMetricsDate(null);
               setMetricsDays(days);
+            }}
+            onOpenConversation={async (id) => {
+              const response = await fetch(`/api/inbox?conversationId=${encodeURIComponent(id)}`, {
+                cache: 'no-store'
+              });
+              const payload = await response.json();
+              if (
+                !response.ok ||
+                !Array.isArray(payload.conversations) ||
+                !payload.conversations.some((item: Conversation) => item.id === id)
+              )
+                throw new Error('La conversación no está disponible o ya no tienes acceso.');
+              setInbox((current) =>
+                current.kind === 'ready'
+                  ? {
+                      ...current,
+                      conversations: [
+                        ...payload.conversations,
+                        ...current.conversations.filter((item) => item.id !== id)
+                      ]
+                    }
+                  : {
+                      kind: 'ready',
+                      conversations: payload.conversations,
+                      nextCursor: null,
+                      tenant: payload.tenant
+                    }
+              );
+              setSelectedConversationId(id);
+              setIsMobileListOpen(false);
+              setActiveView('inbox');
             }}
             state={metrics}
           />
@@ -5103,6 +5140,9 @@ export default function HomePage(): React.ReactNode {
 }
 
 type MetricsPayload = {
+  updatedAt?: string;
+  operationalDate?: string;
+  timeZone?: string;
   closedConversations: number;
   closure: { byAdvisor: number; byBot: number };
   closureActions: { byAdvisor: number; byBot: number };
@@ -5122,6 +5162,8 @@ type MetricsPayload = {
   }>;
   periodDays: number;
   responseTime: {
+    workingConversations?: number;
+    elapsedConversations?: number;
     averageSeconds: number | null;
     betweenFiveAndTenMinutes: number;
     conversations: number;
@@ -5170,18 +5212,21 @@ function tramosDeEspera(responseTime: MetricsPayload['responseTime']) {
   return [
     {
       clave: 'ok',
+      bucket: 'under' as const,
       color: 'ok',
       etiqueta: 'Menos de ' + minutos(amberSeconds) + ' min',
       valor: responseTime.underFiveMinutes
     },
     {
       clave: 'aviso',
+      bucket: 'between' as const,
       color: 'aviso',
       etiqueta: 'Entre ' + minutos(amberSeconds) + ' y ' + minutos(redSeconds) + ' min',
       valor: responseTime.betweenFiveAndTenMinutes
     },
     {
       clave: 'alto',
+      bucket: 'over' as const,
       color: 'alto',
       etiqueta: 'Mas de ' + minutos(redSeconds) + ' min',
       valor: responseTime.overTenMinutes
@@ -5200,14 +5245,18 @@ function MetricsPanel({
   days,
   onChangeDate,
   onChangeDays,
+  onOpenConversation,
   state
 }: {
   date: string | null;
   days: number;
   onChangeDate: (date: string | null) => void;
   onChangeDays: (days: number) => void;
+  onOpenConversation: (id: string) => Promise<void>;
   state: MetricsState;
 }) {
+  const [waitBucket, setWaitBucket] = useState<'under' | 'between' | 'over' | null>(null);
+  useEffect(() => setWaitBucket(null), [date, days]);
   const maximo =
     state.kind === 'ready'
       ? Math.max(1, ...state.data.messagesPerDay.map((dia) => dia.received + dia.sent))
@@ -5227,7 +5276,7 @@ function MetricsPanel({
           <label className="metrics-select-label">
             <span className="metrics-card-label">Periodo</span>
             <AppSelect
-              aria-label="Periodo de las métricas"
+              ariaLabel="Periodo de las métricas"
               onChange={(value) => onChangeDays(Number(value))}
               options={[
                 { label: 'Hoy', value: '1' },
@@ -5255,6 +5304,12 @@ function MetricsPanel({
 
       {state.kind === 'ready' && (
         <>
+          <p className="operational-date-note">
+            Fecha operativa: {state.data.operationalDate ?? '—'} · Ciudad de México
+            {state.data.updatedAt
+              ? ` · Actualizado: ${formatOperationalDate(state.data.updatedAt)} ${formatOperationalTime(state.data.updatedAt)}`
+              : ''}
+          </p>
           <div className="metrics-cards">
             <div className="metrics-card metrics-card-visual blue">
               <span className="metrics-card-icon">↗</span>
@@ -5374,8 +5429,12 @@ function MetricsPanel({
           <div className="metrics-block metrics-wait-chart">
             <h3>Cuánto esperó el cliente</h3>
             <p className="metrics-note">
-              Esta métrica mide solo la primera respuesta de un asesor. Las respuestas del bot no se
-              incluyen.
+              Primera respuesta humana, sin contar respuestas del bot.{' '}
+              {state.data.responseTime.workingConversations ?? 0} medidas dentro del horario del
+              equipo;{' '}
+              {state.data.responseTime.elapsedConversations ??
+                state.data.responseTime.conversations}{' '}
+              en tiempo corrido por no tener historial de horario. El detalle muestra ambos tiempos.
             </p>
             {state.data.responseTime.conversations === 0 ? (
               <p className="metrics-note">
@@ -5384,19 +5443,42 @@ function MetricsPanel({
             ) : (
               <div className="metrics-wait-cards">
                 {tramosDeEspera(state.data.responseTime).map((tramo) => (
-                  <div className={'metrics-wait-card ' + tramo.color} key={tramo.clave}>
+                  <button
+                    type="button"
+                    className={'metrics-wait-card ' + tramo.color}
+                    key={tramo.clave}
+                    aria-expanded={waitBucket === tramo.bucket}
+                    onClick={() => setWaitBucket(tramo.bucket)}
+                  >
                     <span className="metrics-row-name">
                       <span className={'metrics-dot ' + tramo.color} />
                       {tramo.etiqueta}
                     </span>
                     <strong>{tramo.valor}</strong>
-                    <span>{tramo.valor === 1 ? 'conversación' : 'conversaciones'}</span>
-                  </div>
+                    <span>
+                      {tramo.valor === 1 ? 'conversación' : 'conversaciones'} · Ver detalle →
+                    </span>
+                  </button>
                 ))}
               </div>
             )}
           </div>
 
+          {waitBucket && (
+            <ResponseWaitDetails
+              key={`${date}:${days}:${waitBucket}`}
+              bucket={waitBucket}
+              label={
+                tramosDeEspera(state.data.responseTime).find((tramo) => tramo.bucket === waitBucket)
+                  ?.etiqueta ?? 'Detalle de espera'
+              }
+              asOf={state.data.updatedAt}
+              date={date}
+              days={days}
+              onClose={() => setWaitBucket(null)}
+              onOpenConversation={onOpenConversation}
+            />
+          )}
           {state.data.truncated && (
             <p className="metrics-note">
               Se alcanzo el tope de lectura: las cifras son un minimo, no el total.
@@ -5413,7 +5495,7 @@ function MetricsPanel({
                   <div
                     className="metrics-column"
                     key={dia.date}
-                    title={`${dia.received} recibidos · ${dia.sent} enviados`}
+                    title={`${dia.date} · ${dia.received} recibidos · ${dia.sent} enviados`}
                   >
                     <span className="metrics-column-value">{dia.received + dia.sent}</span>
                     <span

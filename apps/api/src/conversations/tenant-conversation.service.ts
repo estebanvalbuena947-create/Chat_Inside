@@ -370,6 +370,7 @@ export class TenantConversationService {
       ),
       query.kind
     );
+    if (query.conversationId) conversationsQuery.eq('id', query.conversationId);
     const platformScopedConversationsQuery = channelAccountIdsForPlatform
       ? conversationsQuery.in('channel_account_id', channelAccountIdsForPlatform)
       : conversationsQuery;

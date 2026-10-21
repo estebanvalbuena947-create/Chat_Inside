@@ -2,8 +2,9 @@ import { ForbiddenException, ServiceUnavailableException } from '@nestjs/common'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rpc = vi.fn();
+const from = vi.fn();
 vi.mock('@chat-zernio/config', () => ({
-  createReservationsSupabaseClient: vi.fn(() => ({ rpc }))
+  createReservationsSupabaseClient: vi.fn(() => ({ rpc, from }))
 }));
 
 import { ReservationsService } from './reservations.service';
@@ -74,5 +75,72 @@ describe('ReservationsService.decide', () => {
         note: null
       })
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+});
+
+describe('ReservationsService.board: gestión y creación', () => {
+  const now = new Date('2026-10-20T18:00:00Z');
+  const drafts = [
+    {
+      id: 1,
+      created_at: '2026-10-20T06:00:00Z',
+      estado_reserva: 'pendiente_pago',
+      monto_pagado: 100
+    },
+    {
+      id: 2,
+      created_at: '2026-10-19T18:00:00Z',
+      comprobante_revision_at: '2026-10-20T12:00:00Z',
+      estado_reserva: 'requiere_revision_pago'
+    },
+    { id: 3, created_at: '2026-10-20T10:00:00Z', estado_reserva: 'cancelando_expirada' },
+    { id: 4, comprobante_revision_at: '2026-10-20T12:00:00Z', estado_reserva: 'pendiente_pago' },
+    {
+      id: 5,
+      created_at: '2026-10-20T10:00:00Z',
+      estado_reserva: 'requiere_revision_pago',
+      monto_pagado: 200
+    }
+  ];
+  beforeEach(() => {
+    from.mockReset();
+    from.mockImplementation((table: string) => {
+      const query = {
+        select: vi.fn(() => query),
+        order: vi.fn(() => query),
+        range: vi
+          .fn()
+          .mockResolvedValue({ data: table === 'reservas_draft' ? drafts : [], error: null })
+      };
+      return query;
+    });
+  });
+  it('devuelve misma lista y conteo para hoy, sin sustituir creación por revisión', async () => {
+    const result = await service().board('Bearer token', tenantId, now);
+    expect(result.porGestionar.map((row) => row.id)).toEqual([1, 5]);
+    expect(result.kpis.porGestionar).toBe(result.porGestionar.length);
+    expect(result.kpis.montoPendiente).toBe(300);
+    expect(result.draftScope).toBe('day');
+    expect(result.sinFechaCreacion).toBe(1);
+    expect(result.creadasHoy.map((row) => row.id)).toEqual([1, 3, 5]);
+    expect(result.dailyDrafts).toEqual([{ date: '2026-10-20', total: 3 }]);
+    expect(result.preReservas.find((row) => row.id === 3)?.estadoEtiqueta).toBe(
+      'Cancelación por vencimiento'
+    );
+    expect(result.preReservas.find((row) => row.id === 4)?.creadaEn).toBeNull();
+  });
+  it('fecha elegida y todos los días mantienen alcances explícitos', async () => {
+    const selected = await service().board('Bearer token', tenantId, now, '2026-10-19');
+    expect(selected.porGestionar.map((row) => row.id)).toEqual([2]);
+    const all = await service().board('Bearer token', tenantId, now, '2026-10-19', 'all');
+    expect(all.porGestionar.map((row) => row.id)).toEqual([1, 4, 2, 5]);
+    expect(all.kpis.porGestionar).toBe(4);
+    expect(all.draftScope).toBe('all');
+  });
+  it('autoriza antes de consultar los datos externos', async () => {
+    await expect(
+      service(new ForbiddenException()).board('Bearer token', tenantId, now)
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(from).not.toHaveBeenCalled();
   });
 });

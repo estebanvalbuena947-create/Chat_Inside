@@ -8,21 +8,6 @@ El despliegue de API y trabajador es necesario para que la pausa tenga efecto en
 
 ## Cambios que hay que llevar al servidor
 
-### Despliegue desde Git
-
-El arreglo se integra en `main`; eso versiona el codigo, pero GitHub no despliega automaticamente
-en este servidor. Desde una copia limpia de `/opt/wepflash`, comprobar `git status --short` y luego:
-
-```bash
-git switch main && git pull --ff-only origin main && bash deploy.sh
-```
-
-Si aparecen cambios locales, revisar y respaldar antes de continuar: no usar `reset --hard`,
-`clean` ni sobrescribir el trabajo del servidor. Si falla la actualizacion, no ejecutar el despliegue
-con una version anterior por accidente. Conservar la imagen anterior para rollback.
-
-### Alternativa con el paquete preparado
-
 El paquete `bot-pause-20261019.tar.gz` contiene el dominio, el encolado de API, los dos caminos del
 trabajador, sus pruebas, la especificacion, el plan, el contrato de tools y esta guia. Excluye secretos,
 dependencias, compilados, migraciones y los cambios pendientes de tiempo real y adjuntos.
