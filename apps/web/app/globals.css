@@ -1813,7 +1813,7 @@ h2 {
   color: #6b7280;
   font-size: 12px;
 }
-.connected-channel-list > div {
+.connected-channel-list > .channel-accounts-heading {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4066,25 +4066,6 @@ h2 {
   text-align: left;
   text-transform: uppercase;
 }
-/*
- * Movil: la fila de un canal conectado es un flex de una sola linea (chip, nombre, Renombrar,
- * Reconectar, Remover). A 322 px de ancho del modal no caben cinco cosas y "Remover" se sale del
- * recuadro. Aqui el nombre crece y consume su linea, asi que los tres botones bajan a la siguiente y
- * quedan alineados a la derecha. El escritorio no cambia.
- */
-@media (max-width: 620px) {
-  .connected-channel-list > div {
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px 8px;
-    justify-content: flex-end;
-  }
-  .connected-channel-list > div strong {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-}
-
 .reservations-table td,
 .reservations-table th {
   border-bottom: 1px solid #eee9e0;
@@ -5086,6 +5067,7 @@ button:not(:disabled):active {
 .channel-accounts-heading {
   align-items: end;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
 }
 
@@ -5106,7 +5088,8 @@ button:not(:disabled):active {
 .channel-account-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr));
+  min-width: 0;
 }
 
 .channel-account-card {
@@ -5118,14 +5101,23 @@ button:not(:disabled):active {
     0 12px 26px rgb(56 48 33 / 9%);
   display: grid;
   gap: 18px;
+  grid-template-rows: 1fr auto;
+  min-width: 0;
   padding: 18px;
 }
 
 .channel-account-card-top {
-  align-items: start;
+  align-content: start;
+  align-items: center;
   display: grid;
   gap: 11px;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr);
+}
+
+.channel-account-card-top > div {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
 }
 
 .channel-account-mark {
@@ -5153,12 +5145,15 @@ button:not(:disabled):active {
 
 .channel-account-card-top .conversation-platform {
   display: inline-flex;
-  margin-bottom: 5px;
+  margin: 0 0 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .channel-account-card h4 {
   color: var(--brand-tinta);
   font-size: 15px;
+  line-height: 1.4;
   margin: 0;
   overflow-wrap: anywhere;
 }
@@ -5166,6 +5161,7 @@ button:not(:disabled):active {
 .channel-account-card p {
   color: var(--brand-tinta-suave);
   font-size: 12px;
+  line-height: 1.5;
   margin: 4px 0 0;
 }
 
@@ -5175,7 +5171,11 @@ button:not(:disabled):active {
   color: #387148;
   font-size: 10px;
   font-weight: 700;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
   padding: 5px 8px;
+  white-space: nowrap;
 }
 
 .channel-account-actions {
@@ -5186,7 +5186,20 @@ button:not(:disabled):active {
 }
 
 .channel-account-actions .channel-rename-form {
+  flex-wrap: wrap;
   margin-left: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.channel-account-actions .channel-rename-form input {
+  flex: 1 1 140px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.channel-account-actions button {
+  min-height: 36px;
 }
 
 .channel-account-view-only {
@@ -5378,15 +5391,6 @@ button:not(:disabled):active {
   .channel-operations-connect .conversation-platform {
     justify-content: center;
     width: 100%;
-  }
-
-  .channel-account-card-top {
-    grid-template-columns: 42px minmax(0, 1fr);
-  }
-
-  .channel-account-status {
-    grid-column: 2;
-    justify-self: start;
   }
 
   .channel-account-actions,
@@ -6073,4 +6077,148 @@ button:not(:disabled):active {
 
 .metrics-period .app-select-trigger {
   min-height: 44px;
+}
+
+/* Work schedules and wait details share the operational palette and remain readable on phones. */
+.metrics-column-bar {
+  background: linear-gradient(180deg, #9a7457 0%, var(--brand-caoba) 100%);
+  max-width: 44px;
+  box-shadow: 0 4px 10px rgb(121 81 48 / 16%);
+}
+.reservations-daily-chart article i {
+  max-width: 44px;
+}
+.metrics-wait-card {
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.metrics-wait-card:hover {
+  box-shadow: 0 5px 14px rgb(56 48 33 / 12%);
+}
+.work-schedule {
+  min-width: 0;
+}
+.work-schedule-content {
+  border-top: 1px solid #e5ded1;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.work-schedule-content h5 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.work-schedule-content p,
+.work-schedule-content small,
+.operational-date-note {
+  color: var(--brand-tinta-suave);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.work-schedule-content fieldset {
+  border: 0;
+  min-width: 0;
+  padding: 0;
+}
+.work-schedule-day {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid #e5ded1;
+  padding: 12px 0;
+}
+.work-schedule-day > strong {
+  font-size: 13px;
+}
+.work-schedule-day > span {
+  color: var(--brand-tinta-suave);
+  font-size: 12px;
+}
+.work-schedule-shift {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+.work-schedule-shift label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  min-width: 0;
+}
+.work-schedule-shift input {
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid #cfc6b5;
+  border-radius: 8px;
+  background: white;
+  color: var(--brand-tinta);
+}
+.work-schedule-shift small {
+  flex-basis: 100%;
+}
+.work-schedule-actions,
+.response-wait-heading,
+.response-wait-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+.work-schedule-content button,
+.response-wait-details button {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid #cfc6b5;
+  border-radius: 8px;
+  background: var(--ui-surface-muted);
+  color: var(--brand-caoba);
+}
+.response-wait-details {
+  background: var(--ui-surface);
+  border-radius: 16px;
+  padding: 20px;
+  min-width: 0;
+}
+.response-wait-details ul {
+  list-style: none;
+  padding: 0;
+}
+.response-wait-details li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid #e5ded1;
+}
+.response-wait-details li div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.response-wait-details p,
+.response-wait-details span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.operational-date-note,
+.reservations-all-days {
+  margin: 12px 0;
+}
+.reservations-all-days {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .response-wait-details li {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

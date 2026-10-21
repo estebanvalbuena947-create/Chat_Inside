@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException
 } from '@nestjs/common';
+import { maxOutboundMediaBytes, maxOutboundMediaLabel } from '@chat-zernio/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { encodeMediaCursor } from '@chat-zernio/domain';
 import {
@@ -307,14 +308,29 @@ describe('ConversationMediaService subida a la conversacion', () => {
     expect(uploads).toHaveLength(0);
   });
 
-  it('un archivo de 26 MB se rechaza sin escribir nada', async () => {
+  it('un archivo por encima del tope se rechaza sin escribir nada', async () => {
     const { service, uploads } = createService({});
-    const grande = Buffer.concat([jpegBytes, Buffer.alloc(26 * 1024 * 1024)]);
+    const grande = Buffer.concat([jpegBytes, Buffer.alloc(maxOutboundMediaBytes)]);
 
     await expect(
       service.upload('Bearer valid.jwt', tenantId, conversationId, grande)
-    ).rejects.toThrow('El archivo supera el límite de 25 MB.');
+    ).rejects.toThrow(`El archivo supera el límite de ${maxOutboundMediaLabel}.`);
     expect(uploads).toHaveLength(0);
+  });
+
+  /**
+   * El caso que motivo subir el tope: un comprobante escaneado de 23 MB no llegaba. Lo que se
+   * comprueba es que ya no se rechaza por el tamaño anterior, y que su ficha reporta el tamaño real.
+   */
+  it('un archivo de 26 MB, que antes se rechazaba, ahora se guarda', async () => {
+    const { service, uploads } = createService({});
+    const escaneado = Buffer.concat([jpegBytes, Buffer.alloc(26 * 1024 * 1024)]);
+
+    const respuesta = await service.upload('Bearer valid.jwt', tenantId, conversationId, escaneado);
+
+    expect(respuesta.byteSize).toBe(escaneado.length);
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]?.path.endsWith('.jpg')).toBe(true);
   });
 
   it('un archivo vacio se rechaza sin escribir nada', async () => {

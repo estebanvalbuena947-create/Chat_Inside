@@ -122,8 +122,12 @@ export function buildReservationKpis(
   confirmed: ReservationConfirmed[],
   decisions: ReservationDecision[],
   receipts: ReservationReceipt[],
-  options: { now: Date; operationalDay?: string; timeZone?: string }
-): { estados: Map<number | null, ReservationStatus>; kpis: ReservationKpis } {
+  options: { now: Date; operationalDay?: string; timeZone?: string; draftDay?: string }
+): {
+  estados: Map<number | null, ReservationStatus>;
+  kpis: ReservationKpis;
+  porGestionar: ReservationDraft[];
+} {
   const { now } = options;
   const porDecision = indexDecisions(decisions);
   const porComprobante = indexByDraftId(receipts);
@@ -133,8 +137,15 @@ export function buildReservationKpis(
     estados.set(draft.id, statusOf(draft, porDecision.get(draft.id)));
   }
 
+  const operationalDrafts = options.draftDay
+    ? drafts.filter((draft) =>
+        isReservationOnDay(draft.entroEn, options.draftDay as string, options.timeZone)
+      )
+    : drafts;
   const conEstado = (claves: ReservationStatus[]) =>
-    drafts.filter((draft) => claves.includes(estados.get(draft.id) as ReservationStatus));
+    operationalDrafts.filter((draft) =>
+      claves.includes(estados.get(draft.id) as ReservationStatus)
+    );
 
   const pendientes = conEstado(['pending']);
   const porRevisar = conEstado(['review', 'info']);
@@ -183,6 +194,7 @@ export function buildReservationKpis(
 
   return {
     estados,
+    porGestionar,
     kpis: {
       comprobantesPorRevisar: drafts.filter((draft) => Boolean(porComprobante.get(draft.id)))
         .length,
@@ -210,4 +222,14 @@ export function isReservationOnDay(value: unknown, day: string, timeZone?: strin
 export function isReservationToday(value: unknown, now: Date, timeZone?: string): boolean {
   const hoy = dayKeyInZone(now, timeZone);
   return hoy !== null && isReservationOnDay(value, hoy, timeZone);
+}
+
+/** Comparte el día operativo con la lista; creación no es revisión ni cita. */
+export function summarizeDraftDays(rows: Array<{ entroEn: Date | null }>, selectedDay: string) {
+  return [
+    {
+      date: selectedDay,
+      total: rows.filter((row) => isReservationOnDay(row.entroEn, selectedDay)).length
+    }
+  ];
 }

@@ -48,6 +48,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const [tenant] = tenantsPayload.items;
     const conversationQuery = new URLSearchParams({ limit: '50' });
+    const conversationId = request.nextUrl.searchParams.get('conversationId');
+    if (conversationId) conversationQuery.set('conversationId', conversationId);
     const assignmentScope = request.nextUrl.searchParams.get('assignmentScope');
     if (assignmentScope === 'assigned_to_me') {
       conversationQuery.set('assignmentScope', assignmentScope);

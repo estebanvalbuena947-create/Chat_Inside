@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import {
   conversationMediaUploadResponseSchema,
+  maxOutboundMediaBytes,
+  maxOutboundMediaLabel,
   mediaListResponseSchema,
   type AttachmentKind,
   type ConversationMediaUploadResponse,
@@ -42,8 +44,6 @@ const logger = new Logger('ConversationMedia');
 const SIGNED_URL_TTL_SECONDS = 600;
 const DEFAULT_PAGE_SIZE = 30;
 const SEARCH_CONTACT_LIMIT = 50;
-/** El mismo limite que impone el lector multipart (`apps/api/src/main.ts`) y el bucket. */
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const mediaSelection =
   'id, conversation_id, message_id, kind, content_type, created_at, bucket, storage_object_path, source_title, conversation:conversations(contact_id, contact:contacts(display_name))';
@@ -346,8 +346,10 @@ export class ConversationMediaService {
     if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
       throw new UnprocessableEntityException('Hace falta un archivo.');
     }
-    if (bytes.length > MAX_UPLOAD_BYTES) {
-      throw new UnprocessableEntityException('El archivo supera el límite de 25 MB.');
+    if (bytes.length > maxOutboundMediaBytes) {
+      throw new UnprocessableEntityException(
+        `El archivo supera el límite de ${maxOutboundMediaLabel}.`
+      );
     }
 
     const recognized = recognizeMedia(bytes);

@@ -1,7 +1,8 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useOperationalToday } from '../../lib/use-operational-today';
 import { formatOperationalDateTime } from '../../lib/operational-time';
 
 type Draft = {
@@ -10,6 +11,7 @@ type Draft = {
   nombre: string | null;
   servicio: string | null;
   estadoMostrado: string;
+  estadoEtiqueta?: string;
   estado: string;
   monto: number;
   horarioProgramado: string | null;
@@ -39,8 +41,12 @@ type Decision = {
   creadaEn: string | null;
 };
 type Board = {
+  draftScope: 'day' | 'all';
+  sinFechaCreacion: number;
+  porGestionar: Draft[];
   actualizadoEn: string;
   operationalDate: string;
+  dailyDrafts: Array<{ date: string; total: number }>;
   citasAgendadasFecha: Confirmed[];
   kpis: {
     porGestionar: number;
@@ -91,6 +97,9 @@ export default function ReservationsPanel(): React.ReactNode {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('summary');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showAllDrafts, setShowAllDrafts] = useState(false);
+  const requestVersion = useRef(0);
+  const operationalToday = useOperationalToday();
   const [creationOrder, setCreationOrder] = useState<CreationOrder>('desc');
   const [selected, setSelected] = useState<Draft | null>(null);
   const [note, setNote] = useState('');
@@ -98,28 +107,40 @@ export default function ReservationsPanel(): React.ReactNode {
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const load = useCallback(
     async (background = false) => {
-      if (!background) setLoading(true);
+      const version = ++requestVersion.current;
+      if (!background) {
+        setLoading(true);
+        setBoard(null);
+      }
       setError(null);
       try {
-        const query = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : '';
+        const params = new URLSearchParams();
+        if (selectedDate) params.set('date', selectedDate);
+        if (showAllDrafts) params.set('draftScope', 'all');
+        const query = params.size ? `?${params.toString()}` : '';
         const res = await fetch(`/api/reservations/board${query}`, { cache: 'no-store' });
         const payload = await res.json().catch(() => ({}));
+        if (version !== requestVersion.current) return;
         if (!res.ok) setError(payload.error ?? 'No fue posible cargar las reservas.');
         else setBoard(payload as Board);
       } catch {
-        setError('El tablero de reservas no está disponible.');
+        if (version === requestVersion.current)
+          setError('El tablero de reservas no está disponible.');
       } finally {
-        if (!background) setLoading(false);
+        if (version === requestVersion.current) setLoading(false);
       }
     },
-    [selectedDate]
+    [selectedDate, showAllDrafts, operationalToday]
   );
   useEffect(() => {
     void load();
     const refresh = window.setInterval(() => {
       if (document.visibilityState === 'visible') void load(true);
     }, 30_000);
-    return () => window.clearInterval(refresh);
+    return () => {
+      window.clearInterval(refresh);
+      requestVersion.current++;
+    };
   }, [load]);
   function openDecision(draft: Draft | null): void {
     setSelected(draft);
@@ -150,8 +171,10 @@ export default function ReservationsPanel(): React.ReactNode {
   }
   const visibleDrafts =
     tab === 'summary'
-      ? board?.preReservas.filter((row) => row.estadoMostrado !== 'confirmed')
-      : board?.preReservas;
+      ? board?.porGestionar
+      : showAllDrafts
+        ? board?.preReservas
+        : board?.creadasHoy;
   const orderedVisibleDrafts = [...(visibleDrafts ?? [])].sort((left, right) => {
     const leftTime = creationTime(left.creadaEn);
     const rightTime = creationTime(right.creadaEn);
@@ -163,15 +186,9 @@ export default function ReservationsPanel(): React.ReactNode {
   // La API ya aplica la fecha operativa: la interfaz no vuelve a clasificar instantes por zona local.
   const confirmedRows = board?.confirmadasHoy;
   const createdRows = board?.creadasHoy;
-  const draftsByDay = board
-    ? [...board.preReservas]
-        .filter((draft) => draft.creadaEn)
-        .reduce<Record<string, number>>((totals, draft) => {
-          const day = draft.creadaEn?.slice(0, 10);
-          if (day) totals[day] = (totals[day] ?? 0) + 1;
-          return totals;
-        }, {})
-    : {};
+  const draftsByDay = Object.fromEntries(
+    (board?.dailyDrafts ?? []).map((item) => [item.date, item.total])
+  );
   const maxDraftsByDay = Math.max(1, ...Object.values(draftsByDay));
   return (
     <section className={`reservations-view${integrated ? ' reservations-view-integrated' : ''}`}>
@@ -214,7 +231,11 @@ export default function ReservationsPanel(): React.ReactNode {
           <button
             aria-pressed={!selectedDate}
             className={!selectedDate ? 'active' : ''}
-            onClick={() => setSelectedDate(null)}
+            onClick={() => {
+              setShowAllDrafts(false);
+              if (selectedDate === null) void load();
+              else setSelectedDate(null);
+            }}
             type="button"
           >
             Hoy
@@ -224,11 +245,42 @@ export default function ReservationsPanel(): React.ReactNode {
             <input
               type="date"
               value={selectedDate ?? ''}
-              onChange={(event) => setSelectedDate(event.target.value || null)}
+              onChange={(event) => {
+                setShowAllDrafts(false);
+                setSelectedDate(event.target.value || null);
+              }}
             />
           </label>
         </div>
       </div>
+      {(tab === 'summary' || tab === 'drafts') && (
+        <label className="reservations-all-days">
+          <input
+            type="checkbox"
+            checked={showAllDrafts}
+            onChange={(event) => setShowAllDrafts(event.target.checked)}
+          />{' '}
+          Ver prerreservas de todos los días
+        </label>
+      )}
+      {board && (
+        <p className="operational-date-note">
+          Fecha operativa: {board.operationalDate} · Ciudad de México · Actualizado:{' '}
+          {date(board.actualizadoEn)}
+        </p>
+      )}
+      {board && (
+        <p>
+          Prereservas:{' '}
+          {board.draftScope === 'all' ? 'todos los días' : `creadas el ${board.operationalDate}`}
+        </p>
+      )}
+      {Boolean(board?.sinFechaCreacion) && (
+        <p role="status">
+          {board?.sinFechaCreacion} prereserva(s) sin fecha de creación registrada. Consulta «Todos
+          los días» para verlas.
+        </p>
+      )}
       {loading && <p>Cargando el tablero…</p>}
       {error && (
         <p role="alert" className="reservations-error">
@@ -419,13 +471,15 @@ function CreatedTable({
         <tbody>
           {rows.map((row) => (
             <tr key={row.id ?? `${row.nombre}-${row.creadaEn}`}>
-              <td data-label="Creada">{date(row.creadaEn)}</td>
+              <td data-label="Creada">
+                {creationTime(row.creadaEn) === null ? 'Sin fecha de creación' : date(row.creadaEn)}
+              </td>
               <td data-label="Cliente">{row.nombre ?? 'Sin nombre'}</td>
               <td data-label="Servicio">{row.servicio ?? '—'}</td>
               <td data-label="Cita">{date(row.horarioProgramado)}</td>
               <td data-label="Estado">
                 <span className={`reservation-status ${row.estadoMostrado}`}>
-                  {label[row.estadoMostrado] ?? row.estado}
+                  {row.estadoEtiqueta ?? label[row.estadoMostrado] ?? row.estado}
                 </span>
               </td>
               <td>
@@ -482,14 +536,16 @@ function Table({
             <tr key={row.id ?? row.nombre}>
               {/* `data-label` repite el encabezado en cada celda: en el telefono la tabla se convierte
                   en tarjetas y cada dato necesita decir de que columna viene. */}
-              <td data-label="Creada">{date(row.creadaEn)}</td>
+              <td data-label="Creada">
+                {creationTime(row.creadaEn) === null ? 'Sin fecha de creación' : date(row.creadaEn)}
+              </td>
               <td data-label="Cliente">{row.nombre ?? 'Sin nombre'}</td>
               <td data-label="Servicio">{row.servicio ?? '—'}</td>
               <td data-label="Cita">{date(row.horarioProgramado)}</td>
               <td data-label="Valor">{money(row.monto)}</td>
               <td data-label="Estado">
                 <span className={`reservation-status ${row.estadoMostrado}`}>
-                  {label[row.estadoMostrado] ?? row.estado}
+                  {row.estadoEtiqueta ?? label[row.estadoMostrado] ?? row.estado}
                 </span>
               </td>
               <td>

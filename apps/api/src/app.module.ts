@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { WorkSchedulesController } from './tenants/work-schedules.controller';
+import { WorkSchedulesService } from './tenants/work-schedules.service';
 import { AppController } from './app.controller';
 import { RequestAuthenticator } from './auth/request-authenticator';
 import { ConversationsController } from './conversations/conversations.controller';
@@ -78,6 +80,7 @@ import { ReservationsService } from './reservations/reservations.service';
     BranchMediaController,
     BranchController,
     MetricsController,
+    WorkSchedulesController,
     ReservationsController,
     MeController,
     AdvisorPresenceController,
@@ -111,6 +114,7 @@ import { ReservationsService } from './reservations/reservations.service';
     BranchService,
     ToolTokenService,
     MetricsService,
+    WorkSchedulesService,
     ReservationsService,
     TenantMessageService,
     CannedResponseService,

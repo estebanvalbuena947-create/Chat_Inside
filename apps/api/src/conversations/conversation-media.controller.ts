@@ -12,6 +12,7 @@ import {
   UnprocessableEntityException
 } from '@nestjs/common';
 import {
+  maxOutboundMediaLabel,
   mediaListQuerySchema,
   tenantIdSchema,
   type ConversationMediaUploadResponse,
@@ -106,7 +107,7 @@ function translateReaderError(error: unknown): never {
   const statusCode = (error as { statusCode?: unknown } | null)?.statusCode;
   const code = (error as { code?: unknown } | null)?.code;
   if (statusCode === 413 || code === 'FST_REQ_FILE_TOO_LARGE') {
-    throw new PayloadTooLargeException('El archivo supera el límite de 25 MB.');
+    throw new PayloadTooLargeException(`El archivo supera el límite de ${maxOutboundMediaLabel}.`);
   }
   throw error;
 }

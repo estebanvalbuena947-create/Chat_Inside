@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { NestFactory } from '@nestjs/core';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { maxOutboundMediaBytes } from '@chat-zernio/contracts';
 import { AppModule } from './app.module';
 import { createHttpAdapter } from './http-adapter';
 
@@ -20,9 +21,12 @@ async function bootstrap(): Promise<void> {
     methods: ['GET'],
     origin: allowedOrigin
   });
-  // Los archivos se aceptan únicamente en el endpoint de multimedia. El límite también se
-  // comprueba allí para que un cliente no pueda agotar memoria enviando un cuerpo mayor.
-  await app.register(multipart, { limits: { files: 1, fileSize: 25 * 1024 * 1024 } });
+  // Los archivos se aceptan únicamente en el endpoint de multimedia. El limite es el del contrato
+  // -- el mismo que comprueba la API y declara el bucket --, y se aplica aqui para que un cliente no
+  // pueda agotar memoria enviando un cuerpo mayor.
+  await app.register(multipart, {
+    limits: { files: 1, fileSize: maxOutboundMediaBytes }
+  });
 
   // La direccion de escucha se configura: en el servidor escucha solo en local (detras de nginx) y
   // dentro de un contenedor necesita 0.0.0.0 para que el puerto publicado funcione.

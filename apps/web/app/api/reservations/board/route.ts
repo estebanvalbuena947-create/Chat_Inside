@@ -40,7 +40,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     const date = request.nextUrl.searchParams.get('date');
-    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    const params = new URLSearchParams();
+    if (date) params.set('date', date);
+    if (request.nextUrl.searchParams.get('draftScope') === 'all') params.set('draftScope', 'all');
+    const query = params.size ? `?${params.toString()}` : '';
     const response = await fetch(`${base}/v1/tenants/${tenant.id}/reservations/board${query}`, {
       cache: 'no-store',
       headers

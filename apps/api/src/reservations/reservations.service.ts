@@ -17,6 +17,8 @@ import {
 } from '@chat-zernio/contracts';
 import {
   buildReservationKpis,
+  reservationStatusText,
+  summarizeDraftDays,
   dayKeyInZone,
   isReservationOnDay,
   isReservationToday,
@@ -137,7 +139,8 @@ export class ReservationsService {
     authorization: unknown,
     tenantId: string,
     now: Date = new Date(),
-    operationalDay?: string
+    operationalDay?: string,
+    draftScope: 'day' | 'all' = 'day'
   ): Promise<ReservationsBoardResponse> {
     const identity = await this.requestAuthenticator.authenticate(authorization);
     // Solo quien gestiona reservas: un agente no ve dinero ni decide comprobantes.
@@ -186,19 +189,25 @@ export class ReservationsService {
     const decisionesNorm = decisiones.map(normalizeDecision);
     const comprobantesNorm = comprobantes.map(normalizeReceipt);
 
-    const { estados, kpis } = buildReservationKpis(
-      borradores,
-      confirmadasNorm,
-      decisionesNorm,
-      comprobantesNorm,
-      { now, operationalDay }
-    );
-
     const selectedDay = operationalDay ?? dayKeyInZone(now);
     if (!selectedDay)
       throw new InternalServerErrorException('No fue posible calcular la fecha operativa.');
 
+    const { estados, kpis, porGestionar } = buildReservationKpis(
+      borradores,
+      confirmadasNorm,
+      decisionesNorm,
+      comprobantesNorm,
+      { now, operationalDay, draftDay: draftScope === 'day' ? selectedDay : undefined }
+    );
+
     return reservationsBoardResponseSchema.parse({
+      draftScope,
+      sinFechaCreacion: borradores.filter((draft) => !draft.entroEn).length,
+      porGestionar: porGestionar.map((draft) =>
+        toDraftView(draft, estados.get(draft.id) as ReservationDraftView['estadoMostrado'])
+      ),
+      dailyDrafts: summarizeDraftDays(borradores, selectedDay),
       actualizadoEn: now.toISOString(),
       operationalDate: selectedDay,
       comprobantes: comprobantesNorm.map(toReceiptView),
@@ -287,6 +296,10 @@ function toDraftView(draft: ReservationDraft, estadoMostrado: string): Reservati
     entroEn: asIso(draft.entroEn),
     estado: draft.estado,
     estadoMostrado: estadoMostrado as ReservationDraftView['estadoMostrado'],
+    estadoEtiqueta: reservationStatusText(
+      draft,
+      estadoMostrado as ReservationDraftView['estadoMostrado']
+    ),
     evidencia: draft.evidencia,
     horarioPendiente: draft.horarioPendiente,
     horarioProgramado: asIso(draft.horarioProgramado),

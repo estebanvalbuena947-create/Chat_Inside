@@ -6,7 +6,17 @@ import {
   type MetricsResponseTime,
   type MetricsSummary
 } from '@chat-zernio/contracts';
-import { ATTENTION_THRESHOLDS, BUSINESS_TIME_ZONE } from '@chat-zernio/domain';
+import {
+  ATTENTION_THRESHOLDS,
+  BUSINESS_TIME_ZONE,
+  dayKeyInZone,
+  measureResponses,
+  operationalInstant,
+  shiftCalendarDay,
+  type ScheduleVersion
+} from '@chat-zernio/domain';
+import { responseDetailListSchema, type ResponseDetailList } from '@chat-zernio/contracts';
+import { loadWorkSchedules } from '../tenants/work-schedules.service';
 import { RequestAuthenticator } from '../auth/request-authenticator';
 import { SupabaseServerClientFactory } from '../infrastructure/supabase-server-client.factory';
 import { TenantAccessService } from '../tenants/tenant-access.service';
@@ -14,45 +24,11 @@ import { TenantAccessService } from '../tenants/tenant-access.service';
 /** Tope de lectura. Si se alcanza, el resultado se marca como minimo en lugar de mentir. */
 const MAX_ROWS = 20000;
 
-/**
- * Margen hacia atras al buscar respuestas.
- *
- * Una respuesta puede contestar a un mensaje anterior al periodo, y sin ese mensaje no habria con que
- * medirla. Solo cuenta la respuesta que cae dentro del periodo; el margen sirve para encontrar su
- * pareja.
- */
-const RESPONSE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
-
-/** Límites de un día operativo, no del huso del navegador ni del servidor. */
+/** Calendar boundaries in the business zone, including historical offset changes. */
 export function operationalDayRange(day: string, timeZone = BUSINESS_TIME_ZONE) {
-  const offsetAt = (instant: Date) => {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      day: '2-digit',
-      hour: '2-digit',
-      hourCycle: 'h23',
-      minute: '2-digit',
-      month: '2-digit',
-      second: '2-digit',
-      timeZone,
-      year: 'numeric'
-    }).formatToParts(instant);
-    const value = (kind: string) => Number(parts.find((part) => part.type === kind)?.value);
-    return (
-      Date.UTC(
-        value('year'),
-        value('month') - 1,
-        value('day'),
-        value('hour'),
-        value('minute'),
-        value('second')
-      ) - instant.getTime()
-    );
-  };
-  const startAtUtc = Date.parse(`${day}T00:00:00.000Z`);
-  const endAtUtc = startAtUtc + 24 * 60 * 60 * 1000;
   return {
-    end: new Date(endAtUtc - offsetAt(new Date(endAtUtc))).toISOString(),
-    start: new Date(startAtUtc - offsetAt(new Date(startAtUtc))).toISOString()
+    start: new Date(operationalInstant(day, 0, timeZone)).toISOString(),
+    end: new Date(operationalInstant(shiftCalendarDay(day, 1), 0, timeZone)).toISOString()
   };
 }
 
@@ -78,14 +54,20 @@ export function summarizeParticipants(
   counts = new Map<
     string,
     { closedConversations?: number; executedClosures?: number; wonConversations?: number }
-  >()
+  >(),
+  options: { since?: string } = {}
 ) {
   const values = new Map<
     string,
     { kind: 'advisor' | 'bot'; label: string; messagesSent: number }
   >();
   for (const row of rows) {
-    if (row.direction !== 'outbound' || !['agent', 'automation'].includes(row.senderType)) continue;
+    if (
+      row.direction !== 'outbound' ||
+      !['agent', 'automation'].includes(row.senderType) ||
+      (options.since && Date.parse(row.createdAt) < Date.parse(options.since))
+    )
+      continue;
     const isBot = row.senderType === 'automation';
     const key = isBot
       ? 'bot'
@@ -131,7 +113,8 @@ export function summarizeParticipants(
       if (
         inboundAt === null ||
         !Number.isFinite(at) ||
-        !['agent', 'automation'].includes(row.senderType)
+        !['agent', 'automation'].includes(row.senderType) ||
+        (options.since !== undefined && at < Date.parse(options.since))
       )
         continue;
       const key =
@@ -182,44 +165,21 @@ export function summarizeClosure(
  */
 export function summarizeResponseTimes(
   rows: ResponseRow[],
-  options: { since: string }
+  options: { since: string; schedules?: ScheduleVersion[] }
 ): MetricsResponseTime {
-  const porConversacion = new Map<string, ResponseRow[]>();
-  for (const fila of rows) {
-    const lista = porConversacion.get(fila.conversationId);
-    if (lista) lista.push(fila);
-    else porConversacion.set(fila.conversationId, [fila]);
-  }
-
-  const esperas: number[] = [];
-  for (const lista of porConversacion.values()) {
-    lista.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    let ultimoEntrante: number | null = null;
-    for (const fila of lista) {
-      const momento = Date.parse(fila.createdAt);
-      if (!Number.isFinite(momento)) continue;
-      if (fila.direction === 'inbound') {
-        ultimoEntrante = momento;
-        continue;
-      }
-      if (fila.senderType !== 'agent') continue;
-      if (ultimoEntrante === null) continue;
-      if (fila.createdAt < options.since) continue;
-      esperas.push(Math.max(0, Math.round((momento - ultimoEntrante) / 1000)));
-      break;
-    }
-  }
-
-  const { amberSeconds, redSeconds } = ATTENTION_THRESHOLDS;
-  const suma = esperas.reduce((total, segundos) => total + segundos, 0);
-
+  const measurements = measureResponses(rows, options.since, options.schedules);
+  const seconds = measurements.map((item) => item.seconds);
   return {
-    averageSeconds: esperas.length ? Math.round(suma / esperas.length) : null,
-    betweenFiveAndTenMinutes: esperas.filter((s) => s >= amberSeconds && s <= redSeconds).length,
-    conversations: esperas.length,
-    overTenMinutes: esperas.filter((s) => s > redSeconds).length,
-    thresholds: { amberSeconds, redSeconds },
-    underFiveMinutes: esperas.filter((s) => s < amberSeconds).length
+    averageSeconds: seconds.length
+      ? Math.round(seconds.reduce((a, b) => a + b, 0) / seconds.length)
+      : null,
+    workingConversations: measurements.filter((item) => item.basis === 'working').length,
+    elapsedConversations: measurements.filter((item) => item.basis === 'elapsed').length,
+    conversations: seconds.length,
+    underFiveMinutes: measurements.filter((item) => item.bucket === 'under').length,
+    betweenFiveAndTenMinutes: measurements.filter((item) => item.bucket === 'between').length,
+    overTenMinutes: measurements.filter((item) => item.bucket === 'over').length,
+    thresholds: ATTENTION_THRESHOLDS
   };
 }
 
@@ -247,7 +207,8 @@ export function summarizeMessages(
   let byAdvisor = 0;
 
   for (const fila of rows) {
-    const dia = fila.createdAt.slice(0, 10);
+    const dia = dayKeyInZone(fila.createdAt);
+    if (!dia) throw new Error('La actividad contiene una fecha inválida.');
     const esEntrante = fila.direction === 'inbound';
     if (esEntrante) inbound += 1;
     else if (fila.senderType === 'automation') byBot += 1;
@@ -331,17 +292,73 @@ export class MetricsService {
     tenantId: string,
     query: MetricsSummaryQuery
   ): Promise<MetricsSummary> {
+    const report = await this.report(authorization, tenantId, query);
+    return metricsSummarySchema.parse(report);
+  }
+
+  async responses(
+    authorization: unknown,
+    tenantId: string,
+    query: MetricsSummaryQuery & {
+      bucket: 'under' | 'between' | 'over';
+      page: number;
+      asOf?: string;
+    }
+  ): Promise<ResponseDetailList> {
+    const report = await this.report(authorization, tenantId, query);
+    const items = report.details.filter((item) => item.bucket === query.bucket);
+    const pageItems = items.slice((query.page - 1) * 25, query.page * 25);
+    const names = new Map<string, string | null>();
+    if (pageItems.length) {
+      const { data, error } = await this.supabaseServerClientFactory
+        .create()
+        .from('conversations')
+        .select('id,contact:contacts(display_name)')
+        .eq('tenant_id', tenantId)
+        .in(
+          'id',
+          pageItems.map((item) => item.conversationId)
+        );
+      if (error)
+        throw new InternalServerErrorException(
+          'No fue posible leer los contactos de las conversaciones.'
+        );
+      for (const row of data ?? []) {
+        const contact = Array.isArray(row.contact) ? row.contact[0] : row.contact;
+        names.set(row.id, typeof contact?.display_name === 'string' ? contact.display_name : null);
+      }
+    }
+    return responseDetailListSchema.parse({
+      items: pageItems.map((item) => ({
+        ...item,
+        contactName: names.get(item.conversationId) ?? null
+      })),
+      total: items.length,
+      page: query.page,
+      pageSize: 25,
+      truncated: report.truncated
+    });
+  }
+
+  private async report(
+    authorization: unknown,
+    tenantId: string,
+    query: MetricsSummaryQuery & { asOf?: string }
+  ) {
     const identity = await this.requestAuthenticator.authenticate(authorization);
     await this.tenantAccessService.assertMembership(identity.userId, tenantId);
 
-    const ahora = Date.now();
+    const ahora = query.asOf ? Math.min(Date.parse(query.asOf), Date.now()) : Date.now();
+    const today = dayKeyInZone(new Date(ahora))!;
     const days = query.date ? 1 : query.days;
-    const period = query.date
-      ? operationalDayRange(query.date)
-      : {
-          end: new Date(ahora).toISOString(),
-          start: new Date(ahora - days * 24 * 60 * 60 * 1000).toISOString()
-        };
+    const period =
+      query.date || query.days === 1
+        ? operationalDayRange(query.date ?? today)
+        : {
+            end: new Date(ahora).toISOString(),
+            start: new Date(ahora - days * 24 * 60 * 60 * 1000).toISOString()
+          };
+    period.end = new Date(Math.min(Date.parse(period.end), ahora)).toISOString();
     const desde = period.start;
     const supabase = this.supabaseServerClientFactory.create();
 
@@ -359,20 +376,33 @@ export class MetricsService {
       'No fue posible leer la actividad.'
     );
 
-    // Respuestas de asesor: se mira un poco mas atras para poder emparejar una respuesta con el
-    // mensaje que contesta, aunque ese mensaje sea de antes del periodo.
+    // Fetch this period plus the immediately preceding inbound per participating conversation.
+    // No fixed lookback and no scan of all historical outgoing activity.
     const respuestas = await leerPorPaginas<Record<string, unknown>>(
       (desdeFila, hastaFila) =>
         supabase
           .from('messages')
           .select('conversation_id, created_at, direction, sender_type, sender_user_id')
           .eq('tenant_id', tenantId)
-          .gte('created_at', new Date(Date.parse(desde) - RESPONSE_LOOKBACK_MS).toISOString())
+          .gte('created_at', desde)
           .lt('created_at', period.end)
-          .order('created_at', { ascending: true })
+          .order('created_at', { ascending: false })
           .range(desdeFila, hastaFila),
       MAX_ROWS,
       'No fue posible leer los tiempos de respuesta.'
+    );
+
+    const priorInbounds = await leerPorPaginas<Record<string, unknown>>(
+      (from, to) =>
+        supabase
+          .rpc('metrics_prior_inbounds', {
+            p_tenant_id: tenantId,
+            p_before: desde,
+            p_until: period.end
+          })
+          .range(from, to),
+      MAX_ROWS,
+      'No fue posible leer los mensajes anteriores a la primera respuesta.'
     );
 
     // Cerradas DENTRO del periodo: `status = 'resolved'` dice cuantas estan cerradas hoy, no cuantas
@@ -508,7 +538,9 @@ export class MetricsService {
       );
     }
 
-    const responseRows = respuestas.filas.map((fila) => ({
+    const schedules = await loadWorkSchedules(supabase, tenantId, period.end);
+
+    const responseRows = [...priorInbounds.filas, ...respuestas.filas].map((fila) => ({
       conversationId: String(fila.conversation_id),
       createdAt: String(fila.created_at),
       direction: String(fila.direction),
@@ -545,7 +577,7 @@ export class MetricsService {
       })
     );
 
-    return summarizeMessages(
+    const summary = summarizeMessages(
       actividad.filas.map((fila) => ({
         createdAt: String(fila.created_at),
         direction: String(fila.direction),
@@ -559,15 +591,23 @@ export class MetricsService {
         closure: summarizeClosure(resueltasDelPeriodo, lastAdvisorByConversation.keys()),
         closureActions: { byAdvisor: actionsByAdvisor, byBot: actionsByBot },
         days,
-        responseTime: summarizeResponseTimes(responseRows, { since: desde }),
+        responseTime: summarizeResponseTimes(responseRows, { since: desde, schedules }),
         truncated:
           actividad.truncado ||
           respuestas.truncado ||
+          priorInbounds.truncado ||
           cerradas.truncado ||
           cierresAuditados.truncado ||
           ganadas.truncado,
-        participants: summarizeParticipants(responseRows, labels, counts)
+        participants: summarizeParticipants(responseRows, labels, counts, { since: desde })
       }
     );
+    return {
+      ...summary,
+      operationalDate: query.date ?? today,
+      updatedAt: new Date(ahora).toISOString(),
+      timeZone: BUSINESS_TIME_ZONE,
+      details: measureResponses(responseRows, desde, schedules)
+    };
   }
 }

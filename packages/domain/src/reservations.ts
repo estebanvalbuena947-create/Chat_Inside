@@ -103,6 +103,7 @@ export const RESERVATION_DATABASE_STATES = {
     'pago_rechazado',
     'cancelado',
     'cancelada',
+    'cancelando_expirada',
     'expirado',
     'expirado_sin_pago',
     'expirada',
@@ -141,7 +142,7 @@ function asText(value: unknown): string {
 
 /** Fecha en que la pre-reserva entro al sistema (no la fecha de la cita). */
 export function enteredAtOf(row: Record<string, unknown>): unknown {
-  return firstValue(row.revisadaEn, row.creadaEn, row.actualizadaEn, row.comprobante_revision_at);
+  return firstValue(row.creadaEn);
 }
 
 /** Fecha en que la reserva quedo confirmada, o en que fallo. */
@@ -220,12 +221,7 @@ export function normalizeDraft(row: Record<string, unknown>): ReservationDraft {
     confirmadaEn: (firstValue(row.pabau_confirmado_at, row.confirmado_at) as string | null) ?? null,
     correo: (firstValue(row.email, row.correo, evidencia?.email) as string | null) ?? null,
     creadaEn:
-      (firstValue(
-        row.created_at,
-        row.creado_at,
-        row.fecha_creacion,
-        row.comprobante_revision_at
-      ) as string | null) ?? null,
+      (firstValue(row.created_at, row.creado_at, row.fecha_creacion) as string | null) ?? null,
     entroEn: null,
     estado: asText(row.estado_reserva),
     evidencia,
@@ -279,4 +275,15 @@ export function normalizeDraft(row: Record<string, unknown>): ReservationDraft {
   borrador.entroEn = parseDate(enteredAtOf(borrador as unknown as Record<string, unknown>));
   borrador.cerradaEn = parseDate(closedAtOf(borrador as unknown as Record<string, unknown>));
   return borrador;
+}
+
+/** Texto de presentación derivado de un estado ya resuelto por el dominio. */
+export function reservationStatusText(
+  draft: Pick<ReservationDraft, 'estado'>,
+  status: ReservationStatus
+): string {
+  if (status === 'rejected' && matchesDatabaseState(draft.estado, ['cancelando_expirada'])) {
+    return 'Cancelación por vencimiento';
+  }
+  return RESERVATION_STATUS_LABELS[status];
 }

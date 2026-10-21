@@ -98,6 +98,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@chat-zernio/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@supabase/ssr':
         specifier: 0.12.4
         version: 0.12.4(@supabase/supabase-js@2.112.3)
